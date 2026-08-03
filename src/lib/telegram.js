@@ -12,7 +12,8 @@ export function initTelegram() {
   }
   tg.ready();
   tg.expand();
-  tg.setHeaderColor?.(tg.themeParams?.bg_color || "#15181B");
+  tg.setHeaderColor?.("#F5F0E6"); // 固定用我们自己的暖宣纸背景色,不跟随 Telegram 主题色,
+                                    // 保证原生顶栏跟下面的内容衔接一致,不出现颜色断层
   tg.disableVerticalSwipes?.();
   setupViewportHeightVar();
 }

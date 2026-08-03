@@ -13,18 +13,18 @@ export default function ResultModal({ result, onRematch, onExit, rematchLoading 
   })();
 
   return (
-    <div style={overlay}>
-      <div className="panel" style={{ maxWidth: 320, width: "100%", textAlign: "center" }}>
-        <h2 style={{ color: outcome === "win" ? "var(--jade)" : outcome === "lose" ? "var(--amber)" : "var(--fg)" }}>
+    <div className="modal-overlay">
+      <div className="modal-panel" style={{ textAlign: "center" }}>
+        <h2 className="text-heading" style={{ color: outcome === "win" ? "var(--wood)" : outcome === "lose" ? "var(--gold)" : "var(--fg)" }}>
           {title}
         </h2>
-        <p className="muted" style={{ marginTop: 8 }}>{desc}</p>
+        <p className="text-caption" style={{ marginTop: "var(--space-2)" }}>{desc}</p>
         {typeof ratingDelta === "number" && (
-          <p className="mono" style={{ marginTop: 10, fontSize: 20, color: ratingDelta > 0 ? "var(--jade)" : ratingDelta < 0 ? "var(--amber)" : "var(--fg-muted)" }}>
+          <p className="mono" style={{ marginTop: "var(--space-3)", fontSize: 20, color: ratingDelta > 0 ? "var(--wood)" : ratingDelta < 0 ? "var(--gold)" : "var(--fg-muted)" }}>
             {ratingDelta > 0 ? `+${ratingDelta}` : ratingDelta} 分
           </p>
         )}
-        <div style={{ display: "flex", gap: 10, marginTop: 20 }}>
+        <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>
           <button className="btn-ghost" style={{ flex: 1 }} onClick={onExit}>返回菜单</button>
           <button className="btn-primary" style={{ flex: 1 }} onClick={onRematch} disabled={rematchLoading}>
             {rematchLoading ? "创建中…" : "再来一局"}
@@ -34,14 +34,3 @@ export default function ResultModal({ result, onRematch, onExit, rematchLoading 
     </div>
   );
 }
-
-const overlay = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,0.55)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: 20,
-  zIndex: 10,
-};

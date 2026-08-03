@@ -1,35 +1,74 @@
 :root {
-  /* ---- 墨与玉 · 色板 ---- */
-  --ink: #15181B;              /* 主背景:深墨色,不是纯黑 */
-  --ink-panel: #1D2124;        /* 卡片/面板背景 */
-  --ink-line: #2B3034;         /* 分隔线 */
-  --jade: #3F8E76;             /* 主强调色:玉石绿 */
-  --jade-soft: #2F6F5E;
-  --amber: #D68C45;            /* 次强调:琥珀,只用于胜负连线/重要提示 */
-  --stone-black: #202225;
-  --stone-black-hi: #3a3d42;
-  --stone-white: #F3EEE3;
-  --stone-white-hi: #ffffff;
-  --text-primary: #EDEAE3;
-  --text-muted: #8B9096;
-  --board-wood-1: #3B2E22;
-  --board-wood-2: #2E2419;
+  /* ============================================================
+     现代东方竞技棋院 · Modern Oriental Strategy Club
+     设计 Token 体系。变量名保留了旧项目里用到的名字(--ink / --jade /
+     --amber / --fg / --bg 等),这样不用去改任何组件文件里的内联样式
+     引用——只是把这些变量背后代表的"值"换成新配色,引用的地方全部
+     自动生效。
+     ============================================================ */
 
-  /* 允许被 Telegram 主题变量覆盖 */
-  --bg: var(--tg-theme-bg-color, var(--ink));
-  --bg-panel: var(--tg-theme-secondary-bg-color, var(--ink-panel));
-  --fg: var(--tg-theme-text-color, var(--text-primary));
-  --fg-muted: var(--tg-theme-hint-color, var(--text-muted));
-  --accent: var(--tg-theme-button-color, var(--jade));
-  --accent-fg: var(--tg-theme-button-text-color, #ffffff);
+  /* ---- 原始色板(新起的语义名字,后面各个角色变量都从这里取值) ---- */
+  --paper: #F5F0E6;         /* 主背景:暖宣纸色 */
+  --surface: #FFFFFF;       /* 卡片/面板表面 */
+  --wood: #5B3823;          /* 深胡桃木:主交互色,用于按钮、激活态 */
+  --wood-soft: #F1E7D8;     /* 木质的极浅底色,用于图标底、hover 这类低存在感强调区域 */
+  --ink-token: #171717;     /* 墨色:高强调文字、印章式元素 */
+  --gold: #C6A15B;          /* 鎏金:稀有强调色,只用于胜负连线、积分数字这类"高光时刻" */
+  --text-secondary: #6B6258;/* 次要文字 */
+  --border-token: #DED3C2;  /* 边框/分隔线 */
 
-  --font-display: "Noto Serif SC", serif;
+  /* ---- 兼容旧变量名,值全部换成上面的新色板,不再让 Telegram 主题色覆盖 ---- */
+  --ink: var(--ink-token);
+  --ink-panel: var(--surface);
+  --ink-line: var(--border-token);
+  --jade: var(--wood);           /* 原来的"主强调色"角色,现在由深胡桃木担任 */
+  --jade-soft: var(--wood);
+  --amber: var(--gold);          /* 原来的"次强调/高光"角色,正好对应鎏金 */
+  --text-primary: var(--ink-token);
+  --text-muted: var(--text-secondary);
+  --board-wood-1: #4A2E1C;
+  --board-wood-2: #33200F;
+
+  --bg: var(--paper);
+  --bg-panel: var(--surface);
+  --fg: var(--ink-token);
+  --fg-muted: var(--text-secondary);
+  --accent: var(--wood);
+  --accent-fg: #FBF6EC;
+
+  /* ---- 棋子质感:黑曜石 / 玉石 ---- */
+  --stone-black: #1C1A18;
+  --stone-black-hi: #3A3430;      /* 黑曜石高光 */
+  --stone-white: #E4EDE2;         /* 玉石底色,带一点点绿灰调,不是纯白 */
+  --stone-white-hi: #FAFDF8;      /* 玉石高光 */
+
+  /* ---- 字体阶梯 ---- */
+  --font-display: "Noto Serif SC", serif;   /* Title:东方感标题 */
   --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
   --font-mono: "JetBrains Mono", monospace;
 
-  --radius-lg: 20px;
-  --radius-md: 14px;
+  --text-title: 28px;
+  --text-heading: 18px;
+  --text-body: 15px;
+  --text-caption: 12px;
+
+  /* ---- 间距体系(4的倍数阶梯,禁止随机数值) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+
+  /* ---- 圆角体系 ---- */
   --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+
+  /* ---- 阴影体系:柔和、大范围扩散,不要浮夸 ---- */
+  --shadow-card: 0 2px 6px rgba(23, 23, 23, 0.04), 0 10px 28px rgba(23, 23, 23, 0.06);
+  --shadow-modal: 0 8px 16px rgba(23, 23, 23, 0.06), 0 24px 48px rgba(23, 23, 23, 0.14);
 }
 
 * { box-sizing: border-box; }
@@ -45,6 +84,8 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: 1.6;
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
   overflow-y: auto;
@@ -57,17 +98,49 @@ body {
   min-height: var(--app-height, 100dvh);
   display: flex;
   flex-direction: column;
-  padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+  padding: env(safe-area-inset-top) var(--space-4) env(safe-area-inset-bottom);
   background:
-    radial-gradient(ellipse at top, rgba(63,142,118,0.08), transparent 60%),
+    radial-gradient(ellipse at top, rgba(198,161,91,0.06), transparent 60%),
     var(--bg);
 }
 
+/* ---- Typography 阶梯:Title / Heading / Body / Caption ---- */
 h1, h2, h3 {
   font-family: var(--font-display);
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
+  color: var(--ink-token);
   margin: 0;
+}
+
+.text-title {
+  font-family: var(--font-display);
+  font-size: var(--text-title);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ink-token);
+}
+
+.text-heading {
+  font-family: var(--font-display);
+  font-size: var(--text-heading);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-token);
+}
+
+.text-body {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  color: var(--fg);
+  letter-spacing: 0.01em;
+}
+
+.text-caption {
+  font-family: var(--font-body);
+  font-size: var(--text-caption);
+  color: var(--text-secondary);
+  letter-spacing: 0.02em;
 }
 
 button {
@@ -77,35 +150,44 @@ button {
   outline: none;
 }
 button:focus-visible {
-  box-shadow: 0 0 0 3px rgba(63,142,118,0.5);
+  box-shadow: 0 0 0 3px rgba(91, 56, 35, 0.28);
 }
 
+/* ---- 按钮:主按钮(木质实心)/ 次按钮(描边)/ 禁用态 ---- */
 .btn-primary {
-  background: var(--accent);
+  background: var(--wood);
   color: var(--accent-fg);
   border-radius: var(--radius-md);
-  padding: 14px 20px;
-  font-size: 16px;
+  padding: var(--space-4) var(--space-6);
+  font-size: var(--text-body);
   font-weight: 600;
-  transition: transform 0.15s ease, filter 0.15s ease;
+  letter-spacing: 0.02em;
+  box-shadow: var(--shadow-card);
+  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
 }
-.btn-primary:active { transform: scale(0.97); filter: brightness(0.95); }
-.btn-primary:disabled { opacity: 0.5; }
+.btn-primary:active { transform: scale(0.97); filter: brightness(1.08); box-shadow: none; }
+.btn-primary:disabled { opacity: 0.4; box-shadow: none; }
 
 .btn-ghost {
   background: transparent;
-  color: var(--fg);
-  border: 1px solid var(--ink-line);
+  color: var(--ink-token);
+  border: 1px solid var(--border-token);
   border-radius: var(--radius-md);
-  padding: 12px 18px;
-  font-size: 15px;
+  padding: var(--space-3) var(--space-4);
+  font-size: 14px;
+  font-weight: 500;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
+.btn-ghost:active { background: var(--wood-soft); }
+.btn-ghost:disabled { opacity: 0.4; }
 
+/* ---- 卡片:低存在感边框 + 柔和大范围阴影,不用刻意加粗的边框来做层次 ---- */
 .panel {
-  background: var(--bg-panel);
+  background: var(--surface);
   border-radius: var(--radius-lg);
-  padding: 20px;
-  border: 1px solid var(--ink-line);
+  padding: var(--space-6);
+  border: 1px solid var(--border-token);
+  box-shadow: var(--shadow-card);
 }
 
 .mono {
@@ -114,6 +196,28 @@ button:focus-visible {
 }
 
 .muted { color: var(--fg-muted); }
+
+/* ---- Modal 基础样式:统一弹窗蒙层与面板,避免每个弹窗各写一份 ---- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(23, 23, 23, 0.45);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-6);
+  z-index: 20;
+}
+
+.modal-panel {
+  background: var(--surface);
+  border-radius: var(--radius-lg);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-modal);
+  max-width: 340px;
+  width: 100%;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
