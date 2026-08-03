@@ -1,0 +1,120 @@
+:root {
+  /* ---- 墨与玉 · 色板 ---- */
+  --ink: #15181B;              /* 主背景:深墨色,不是纯黑 */
+  --ink-panel: #1D2124;        /* 卡片/面板背景 */
+  --ink-line: #2B3034;         /* 分隔线 */
+  --jade: #3F8E76;             /* 主强调色:玉石绿 */
+  --jade-soft: #2F6F5E;
+  --amber: #D68C45;            /* 次强调:琥珀,只用于胜负连线/重要提示 */
+  --stone-black: #202225;
+  --stone-black-hi: #3a3d42;
+  --stone-white: #F3EEE3;
+  --stone-white-hi: #ffffff;
+  --text-primary: #EDEAE3;
+  --text-muted: #8B9096;
+  --board-wood-1: #3B2E22;
+  --board-wood-2: #2E2419;
+
+  /* 允许被 Telegram 主题变量覆盖 */
+  --bg: var(--tg-theme-bg-color, var(--ink));
+  --bg-panel: var(--tg-theme-secondary-bg-color, var(--ink-panel));
+  --fg: var(--tg-theme-text-color, var(--text-primary));
+  --fg-muted: var(--tg-theme-hint-color, var(--text-muted));
+  --accent: var(--tg-theme-button-color, var(--jade));
+  --accent-fg: var(--tg-theme-button-text-color, #ffffff);
+
+  --font-display: "Noto Serif SC", serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 8px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100vh;   /* 兜底:老浏览器 */
+  height: 100dvh;  /* 现代浏览器:动态视口高度 */
+  height: var(--app-height, 100dvh); /* Telegram 环境:用SDK汇报的真实高度,避免键盘/头部栏引起跳动 */
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  min-height: var(--app-height, 100dvh);
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+  background:
+    radial-gradient(ellipse at top, rgba(63,142,118,0.08), transparent 60%),
+    var(--bg);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin: 0;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+button:focus-visible {
+  box-shadow: 0 0 0 3px rgba(63,142,118,0.5);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-radius: var(--radius-md);
+  padding: 14px 20px;
+  font-size: 16px;
+  font-weight: 600;
+  transition: transform 0.15s ease, filter 0.15s ease;
+}
+.btn-primary:active { transform: scale(0.97); filter: brightness(0.95); }
+.btn-primary:disabled { opacity: 0.5; }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--fg);
+  border: 1px solid var(--ink-line);
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  font-size: 15px;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  border: 1px solid var(--ink-line);
+}
+
+.mono {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+}
+
+.muted { color: var(--fg-muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}
