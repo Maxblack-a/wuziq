@@ -9,6 +9,7 @@ import LeaderboardScreen from "./components/LeaderboardScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import { supabase, loginWithTelegram, loginAnonymously, getExistingUserId } from "./lib/supabase";
 import { initTelegram, isInTelegram, getInitData, getStartParam, getTelegramUserId } from "./lib/telegram";
+import { initPresence } from "./lib/presence";
 
 export default function App() {
   const [myId, setMyId] = useState(null);
@@ -52,6 +53,7 @@ export default function App() {
           await refreshProfile(uid);
         }
         setMyId(uid);
+        initPresence(uid); // 往"在线用户"这个全局频道报到,好友列表能看到谁在线
 
         // 深链接参数分两种前缀:room_邀请码 用于加入对局,friend_好友码 用于加好友。
         // 这个必须放在"自动续局"检查之前——用户点了一条明确的邀请/好友链接进来,

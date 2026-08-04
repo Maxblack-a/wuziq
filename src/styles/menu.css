@@ -267,6 +267,21 @@
 .mode-card .title { font-weight: 600; font-size: var(--text-body); color: var(--fg); }
 .mode-card .desc { font-size: var(--text-caption); color: var(--fg-muted); margin-top: var(--space-1); }
 
+/* 好友在线状态圆点:离线是空心灰边框,在线是实心绿点 */
+.online-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-token);
+  flex-shrink: 0;
+  margin-right: var(--space-1);
+}
+.online-dot.online {
+  background: #4C8C5A;
+  border-color: #4C8C5A;
+  box-shadow: 0 0 0 3px rgba(76, 140, 90, 0.18);
+}
+
 .diff-row {
   display: flex;
   gap: var(--space-2);
