@@ -3,7 +3,7 @@ import Board from "./Board";
 import ResultModal from "./ResultModal";
 import { createEmptyBoard, checkWin, isBoardFull, cloneBoard, BLACK, WHITE } from "../game/logic";
 import { getAiMove } from "../game/ai";
-import { useTelegramBackButton, hapticImpact, hapticNotify, confirmDialog } from "../lib/telegram";
+import { useTelegramBackButton, hapticNotify, confirmDialog } from "../lib/telegram";
 
 export default function PveScreen({ onExit }) {
   useTelegramBackButton(onExit);
@@ -50,7 +50,7 @@ export default function PveScreen({ onExit }) {
     setHistory(h => [...h, board]);
     setBoard(next);
     setLastMove([x, y]);
-    hapticImpact("light");
+    // 落子的震动反馈已经在 Board 组件"确认落子"那一步震过了,这里不用再震一次
 
     const win = checkWin(next, x, y);
     if (win) {
@@ -102,7 +102,7 @@ export default function PveScreen({ onExit }) {
     <div>
       <div className="game-layout">
         <div className="game-board-col">
-          <Board board={board} onCellClick={handleCellClick} lastMove={lastMove} winLine={winInfo} disabled={thinking} onIllegalTap={() => hapticNotify("warning")} />
+          <Board board={board} onCellClick={handleCellClick} lastMove={lastMove} winLine={winInfo} disabled={thinking} onIllegalTap={() => hapticNotify("warning")} previewColor={BLACK} />
         </div>
 
         <div className="game-info-col">

@@ -3,7 +3,7 @@ import Board from "./Board";
 import ResultModal from "./ResultModal";
 import { supabase } from "../lib/supabase";
 import { toBoard2D, checkWin, isBoardFull, cloneBoard, BOARD_SIZE } from "../game/logic";
-import { hapticImpact, hapticNotify, confirmDialog, useTelegramBackButton, setClosingConfirmation } from "../lib/telegram";
+import { hapticNotify, confirmDialog, useTelegramBackButton, setClosingConfirmation } from "../lib/telegram";
 
 const DISCONNECT_GRACE_MS = 20000; // 对方断线后,宽限20秒再允许判负
 
@@ -183,7 +183,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     // 先本地落子,画面立刻响应,不等网络
     setLastMove([x, y]);
     setPendingMove({ board: next, turnAfter: nextTurn, moveCountAfter: room.move_count + 1 });
-    hapticImpact("light");
+    // 落子的震动反馈已经在 Board 组件"确认落子"那一步震过了,这里不用再震一次
 
     const flat = next.flat();
     const { error } = await supabase.from("rooms").update({
@@ -255,6 +255,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
             winLine={winLine}
             disabled={!isMyTurn}
             onIllegalTap={() => hapticNotify("warning")}
+            previewColor={mySlot}
           />
         </div>
 
