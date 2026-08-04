@@ -41,10 +41,10 @@ export default function MainMenu({ onSelect, playerName, rating }) {
         </p>
       </div>
 
-      {/* 品牌核心视觉:静态棋盘展示 */}
-      <div className="fade-in-up" style={{ animationDelay: "80ms" }}>
-        <HeroBoard />
-      </div>
+      {/* 品牌核心视觉:静态棋盘展示。入场动效已经在 HeroBoard 组件内部
+          精心设计过了(棋盒淡入定住 + 棋子逐颗落下),这里不再额外包一层
+          fade-in-up,避免两层动效叠在一起显得乱 */}
+      <HeroBoard />
 
       {/* 主 CTA:开始对局(对应原有的匹配对战入口) */}
       <button className="cta-primary fade-in-up" style={{ animationDelay: "140ms" }} onClick={() => onSelect("matchmaking")}>
