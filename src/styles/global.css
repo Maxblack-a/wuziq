@@ -100,8 +100,9 @@ body {
   flex-direction: column;
   padding: env(safe-area-inset-top) var(--space-4) env(safe-area-inset-bottom);
   background:
-    radial-gradient(ellipse at top, rgba(198,161,91,0.06), transparent 60%),
-    var(--bg);
+    radial-gradient(ellipse 120% 60% at 50% 0%, rgba(198,161,91,0.10), transparent 62%),
+    radial-gradient(ellipse 90% 50% at 100% 100%, rgba(139,102,58,0.05), transparent 60%),
+    linear-gradient(180deg, #F7F2E8 0%, var(--paper) 55%, #EFE7D7 100%);
 }
 
 /* ---- Typography 阶梯:Title / Heading / Body / Caption ---- */

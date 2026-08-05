@@ -94,7 +94,58 @@
 /* ============================================================
    品牌区
    ============================================================ */
+.hero-scene {
+  position: relative;
+}
+
+.brand-backdrop {
+  position: absolute;
+  inset: -8px -16px -8px -16px;
+  width: calc(100% + 32px);
+  height: calc(100% + 16px);
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.backdrop-bamboo {
+  position: absolute;
+  left: -6%;
+  top: 0;
+  width: 32%;
+  height: auto;
+  mix-blend-mode: multiply;
+  opacity: 0.9;
+}
+
+.backdrop-mountain {
+  position: absolute;
+  right: -8%;
+  top: 6%;
+  width: 38%;
+  height: auto;
+  mix-blend-mode: multiply;
+  opacity: 0.85;
+}
+
+/* 棋盘背后的暖光晕:模拟参考图里棋盘周围那圈打光,比棋盘本身大一圈,
+   居中叠在 hero-board-outer 后面,不与棋盘的 drop-shadow 相互干扰 */
+.board-glow {
+  position: absolute;
+  left: 50%;
+  top: 56%;
+  transform: translate(-50%, -50%);
+  width: min(92%, 380px);
+  aspect-ratio: 1 / 1;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(circle, rgba(230, 190, 120, 0.28), rgba(230, 190, 120, 0.08) 55%, transparent 72%);
+  filter: blur(6px);
+}
+
 .brand-hero {
+  position: relative;
+  z-index: 1;
   text-align: center;
   padding: var(--space-6) 0 var(--space-4);
 }
@@ -163,36 +214,34 @@
      棋盘应该"安静地立在那"而不是一直晃,那样会显得廉价
    ============================================================ */
 .hero-board-outer {
+  position: relative;
+  z-index: 1;
   display: flex;
   justify-content: center;
   padding: var(--space-2) 0 var(--space-5);
-  perspective: 1000px;
 }
 
 .hero-board-wrap {
-  width: 84%;
-  max-width: 340px;
-  aspect-ratio: 1 / 1;
-  transform: rotateX(10deg);
-  filter: drop-shadow(0 24px 34px rgba(23, 23, 23, 0.24)) drop-shadow(0 6px 10px rgba(23, 23, 23, 0.14));
+  width: 94%;
+  max-width: 400px;
   animation: hero-settle 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+.hero-board-photo {
+  display: block;
+  width: 100%;
+  height: auto;
+  /* 原图裁切下来四周还留了一圈极薄的背景,用径向遮罩把边缘羽化掉,
+     融进页面自己的暖色背景,而不是一块生硬的矩形贴图 */
+  -webkit-mask-image: radial-gradient(ellipse 84% 84% at 50% 48%, #000 62%, transparent 96%);
+  mask-image: radial-gradient(ellipse 84% 84% at 50% 48%, #000 62%, transparent 96%);
+  filter: drop-shadow(0 20px 26px rgba(23, 23, 23, 0.22));
+}
+
 @keyframes hero-settle {
-  0% { opacity: 0; transform: rotateX(10deg) translateY(18px) scale(0.94); }
-  70% { opacity: 1; transform: rotateX(10deg) translateY(-4px) scale(1.01); }
-  100% { opacity: 1; transform: rotateX(10deg) translateY(0) scale(1); }
-}
-
-/* 棋子的"落子"入场:轻微缩放回弹,每颗错开一点时间,像刚下完这几手 */
-.hero-stone {
-  animation: hero-stone-drop 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
-}
-
-@keyframes hero-stone-drop {
-  0% { opacity: 0; transform: scale(0.3); }
-  70% { opacity: 1; transform: scale(1.12); }
-  100% { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; transform: translateY(18px) scale(0.96); }
+  70% { opacity: 1; transform: translateY(-4px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 /* ============================================================
@@ -477,6 +526,5 @@
 
 @media (prefers-reduced-motion: reduce) {
   .hero-board-wrap { animation: none; }
-  .hero-stone { animation: none; }
   .fade-in-up { animation: none; }
 }
