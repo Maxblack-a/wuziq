@@ -163,13 +163,65 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   }
 
   const mySlot = room.player1_id === myId ? 1 : 2;
+
+  // 挪到这里(大厅判断之前),因为大厅视图和真实对局视图都要用到断线倒计时
+  const graceRemaining = disconnectSince ? Math.max(0, DISCONNECT_GRACE_MS - (now - disconnectSince)) : 0;
+
+  // 大厅:双方都进房间了,但还没真正开始对局。房主(player1)点"开始对局"
+  // 才会真正把状态推进到 playing。这一步之前不存在——之前是好友一接受邀请
+  // 就直接被拽进真实对局,完全没有"进房间"和"开始打"的区分
+  if (room.status === "lobby") {
+    return (
+      <div>
+        <button className="btn-ghost" onClick={handleExitClick}>← 返回</button>
+        <div className="menu-header"><h2>对局大厅</h2></div>
+
+        {disconnectSince && (
+          <div className="panel" style={{ textAlign: "center", marginBottom: "var(--space-4)" }}>
+            {graceRemaining > 0 ? (
+              <p className="muted">对方似乎断开了连接,{Math.ceil(graceRemaining / 1000)} 秒后可以确认</p>
+            ) : (
+              <>
+                <p className="muted" style={{ marginBottom: "var(--space-2)" }}>对方已经离开了房间</p>
+                <button className="btn-ghost" style={{ width: "100%" }} onClick={onExit}>返回菜单</button>
+              </>
+            )}
+          </div>
+        )}
+
+        <div className="panel" style={{ textAlign: "center", marginBottom: "var(--space-4)" }}>
+          <p className="text-body">
+            你<span className="mono">({mySlot === 1 ? "黑" : "白"})</span> VS {opponentName}<span className="mono">({mySlot === 1 ? "白" : "黑"})</span>
+          </p>
+          <p className="muted" style={{ fontSize: 13, marginTop: "var(--space-2)" }}>
+            双方都已经在房间里了{mySlot === 1 ? ",随时可以开始" : ",等房主开始"}
+          </p>
+        </div>
+
+        {mySlot === 1 ? (
+          <button className="btn-primary" style={{ width: "100%" }} onClick={startMatch} disabled={!!disconnectSince}>开始对局</button>
+        ) : (
+          <div style={{ textAlign: "center" }}>
+            <div className="spinner" style={{ margin: "0 auto 12px" }} />
+            <p className="muted">等待房主开始对局…</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   // 有未确认的乐观更新时优先显示它,服务器数据到位后自动切回
   const board2D = pendingMove ? pendingMove.board : toBoard2D(room.board);
   const effectiveTurn = pendingMove ? pendingMove.turnAfter : room.current_turn;
   const isMyTurn = effectiveTurn === mySlot && room.status === "playing" && !pendingMove;
 
-  const graceRemaining = disconnectSince ? Math.max(0, DISCONNECT_GRACE_MS - (now - disconnectSince)) : 0;
   const canClaimForfeit = room.status === "playing" && disconnectSince && graceRemaining === 0;
+
+  // 房主在大厅点"开始对局",真正把状态推进到 playing。RLS 允许双方任意一方
+  // 更新这一行,但按钮只在房主这边渲染出来,保证正常流程下只有房主能点这个
+  async function startMatch() {
+    await supabase.from("rooms").update({ status: "playing" }).eq("id", roomId);
+  }
 
   async function handleCellClick(x, y) {
     if (!isMyTurn) return;

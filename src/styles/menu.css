@@ -1,11 +1,78 @@
 /* ============================================================
-   顶部轻量导航:图标 + 极小文字,无边框无底色,不跟品牌区抢注意力
+   顶栏:左边身份牌(头像+等级+进度条),右边三个轻量图标入口。
+   两端对齐,不加边框/底色,视觉权重明显低于下方品牌区与棋盘。
    ============================================================ */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.identity-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0; /* 允许内部文字截断,不撑破布局 */
+}
+
+.identity-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--wood-soft);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border-token);
+}
+.identity-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.identity-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.identity-level {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-token);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.identity-progress-track {
+  display: block;
+  width: 84px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--wood-soft);
+  overflow: hidden;
+}
+.identity-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--gold);
+}
+
 .top-nav-light {
   display: flex;
-  justify-content: space-around;
   align-items: center;
-  padding: var(--space-2) 0;
+  gap: var(--space-4);
+  flex-shrink: 0;
 }
 
 .nav-icon-btn {
@@ -13,7 +80,7 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-1);
+  gap: 3px;
   color: var(--text-secondary);
   font-size: 11px;
   letter-spacing: 0.02em;
@@ -22,18 +89,6 @@
 .nav-icon-btn:active {
   color: var(--ink-token);
   transform: scale(0.94);
-}
-
-.nav-icon-circle {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  border: 1.4px solid currentColor;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 /* ============================================================
@@ -53,10 +108,31 @@
   text-transform: uppercase;
 }
 
-.brand-hero h1 {
-  font-size: var(--text-title);
+.brand-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-2);
   margin-top: var(--space-1);
 }
+
+.brand-hero h1 {
+  font-size: var(--text-title);
+}
+
+/* 印章按钮:装饰性的鉴赏章,同时承担"规则"入口的点击功能 */
+.brand-seal {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+.brand-seal:active { transform: scale(0.88); }
 
 .brand-slogan {
   font-family: var(--font-display);
@@ -89,23 +165,23 @@
 .hero-board-outer {
   display: flex;
   justify-content: center;
-  padding: var(--space-4) 0 var(--space-6);
-  perspective: 900px;
+  padding: var(--space-2) 0 var(--space-5);
+  perspective: 1000px;
 }
 
 .hero-board-wrap {
-  width: 70%;
-  max-width: 260px;
+  width: 84%;
+  max-width: 340px;
   aspect-ratio: 1 / 1;
-  transform: rotateX(6deg);
-  filter: drop-shadow(0 18px 26px rgba(23, 23, 23, 0.22)) drop-shadow(0 4px 8px rgba(23, 23, 23, 0.12));
+  transform: rotateX(10deg);
+  filter: drop-shadow(0 24px 34px rgba(23, 23, 23, 0.24)) drop-shadow(0 6px 10px rgba(23, 23, 23, 0.14));
   animation: hero-settle 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes hero-settle {
-  0% { opacity: 0; transform: rotateX(6deg) translateY(18px) scale(0.94); }
-  70% { opacity: 1; transform: rotateX(6deg) translateY(-4px) scale(1.01); }
-  100% { opacity: 1; transform: rotateX(6deg) translateY(0) scale(1); }
+  0% { opacity: 0; transform: rotateX(10deg) translateY(18px) scale(0.94); }
+  70% { opacity: 1; transform: rotateX(10deg) translateY(-4px) scale(1.01); }
+  100% { opacity: 1; transform: rotateX(10deg) translateY(0) scale(1); }
 }
 
 /* 棋子的"落子"入场:轻微缩放回弹,每颗错开一点时间,像刚下完这几手 */
@@ -120,25 +196,68 @@
 }
 
 /* ============================================================
-   主 CTA:全页面视觉最重的交互元素,墨色实心、精致边缘
+   在线状态行:棋盘和主CTA之间的一条轻量提示,呼应"已连接到棋局世界"
+   的仪式感,不抢棋盘和按钮的视觉重量
    ============================================================ */
-.cta-primary {
+.online-status {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
+  gap: 4px;
+  text-align: center;
+  padding-bottom: var(--space-4);
+}
+
+.online-status-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  color: var(--wood);
+}
+
+.online-dot-glow {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4C8C5A;
+  box-shadow: 0 0 0 3px rgba(76, 140, 90, 0.18);
+}
+
+.online-status-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ============================================================
+   主 CTA:全页面视觉最重的交互元素,墨色实心、精致边缘。
+   文字靠左,右侧一个圆环箭头,呼应参考图的按钮结构
+   ============================================================ */
+.cta-primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   width: 100%;
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
   box-shadow: var(--shadow-modal);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .cta-primary:active {
   transform: scale(0.98);
   box-shadow: var(--shadow-card);
+}
+
+.cta-primary-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .cta-primary-title {
@@ -153,6 +272,18 @@
   font-size: 11px;
   letter-spacing: 0.24em;
   color: rgba(251, 246, 236, 0.6);
+}
+
+.cta-primary-arrow {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.4px solid rgba(251, 246, 236, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #FBF6EC;
 }
 
 /* ============================================================
@@ -212,6 +343,27 @@
   font-size: var(--text-caption);
   color: var(--fg-muted);
   margin-top: 2px;
+}
+
+/* ============================================================
+   底部标语:两侧配细线,做收尾的"棋院牌匾感"
+   ============================================================ */
+.bottom-tagline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding-bottom: var(--space-4);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--text-secondary);
+}
+
+.tagline-line {
+  width: 22px;
+  height: 1px;
+  background: var(--border-token);
 }
 
 /* ============================================================

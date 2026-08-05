@@ -74,7 +74,7 @@ export default function InviteScreen({ myId, prefillCode, onMatched, onExit }) {
       .channel(`invite-${roomId}`)
       .on("postgres_changes",
         { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
-        (payload) => { if (payload.new.status === "playing") onMatchedRef.current(roomId); }
+        (payload) => { if (payload.new.status !== "waiting") onMatchedRef.current(roomId); }
       ).subscribe();
 
     return () => supabase.removeChannel(channel);

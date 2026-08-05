@@ -58,3 +58,36 @@ export function IconLink({ size = 22 }) {
     </svg>
   );
 }
+
+// 右箭头,只用于主 CTA 右侧的圆环按钮
+export function IconArrowRight({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 12h14" />
+      <path d="M13 6l6 6-6 6" />
+    </svg>
+  );
+}
+
+// 品牌区的小印章:视觉上是"收藏级棋具"的鉴赏章,同时承担"规则"入口的
+// 点击功能——比起在顶部导航单独放一个"规则"图标去跟好友/排行榜/我的
+// 抢位置,把它藏进这枚本就该存在的装饰印章里,更符合参考图的极简顶栏。
+export function IconSeal({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="2" width="20" height="20" rx="4" fill="#A13A2E" />
+      <rect x="2" y="2" width="20" height="20" rx="4" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
+      <text x="12" y="16.5" textAnchor="middle" fontSize="11" fontFamily="'Noto Serif SC', serif" fill="#F5EBDD">规</text>
+    </svg>
+  );
+}
+
+// 头像占位:没有 avatar_url 时使用的默认剪影,风格跟其余线性图标保持一致
+export function IconAvatarFallback({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="8.5" r="3.6" />
+      <path d="M4.5 20c1-4 3.9-6 7.5-6s6.5 2 7.5 6" />
+    </svg>
+  );
+}

@@ -116,7 +116,7 @@ export default function FriendsScreen({ myId, myFriendCode, onMatched, onExit })
       .on("postgres_changes",
         { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${room.id}` },
         (payload) => {
-          if (payload.new.status === "playing") {
+          if (payload.new.status !== "waiting") {
             setPendingInvite(null);
             onMatched(room.id);
             cleanup();

@@ -84,7 +84,7 @@ export default function App() {
           .from("rooms")
           .select("id")
           .or(
-            `and(status.eq.playing,or(player1_id.eq.${uid},player2_id.eq.${uid})),` +
+            `and(status.in.(lobby,playing),or(player1_id.eq.${uid},player2_id.eq.${uid})),` +
             `and(status.eq.waiting,player1_id.eq.${uid})`
           )
           .order("updated_at", { ascending: false })
@@ -135,7 +135,7 @@ export default function App() {
       )}
 
       {screen === "menu" && (
-        <MainMenu onSelect={setScreen} playerName={profile?.display_name} rating={profile?.rating} />
+        <MainMenu onSelect={setScreen} playerName={profile?.display_name} rating={profile?.rating} avatarUrl={profile?.avatar_url} />
       )}
       {screen === "pve" && <PveScreen onExit={goMenu} />}
       {screen === "matchmaking" && (

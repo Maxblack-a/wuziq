@@ -26,7 +26,7 @@ create table if not exists rooms (
   id uuid primary key default gen_random_uuid(),
   code text unique,                          -- 邀请码,匹配对局可为空
   mode text not null check (mode in ('invite', 'matchmaking')),
-  status text not null default 'waiting' check (status in ('waiting', 'playing', 'finished')),
+  status text not null default 'waiting' check (status in ('waiting', 'lobby', 'playing', 'finished')),
   player1_id uuid references profiles(id),
   player2_id uuid references profiles(id),
   board jsonb not null default '[]'::jsonb,  -- 15x15 数组,0=空 1=黑 2=白
@@ -37,6 +37,16 @@ create table if not exists rooms (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- 兼容已经建过表的老项目:老的 check 约束里没有 'lobby' 这个值,得先删旧的再建新的
+do $$
+begin
+  alter table rooms drop constraint if exists rooms_status_check;
+  alter table rooms add constraint rooms_status_check
+    check (status in ('waiting', 'lobby', 'playing', 'finished'));
+exception when others then
+  null;
+end $$;
 
 -- 匹配队列表
 create table if not exists matchmaking_queue (
@@ -171,7 +181,7 @@ begin
   end if;
 
   update rooms
-  set player2_id = me, status = 'playing'
+  set player2_id = me, status = 'lobby'
   where code = room_code and player2_id is null and player1_id <> me
   returning id into target_id;
 
@@ -385,7 +395,7 @@ begin
     return null; -- 房间已失效或者已经被别人占了
   end if;
 
-  update rooms set player2_id = auth.uid(), status = 'playing' where id = target_room.id;
+  update rooms set player2_id = auth.uid(), status = 'lobby' where id = target_room.id;
   update game_invites set status = 'accepted' where id = p_invite_id;
 
   return target_room.id;
@@ -513,9 +523,9 @@ as $$
 begin
   -- 先删关联的邀请通知,避免外键约束挡住房间删除
   delete from game_invites where room_id in (
-    select id from rooms where status = 'waiting' and created_at < now() - interval '1 hour'
+    select id from rooms where status in ('waiting', 'lobby') and created_at < now() - interval '1 hour'
   );
-  delete from rooms where status = 'waiting' and created_at < now() - interval '1 hour';
+  delete from rooms where status in ('waiting', 'lobby') and created_at < now() - interval '1 hour';
 end;
 $$;
 
