@@ -231,10 +231,13 @@
   display: block;
   width: 100%;
   height: auto;
-  /* 原图裁切下来四周还留了一圈极薄的背景,用径向遮罩把边缘羽化掉,
-     融进页面自己的暖色背景,而不是一块生硬的矩形贴图 */
-  -webkit-mask-image: radial-gradient(ellipse 84% 84% at 50% 48%, #000 62%, transparent 96%);
-  mask-image: radial-gradient(ellipse 84% 84% at 50% 48%, #000 62%, transparent 96%);
+  /* 原图裁切下来四周还留了一圈极薄的背景,而且这圈背景色跟页面的暖米白
+     并不是完全同一个色值——直接径向遮罩会在四角留下一圈能被肉眼察觉
+     的"矩形雾斑"。这里把羽化起点往内收、终点往外放,拉出一个更长更
+     柔和的过渡带,让边缘在还没到矩形轮廓前就已经彻底透明,不会露出
+     底图色差的痕迹 */
+  -webkit-mask-image: radial-gradient(ellipse 76% 74% at 50% 46%, #000 46%, rgba(0, 0, 0, 0.55) 62%, rgba(0, 0, 0, 0.12) 82%, transparent 100%);
+  mask-image: radial-gradient(ellipse 76% 74% at 50% 46%, #000 46%, rgba(0, 0, 0, 0.55) 62%, rgba(0, 0, 0, 0.12) 82%, transparent 100%);
   filter: drop-shadow(0 20px 26px rgba(23, 23, 23, 0.22));
 }
 
@@ -328,11 +331,11 @@
   height: 40px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 1.4px solid rgba(251, 246, 236, 0.4);
+  border: 1.4px solid rgba(198, 161, 91, 0.55);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #FBF6EC;
+  color: var(--gold);
 }
 
 /* ============================================================
@@ -364,10 +367,8 @@
 }
 
 .secondary-card-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
-  background: var(--wood-soft);
+  width: 28px;
+  height: 28px;
   color: var(--wood);
   display: flex;
   align-items: center;
