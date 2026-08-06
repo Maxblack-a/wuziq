@@ -193,14 +193,16 @@
 /* ============================================================
    在线状态行:不再是棋盘下方另起一段的独立区块,而是直接叠在品牌区
    背景图底部那圈暖色留白上(设计图里这行字本来就是压在背景上的),
-   用 position:absolute 挂在 .hero-full-bleed 上,bottom 值对应图片
-   里颜色已经回稳、不在棋盘投影范围内的安全区
+   用 position:absolute 挂在 .hero-full-bleed 上。top:80% 对应的是
+   hero-scene.png 自己棋盘投影褪干净、颜色回稳的位置(实测约 78%),
+   往下留一点点缓冲——不是随便选的比例,是量过图片再定的,不然不管
+   往上还是往下挪一点,跟棋盘的间距看着都会很怪。
    ============================================================ */
 .online-status {
   position: absolute;
   left: 0;
   right: 0;
-  bottom: 7%;
+  top: 80%;
   z-index: 1;
   display: flex;
   flex-direction: column;
@@ -243,7 +245,12 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  margin-top: var(--space-5);
+  /* 之前这里写的 var(--space-5) 其实是个没定义过的变量(项目里的间距
+     阶梯是 1/2/3/4/6/8/12,没有 5),等于白写,并不生效——这也是为什么
+     "调整"完之后间距看着完全没变。真正需要的是把按钮往上拉,盖掉
+     hero-full-bleed 留白区里在线状态行下面那截没用上的图片尾巴,
+     对齐设计图里"已连接到棋局世界"跟按钮之间那一条很窄的间距 */
+  margin-top: -46px;
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);
@@ -306,8 +313,11 @@
   align-items: center;
   text-align: center;
   gap: var(--space-1);
-  background: var(--surface);
-  border: 1px solid var(--border-token);
+  /* 设计图里这两张卡片跟背景几乎是同一个色系,只是比背景稍微提亮一点
+     (实测卡片内部色值只比卡片外的背景亮 15-20,不是纯白卡片硬贴在暖色
+     背景上那种强对比),所以这里改成半透明暖白,而不是纯 #FFFFFF */
+  background: rgba(255, 252, 245, 0.6);
+  border: 1px solid rgba(222, 211, 194, 0.7);
   border-radius: var(--radius-md);
   padding: var(--space-4) var(--space-2);
   box-shadow: var(--shadow-card);
