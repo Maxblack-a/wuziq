@@ -229,7 +229,13 @@
   display: block;
   width: 100%;
   height: auto;
-  filter: drop-shadow(0 18px 22px rgba(23, 23, 23, 0.16));
+  /* 抠图之后图片本身只剩棋盘和它最贴身的一点点阴影,不再带大范围的
+     投影渐变——所以这里的投影不能太克制,得靠两层 drop-shadow 叠出
+     "棋盘真的搁在桌面上"的重量感:一层贴近棋盘边缘、颜色深一点，
+     模拟接触阴影;一层范围更大、更淡，模拟环境光扩散 */
+  filter:
+    drop-shadow(0 8px 10px rgba(30, 20, 8, 0.30))
+    drop-shadow(0 26px 30px rgba(30, 20, 8, 0.28));
 }
 
 @keyframes hero-settle {
