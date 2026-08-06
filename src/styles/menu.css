@@ -191,23 +191,23 @@
 }
 
 /* ============================================================
-   在线状态行:上一版 top:80% 量错了——那个位置已经在棋盘投影完全
-   淡出很久之后了,棋盘到这行字之间空了一大截。重新在实机截图里量了
-   一遍棋盘投影最深处跟这行字的实际间距,现在挪到 top:72%,离棋盘
-   近了不少。这个位置背景色还在从棋盘阴影往稳定暖色过渡,深色文字
-   对比度会稍微弱一点,所以额外加了一圈很淡的浅色光晕(text-shadow)
-   兜底,不管背景当时具体多深都能看清楚,不用靠精确对齐某个像素点。
+   在线状态行:重新对照设计图放大看了这一小块——之前想错了方向,
+   design 里这行字根本不是"深色字压浅色底",而是白色/暖白字直接压在
+   棋盘投影那圈还没完全褪干净的深色暖褐区域上,圆点也是纯白发光,不是
+   绿色。hero-scene.png 棋盘投影下方 66%-70% 那一段刚好也是这种深色
+   过渡调,天然适合放白字——不用再纠结"往下挪到浅色区才能看清"这种
+   顾虑了,直接搬 design 的配色方案。
    ============================================================ */
 .online-status {
   position: absolute;
   left: 0;
   right: 0;
-  top: 72%;
+  top: 68%;
   z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   text-align: center;
   padding: 0 var(--space-4);
 }
@@ -215,27 +215,42 @@
 .online-status-line {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.22em;
-  color: var(--wood);
-  text-shadow: 0 1px 6px rgba(255, 250, 240, 0.85), 0 0 2px rgba(255, 250, 240, 0.7);
+  /* 暖白/米白,不是纯 #FFFFFF——量出来设计图这里的字色偏米黄,
+     直接复用 --wood-soft 这个已有的暖白 token,不用再造一个新色 */
+  color: var(--wood-soft);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .online-dot-glow {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #4C8C5A;
-  box-shadow: 0 0 0 3px rgba(76, 140, 90, 0.18);
+  background: #FBF6EC;
+  box-shadow: 0 0 0 4px rgba(251, 246, 236, 0.22), 0 0 10px rgba(251, 246, 236, 0.55);
 }
 
 .online-status-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: 12px;
-  color: var(--text-secondary);
-  text-shadow: 0 1px 6px rgba(255, 250, 240, 0.85), 0 0 2px rgba(255, 250, 240, 0.7);
+  color: rgba(241, 231, 216, 0.78);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 副标题两侧的短横线,呼应设计图里"已连接到棋局世界"左右那两条
+   装饰虚线——纯 CSS 画,不额外切图 */
+.online-status-sub::before,
+.online-status-sub::after {
+  content: "";
+  width: 20px;
+  height: 1px;
+  background: rgba(241, 231, 216, 0.45);
 }
 
 /* ============================================================
@@ -247,11 +262,10 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  /* online-status 从 top:80% 挪到 top:72% 之后,它跟 hero-full-bleed
-     底边之间空出来的尾巴变长了(约 20% 高度,而不是原来的 12%),所以
-     这里的负 margin 也要跟着放大,不然按钮会离在线状态行变远,重新
-     变成"太空"的老问题 */
-  margin-top: -78px;
+  /* online-status 这次从 top:72% 又往上挪到 68%(离棋盘更近,贴 design
+     的位置),下面留给按钮的尾巴相应变长了,负 margin 要跟着加大,
+     不然又会变回"在线状态离棋盘近了,但离按钮远了"的跷跷板问题 */
+  margin-top: -100px;
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);
