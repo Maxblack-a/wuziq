@@ -1,7 +1,42 @@
 /* ============================================================
-   顶栏:左边身份牌(头像+等级+进度条),右边三个轻量图标入口。
-   两端对齐,不加边框/底色,视觉权重明显低于下方品牌区与棋盘。
+   品牌区全出血:背景图是真正的背景,横向撑满整个屏幕宽度(打破
+   app-shell 左右 16px 的内边距),不是一张贴在页面中间、四周露出
+   底色边框的"照片卡片"。内部再用 padding 把顶栏和标题文字拉回
+   跟页面其它内容一致的左右边距。
+   容器高度按图片原始比例(1024:1535)撑开,object-fit: cover 在这
+   个比例下等于完整显示、不裁切。底部叠一层遮罩渐隐,让它跟下面
+   app-shell 自身的暖褐色渐变背景之间没有生硬的分界线。
    ============================================================ */
+.hero-full-bleed {
+  position: relative;
+  width: calc(100% + var(--space-4) * 2);
+  margin-left: calc(-1 * var(--space-4));
+  margin-right: calc(-1 * var(--space-4));
+  aspect-ratio: 1024 / 1535;
+  overflow: hidden;
+}
+
+.hero-scene-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  /* 底部 20% 渐隐透明,融入下方 app-shell 的暖褐渐变,避免硬边 */
+  mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
+}
+
+.hero-full-bleed-inner {
+  position: relative;
+  z-index: 1;
+  padding: 0 var(--space-4);
+}
+
 .top-bar {
   display: flex;
   align-items: center;
@@ -89,35 +124,6 @@
 .nav-icon-btn:active {
   color: var(--ink-token);
   transform: scale(0.94);
-}
-
-/* ============================================================
-   品牌区 + 棋盘:整块用一张成品图(暖调背景 + 竹叶/远山装饰 +
-   棋盘实拍),容器按图片原始比例(1024:1535)撑开高度,图片绝对
-   定位铺满,标题文字作为唯一的普通流子元素叠在图片顶部留白区域。
-   图片底部叠一层遮罩渐隐,让它跟下面 app-shell 自身的暖褐色
-   渐变背景之间不会有一条生硬的颜色分界线。
-   ============================================================ */
-.hero-scene {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1024 / 1535;
-  overflow: hidden;
-}
-
-.hero-scene-bg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-  z-index: 0;
-  pointer-events: none;
-  user-select: none;
-  /* 底部 18% 渐隐透明,融入下方 app-shell 的暖褐渐变,避免硬边 */
-  mask-image: linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 82%, transparent 100%);
 }
 
 .brand-hero {

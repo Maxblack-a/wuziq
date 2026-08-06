@@ -24,60 +24,60 @@ export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
 
   return (
     <div>
-      {/* 顶栏:左边身份牌(头像+等级),右边三个轻量图标入口。"规则"不再
-          单独占一个导航位,挪去品牌区的印章上触发,顶栏严格保持三图标 */}
-      <div className="top-bar fade-in-up" style={{ animationDelay: "0ms" }}>
-        <div className="identity-badge" onClick={() => onSelect("profile")}>
-          <div className="identity-avatar">
-            {avatarUrl ? <img src={avatarUrl} alt="" /> : <IconAvatarFallback size={20} />}
+      {/* 品牌区整体全出血(横向撑满屏幕,不受 app-shell 左右内边距限制):
+          图片是真正的背景,不是一张"贴上去"的卡片——顶栏和标题文字都
+          浮在这张背景之上,内部再用 hero-full-bleed-inner 把内容拉回
+          和页面其他内容对齐的左右边距,这样文字/图标位置不变,只有
+          背景图本身是通到屏幕两侧的。 */}
+      <div className="hero-full-bleed">
+        <img className="hero-scene-bg" src="/hero-scene.png" alt="" aria-hidden="true" />
+
+        <div className="hero-full-bleed-inner">
+          {/* 顶栏:左边身份牌(头像+等级),右边三个轻量图标入口。"规则"不再
+              单独占一个导航位,挪去品牌区的印章上触发,顶栏严格保持三图标 */}
+          <div className="top-bar fade-in-up" style={{ animationDelay: "0ms" }}>
+            <div className="identity-badge" onClick={() => onSelect("profile")}>
+              <div className="identity-avatar">
+                {avatarUrl ? <img src={avatarUrl} alt="" /> : <IconAvatarFallback size={20} />}
+              </div>
+              <div className="identity-meta">
+                <span className="identity-level">LV.{level} {title}</span>
+                <span className="identity-progress-track">
+                  <span className="identity-progress-fill" style={{ width: `${progressPct}%` }} />
+                </span>
+              </div>
+            </div>
+
+            <nav className="top-nav-light">
+              <button className="nav-icon-btn" onClick={() => onSelect("friends")}>
+                <IconFriends />
+                <span>好友</span>
+              </button>
+              <button className="nav-icon-btn" onClick={() => onSelect("leaderboard")}>
+                <IconTrophy />
+                <span>排行榜</span>
+              </button>
+              <button className="nav-icon-btn" onClick={() => onSelect("profile")}>
+                <IconProfile />
+                <span>我的</span>
+              </button>
+            </nav>
           </div>
-          <div className="identity-meta">
-            <span className="identity-level">LV.{level} {title}</span>
-            <span className="identity-progress-track">
-              <span className="identity-progress-fill" style={{ width: `${progressPct}%` }} />
-            </span>
+
+          <div className="brand-hero fade-in-up" style={{ animationDelay: "40ms" }}>
+            <div className="brand-name">WUZIGIX</div>
+            <div className="brand-title-row">
+              <h1>五子棋</h1>
+              <button className="brand-seal" onClick={() => setShowRules(true)} aria-label="玩法规则">
+                <IconSeal />
+              </button>
+            </div>
+            <p className="brand-slogan">黑白之间 · 一念胜负</p>
           </div>
         </div>
-
-        <nav className="top-nav-light">
-          <button className="nav-icon-btn" onClick={() => onSelect("friends")}>
-            <IconFriends />
-            <span>好友</span>
-          </button>
-          <button className="nav-icon-btn" onClick={() => onSelect("leaderboard")}>
-            <IconTrophy />
-            <span>排行榜</span>
-          </button>
-          <button className="nav-icon-btn" onClick={() => onSelect("profile")}>
-            <IconProfile />
-            <span>我的</span>
-          </button>
-        </nav>
       </div>
 
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
-
-      {/* 品牌区 + 棋盘:这一整块直接用设计图裁出来的成品图
-          (背景暖调渐变 + 竹叶/远山装饰 + 棋盘实拍,已经是处理好的
-          一张完整图),不再用 CSS 拼凑装饰层 + 单独棋盘照片两套东西
-          去凑效果。图的宽高比是固定的(1024:1535),容器按同样比例
-          撑开,object-fit: cover 在这个比例下等于完整显示、不裁切。
-          标题文字块是唯一的普通文档流子元素,天然叠在图片顶部那一圈
-          留白(约上 30%)之上,棋盘部分完全来自图片本身。 */}
-      <div className="hero-scene">
-        <img className="hero-scene-bg" src="/hero-scene.png" alt="" aria-hidden="true" />
-
-        <div className="brand-hero fade-in-up" style={{ animationDelay: "40ms" }}>
-          <div className="brand-name">WUZIGIX</div>
-          <div className="brand-title-row">
-            <h1>五子棋</h1>
-            <button className="brand-seal" onClick={() => setShowRules(true)} aria-label="玩法规则">
-              <IconSeal />
-            </button>
-          </div>
-          <p className="brand-slogan">黑白之间 · 一念胜负</p>
-        </div>
-      </div>
 
       {/* 在线状态行:菜单页只有在 App.jsx 里 boot() 成功、拿到 myId 之后
           才会渲染,所以到这一步一定已经连上了——这里是纯展示,不额外
