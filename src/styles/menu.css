@@ -112,20 +112,23 @@
   position: absolute;
   left: -6%;
   top: 0;
-  width: 32%;
+  width: 26%;
   height: auto;
+  max-height: 62%;
+  object-fit: cover;
+  object-position: top;
   mix-blend-mode: multiply;
-  opacity: 0.9;
+  opacity: 0.4;
 }
 
 .backdrop-mountain {
   position: absolute;
   right: -8%;
-  top: 6%;
-  width: 38%;
+  top: 4%;
+  width: 34%;
   height: auto;
   mix-blend-mode: multiply;
-  opacity: 0.85;
+  opacity: 0.5;
 }
 
 /* 棋盘背后的暖光晕:模拟参考图里棋盘周围那圈打光,比棋盘本身大一圈,
@@ -231,14 +234,7 @@
   display: block;
   width: 100%;
   height: auto;
-  /* 原图裁切下来四周还留了一圈极薄的背景,而且这圈背景色跟页面的暖米白
-     并不是完全同一个色值——直接径向遮罩会在四角留下一圈能被肉眼察觉
-     的"矩形雾斑"。这里把羽化起点往内收、终点往外放,拉出一个更长更
-     柔和的过渡带,让边缘在还没到矩形轮廓前就已经彻底透明,不会露出
-     底图色差的痕迹 */
-  -webkit-mask-image: radial-gradient(ellipse 76% 74% at 50% 46%, #000 46%, rgba(0, 0, 0, 0.55) 62%, rgba(0, 0, 0, 0.12) 82%, transparent 100%);
-  mask-image: radial-gradient(ellipse 76% 74% at 50% 46%, #000 46%, rgba(0, 0, 0, 0.55) 62%, rgba(0, 0, 0, 0.12) 82%, transparent 100%);
-  filter: drop-shadow(0 20px 26px rgba(23, 23, 23, 0.22));
+  filter: drop-shadow(0 18px 22px rgba(23, 23, 23, 0.16));
 }
 
 @keyframes hero-settle {

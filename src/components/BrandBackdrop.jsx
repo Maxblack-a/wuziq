@@ -7,7 +7,7 @@
 export default function BrandBackdrop() {
   return (
     <div className="brand-backdrop" aria-hidden="true">
-      <img className="backdrop-bamboo" src="/bamboo-deco.jpg" alt="" />
+      <img className="backdrop-bamboo" src="/bamboo-deco-trimmed.jpg" alt="" />
       <img className="backdrop-mountain" src="/mountain-deco.jpg" alt="" />
     </div>
   );
