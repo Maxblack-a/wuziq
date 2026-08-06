@@ -12,6 +12,13 @@ export default function HeroBoard() {
   return (
     <div className="hero-board-outer">
       <div className="hero-board-wrap">
+        {/* 独立的接触阴影:抠图之后棋盘图片本身不再带阴影渐变,单靠图片
+            上的 CSS filter drop-shadow 在偏暖偏深的背景上对比度不够,
+            肉眼几乎看不出来。这里单独铺一层深色椭圆虚影,用
+            mix-blend-mode: multiply 叠加,不管背景色多深都能读出"棋盘
+            压在桌面上"的重量感,而不是纯粹依赖 filter 那种容易被背景
+            吃掉的效果 */}
+        <div className="hero-board-shadow" aria-hidden="true" />
         <img className="hero-board-photo" src="/board-hero-cutout.png" alt="棋盘装饰" />
       </div>
     </div>

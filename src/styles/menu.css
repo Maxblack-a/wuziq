@@ -114,7 +114,8 @@
   top: 0;
   width: 30%;
   height: auto;
-  opacity: 0.55;
+  mix-blend-mode: multiply;
+  opacity: 0.8;
 }
 
 .backdrop-mountain {
@@ -123,7 +124,8 @@
   top: 2%;
   width: 40%;
   height: auto;
-  opacity: 0.55;
+  mix-blend-mode: multiply;
+  opacity: 0.75;
 }
 
 /* 棋盘背后的暖光晕:模拟参考图里棋盘周围那圈打光,比棋盘本身大一圈,
@@ -220,22 +222,34 @@
 }
 
 .hero-board-wrap {
+  position: relative;
   width: 94%;
   max-width: 400px;
   animation: hero-settle 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
+/* 棋盘正下方的深色接触阴影椭圆,压在棋盘底边一点点,制造"棋盘边缘
+   陷进阴影里"的贴合感,而不是悬空的一整块投影 */
+.hero-board-shadow {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 2%;
+  height: 14%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse closest-side, rgba(40, 26, 12, 0.55), rgba(40, 26, 12, 0.22) 60%, transparent 85%);
+  mix-blend-mode: multiply;
+  filter: blur(6px);
+  z-index: 0;
+}
+
 .hero-board-photo {
+  position: relative;
+  z-index: 1;
   display: block;
   width: 100%;
   height: auto;
-  /* 抠图之后图片本身只剩棋盘和它最贴身的一点点阴影,不再带大范围的
-     投影渐变——所以这里的投影不能太克制,得靠两层 drop-shadow 叠出
-     "棋盘真的搁在桌面上"的重量感:一层贴近棋盘边缘、颜色深一点，
-     模拟接触阴影;一层范围更大、更淡，模拟环境光扩散 */
-  filter:
-    drop-shadow(0 8px 10px rgba(30, 20, 8, 0.30))
-    drop-shadow(0 26px 30px rgba(30, 20, 8, 0.28));
+  filter: drop-shadow(0 10px 14px rgba(30, 20, 8, 0.22));
 }
 
 @keyframes hero-settle {
