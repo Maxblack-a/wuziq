@@ -1,7 +1,5 @@
 import { useState } from "react";
 import RulesModal from "./RulesModal";
-import HeroBoard from "./HeroBoard";
-import BrandBackdrop from "./BrandBackdrop";
 import { IconFriends, IconTrophy, IconProfile, IconRobot, IconLink, IconArrowRight, IconSeal, IconAvatarFallback } from "./Icons";
 
 // 段位头衔:纯展示层的分档,不影响任何积分/匹配逻辑,只是把 rating
@@ -59,10 +57,15 @@ export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
 
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
-      {/* 品牌区 + 棋盘:包一层 hero-scene,背景装饰(竹叶/远山/暖光晕)
-          铺在这一整块底下,只覆盖品牌视觉区,不侵入顶栏和下方按钮区 */}
+      {/* 品牌区 + 棋盘:这一整块直接用设计图裁出来的成品图
+          (背景暖调渐变 + 竹叶/远山装饰 + 棋盘实拍,已经是处理好的
+          一张完整图),不再用 CSS 拼凑装饰层 + 单独棋盘照片两套东西
+          去凑效果。图的宽高比是固定的(1024:1535),容器按同样比例
+          撑开,object-fit: cover 在这个比例下等于完整显示、不裁切。
+          标题文字块是唯一的普通文档流子元素,天然叠在图片顶部那一圈
+          留白(约上 30%)之上,棋盘部分完全来自图片本身。 */}
       <div className="hero-scene">
-        <BrandBackdrop />
+        <img className="hero-scene-bg" src="/hero-scene.png" alt="" aria-hidden="true" />
 
         <div className="brand-hero fade-in-up" style={{ animationDelay: "40ms" }}>
           <div className="brand-name">WUZIGIX</div>
@@ -74,12 +77,6 @@ export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
           </div>
           <p className="brand-slogan">黑白之间 · 一念胜负</p>
         </div>
-
-        {/* 品牌核心视觉:静态棋盘展示。入场动效已经在 HeroBoard 组件内部
-            精心设计过了(棋盒淡入定住 + 棋子逐颗落下),这里不再额外包一层
-            fade-in-up,避免两层动效叠在一起显得乱 */}
-        <div className="board-glow" aria-hidden="true" />
-        <HeroBoard />
       </div>
 
       {/* 在线状态行:菜单页只有在 App.jsx 里 boot() 成功、拿到 myId 之后
