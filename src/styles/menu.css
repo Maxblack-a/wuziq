@@ -112,23 +112,18 @@
   position: absolute;
   left: -6%;
   top: 0;
-  width: 26%;
+  width: 30%;
   height: auto;
-  max-height: 62%;
-  object-fit: cover;
-  object-position: top;
-  mix-blend-mode: multiply;
-  opacity: 0.4;
+  opacity: 0.55;
 }
 
 .backdrop-mountain {
   position: absolute;
-  right: -8%;
-  top: 4%;
-  width: 34%;
+  right: -6%;
+  top: 2%;
+  width: 40%;
   height: auto;
-  mix-blend-mode: multiply;
-  opacity: 0.5;
+  opacity: 0.55;
 }
 
 /* 棋盘背后的暖光晕:模拟参考图里棋盘周围那圈打光,比棋盘本身大一圈,
@@ -319,7 +314,7 @@
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.24em;
-  color: rgba(251, 246, 236, 0.6);
+  color: rgba(198, 161, 91, 0.85);
 }
 
 .cta-primary-arrow {
@@ -327,11 +322,12 @@
   height: 40px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 1.4px solid rgba(198, 161, 91, 0.55);
+  border: 1.4px solid rgba(198, 161, 91, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--gold);
+  box-shadow: 0 0 12px rgba(198, 161, 91, 0.35);
 }
 
 /* ============================================================

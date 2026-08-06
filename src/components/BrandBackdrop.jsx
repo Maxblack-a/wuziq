@@ -1,14 +1,16 @@
-// 首页专属的背景装饰:左上角竹叶剪影 + 右上角水墨远山,直接使用从
-// 设计图裁切出来的两小块实拍/实绘图(public/bamboo-deco.jpg、
-// public/mountain-deco.jpg),用 mix-blend-mode: multiply 叠加到页面
-// 背景上——因为这两张图本身底色是浅色宣纸调,乘法混合会让浅色部分
-// 几乎"消失"融入页面背景,只留下深色的墨迹线条,不需要额外抠图,
-// 也不会出现方形贴图的生硬边缘。纯装饰,aria-hidden、不接受任何点击。
+// 首页专属的背景装饰:左上角竹叶剪影 + 右上角水墨远山。
+// 这两张图之前是普通JPG(自带一块浅色矩形底),靠 mix-blend-mode:
+// multiply 去"隐藏"那块底色——但JPG的浅色底跟页面暖米白色终究是两个
+// 不同的色值,乘法混合只会削弱、不会消除,叠加起来就会在图片的矩形
+// 范围内露出一块能被肉眼察觉的色块。现在直接用 OpenCV 抠成真正透明
+// 背景的 PNG(只保留墨迹线条本身的 alpha),不再需要任何混合模式戏法,
+// 图片范围之外就是纯粹的 0 透明,不会有矩形边界。纯装饰,aria-hidden、
+// 不接受任何点击。
 export default function BrandBackdrop() {
   return (
     <div className="brand-backdrop" aria-hidden="true">
-      <img className="backdrop-bamboo" src="/bamboo-deco-trimmed.jpg" alt="" />
-      <img className="backdrop-mountain" src="/mountain-deco.jpg" alt="" />
+      <img className="backdrop-bamboo" src="/bamboo-deco-cutout.png" alt="" />
+      <img className="backdrop-mountain" src="/mountain-deco-cutout.png" alt="" />
     </div>
   );
 }
