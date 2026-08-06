@@ -26,9 +26,10 @@
   z-index: 0;
   pointer-events: none;
   user-select: none;
-  /* 底部 20% 渐隐透明,融入下方 app-shell 的暖褐渐变,避免硬边 */
-  mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 80%, transparent 100%);
+  /* 底部 10% 渐隐透明,融入下方 app-shell 的暖褐渐变,避免硬边——
+     只淡出图片本身最后一截,在线状态行叠在它上面的稳定色区,不受影响 */
+  mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
 }
 
 .hero-full-bleed-inner {
@@ -190,16 +191,23 @@
 }
 
 /* ============================================================
-   在线状态行:棋盘和主CTA之间的一条轻量提示,呼应"已连接到棋局世界"
-   的仪式感,不抢棋盘和按钮的视觉重量
+   在线状态行:不再是棋盘下方另起一段的独立区块,而是直接叠在品牌区
+   背景图底部那圈暖色留白上(设计图里这行字本来就是压在背景上的),
+   用 position:absolute 挂在 .hero-full-bleed 上,bottom 值对应图片
+   里颜色已经回稳、不在棋盘投影范围内的安全区
    ============================================================ */
 .online-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 7%;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   text-align: center;
-  padding-bottom: var(--space-4);
+  padding: 0 var(--space-4);
 }
 
 .online-status-line {
@@ -235,6 +243,7 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  margin-top: var(--space-5);
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);

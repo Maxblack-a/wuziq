@@ -75,22 +75,24 @@ export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
             <p className="brand-slogan">黑白之间 · 一念胜负</p>
           </div>
         </div>
+
+        {/* 在线状态行:图片下方留白本来就是设计图预留给这行字的位置,
+            不是"棋盘结束后的空白",所以直接叠在图片这块暖色留白区里,
+            而不是另起一段、在图片外面再加一份间距——那样两份空白会
+            叠加,显得空得不正常。菜单页只有在 App.jsx 里 boot() 成功、
+            拿到 myId 之后才会渲染,所以到这一步一定已经连上了 */}
+        <div className="online-status fade-in-up" style={{ animationDelay: "100ms" }}>
+          <span className="online-status-line">
+            <span className="online-dot-glow" />
+            ONLINE
+          </span>
+          <span className="online-status-sub">
+            {playerName ? `已连接到棋局世界 · ${playerName}` : "已连接到棋局世界"}
+          </span>
+        </div>
       </div>
 
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
-
-      {/* 在线状态行:菜单页只有在 App.jsx 里 boot() 成功、拿到 myId 之后
-          才会渲染,所以到这一步一定已经连上了——这里是纯展示,不额外
-          接状态管理 */}
-      <div className="online-status fade-in-up" style={{ animationDelay: "100ms" }}>
-        <span className="online-status-line">
-          <span className="online-dot-glow" />
-          ONLINE
-        </span>
-        <span className="online-status-sub">
-          {playerName ? `已连接到棋局世界 · ${playerName}` : "已连接到棋局世界"}
-        </span>
-      </div>
 
       {/* 主 CTA:开始对局(对应原有的匹配对战入口) */}
       <button className="cta-primary fade-in-up" style={{ animationDelay: "140ms" }} onClick={() => onSelect("matchmaking")}>
