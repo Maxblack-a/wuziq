@@ -226,6 +226,43 @@ button:focus-visible {
   width: 100%;
 }
 
+/* 邀请弹窗专用的两小块:对方头像圆形展示、回复留言的文本框。
+   跟其它输入框一样用 --ink-line/--radius-md,不单独造一套样式 */
+.invite-modal-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  margin: 0 auto;
+  overflow: hidden;
+  background: var(--wood-soft);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: var(--shadow-card);
+}
+.invite-modal-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.invite-modal-input {
+  width: 100%;
+  resize: none;
+  padding: var(--space-3);
+  font-size: 14px;
+  font-family: inherit;
+  color: var(--fg);
+  background: var(--wood-soft);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-sm);
+}
+.invite-modal-input:focus {
+  outline: none;
+  border-color: var(--wood);
+}
+
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
 }

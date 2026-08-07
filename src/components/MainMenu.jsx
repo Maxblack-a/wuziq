@@ -1,6 +1,6 @@
 import { useState } from "react";
 import RulesModal from "./RulesModal";
-import { IconFriends, IconTrophy, IconProfile, IconRobot, IconLink, IconArrowRight, IconSeal, IconAvatarFallback } from "./Icons";
+import { IconFriends, IconTrophy, IconProfile, IconRobot, IconArrowRight, IconSeal, IconAvatarFallback } from "./Icons";
 
 // 段位头衔:纯展示层的分档,不影响任何积分/匹配逻辑,只是把 rating
 // 翻译成一个更有"棋院感"的称呼,呼应参考图里"LV.12 棋士"的身份牌感。
@@ -94,8 +94,10 @@ export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
 
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}
 
-      {/* 主 CTA:开始对局(对应原有的匹配对战入口) */}
-      <button className="cta-primary fade-in-up" style={{ animationDelay: "140ms" }} onClick={() => onSelect("matchmaking")}>
+      {/* 主 CTA:开始对局。之前这里直接进随机匹配、"邀请好友"是另一个单独
+          入口——现在合并成一个:点进去先进"对局房间",在那边再选"匹配"
+          还是"邀请好友",两条路都从同一个房间出发 */}
+      <button className="cta-primary fade-in-up" style={{ animationDelay: "140ms" }} onClick={() => onSelect("room")}>
         <span className="cta-primary-text">
           <span className="cta-primary-title">开始对局</span>
           <span className="cta-primary-sub">START MATCH</span>
@@ -103,17 +105,13 @@ export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
         <span className="cta-primary-arrow"><IconArrowRight /></span>
       </button>
 
-      {/* 次级入口:人机挑战 + 邀请好友,并排、视觉分量低于主CTA */}
+      {/* 次级入口:人机挑战。"邀请好友"已经并入上面的主 CTA 流程,
+          这里不再重复放一个入口 */}
       <div className="secondary-row fade-in-up" style={{ animationDelay: "200ms" }}>
         <button className="secondary-card" onClick={() => onSelect("pve")}>
           <div className="secondary-card-icon"><IconRobot /></div>
           <div className="secondary-card-title">人机挑战</div>
           <div className="secondary-card-sub">AI MATCH</div>
-        </button>
-        <button className="secondary-card" onClick={() => onSelect("invite")}>
-          <div className="secondary-card-icon"><IconLink /></div>
-          <div className="secondary-card-title">邀请好友</div>
-          <div className="secondary-card-sub">PRIVATE GAME</div>
         </button>
       </div>
 

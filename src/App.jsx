@@ -3,6 +3,8 @@ import MainMenu from "./components/MainMenu";
 import PveScreen from "./components/PveScreen";
 import MatchmakingScreen from "./components/MatchmakingScreen";
 import InviteScreen from "./components/InviteScreen";
+import RoomScreen from "./components/RoomScreen";
+import IncomingInviteModal from "./components/IncomingInviteModal";
 import OnlineGame from "./components/OnlineGame";
 import FriendsScreen from "./components/FriendsScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
@@ -14,10 +16,12 @@ import { initPresence } from "./lib/presence";
 export default function App() {
   const [myId, setMyId] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [screen, setScreen] = useState("loading"); // loading | menu | pve | matchmaking | invite | game | friends | leaderboard | profile
+  const [screen, setScreen] = useState("loading"); // loading | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile
   const [roomId, setRoomId] = useState(null);
   const [prefillRoomCode, setPrefillRoomCode] = useState(null);
   const [friendAddMsg, setFriendAddMsg] = useState(null);
+  const [incomingInvite, setIncomingInvite] = useState(null); // { id, room_id, fromName, fromAvatar }
+  const [inviteBusy, setInviteBusy] = useState(false);
 
   async function refreshProfile(uid) {
     const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
@@ -82,7 +86,7 @@ export default function App() {
         // 不如显式嵌套可靠。
         const { data: activeRoom } = await supabase
           .from("rooms")
-          .select("id")
+          .select("id, status")
           .or(
             `and(status.in.(lobby,playing),or(player1_id.eq.${uid},player2_id.eq.${uid})),` +
             `and(status.eq.waiting,player1_id.eq.${uid})`
@@ -93,7 +97,9 @@ export default function App() {
 
         if (activeRoom) {
           setRoomId(activeRoom.id);
-          setScreen("game");
+          // playing 才是真正在下棋,直接进对局页;waiting/lobby 都还没正式
+          // 开局(可能还在等对手、也可能双方都到齐了但没人点开始),回房间页
+          setScreen(activeRoom.status === "playing" ? "game" : "room");
         } else {
           setScreen("menu");
         }
@@ -112,10 +118,64 @@ export default function App() {
     if (myId) refreshProfile(myId);
   }
 
-  function handleMatched(id) {
+  // 之前这里不管三七二十一都直接进 "game"(真实对局页)。现在一个房间
+  // 号背后可能是两种情况:随机匹配直接配对成功的(状态已经是 playing,
+  // 双方都准备好了,直接开打)、或者好友邀请接受/扫码加入的(状态是
+  // lobby,人到齐了但还没人点开始)——查一下状态,分别送去对应的页面。
+  async function handleMatched(id) {
     setRoomId(id);
-    setScreen("game");
+    const { data } = await supabase.from("rooms").select("status").eq("id", id).single();
+    setScreen(data?.status === "playing" ? "game" : "room");
   }
+
+  // 接受/拒绝好友对战邀请,都可以顺手带一句话(选填)。这两个函数挂在
+  // App 顶层是因为邀请弹窗本身也是全局的,跟当前具体在哪个 screen 无关。
+  async function handleAcceptInvite(message) {
+    if (!incomingInvite) return;
+    setInviteBusy(true);
+    const { data: newRoomId, error } = await supabase.rpc("accept_game_invite", {
+      p_invite_id: incomingInvite.id,
+      p_message: message,
+    });
+    setInviteBusy(false);
+    setIncomingInvite(null);
+    if (!error && newRoomId) {
+      handleMatched(newRoomId);
+    }
+  }
+
+  async function handleDeclineInvite(message) {
+    if (!incomingInvite) return;
+    setInviteBusy(true);
+    await supabase.from("game_invites")
+      .update({ status: "declined", response_message: message })
+      .eq("id", incomingInvite.id);
+    setInviteBusy(false);
+    setIncomingInvite(null);
+  }
+
+  // 全局监听发给我的对战邀请:不管当前停在哪个页面,只要有好友邀请就弹窗,
+  // 不需要专门跑到"好友"页面才能看到。只在拿到登录身份之后才订阅。
+  useEffect(() => {
+    if (!myId) return;
+    const channel = supabase
+      .channel(`global-invites-${myId}`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "game_invites", filter: `to_id=eq.${myId}` },
+        async (payload) => {
+          const inv = payload.new;
+          const { data: fromProfile } = await supabase
+            .from("profiles").select("display_name, avatar_url").eq("id", inv.from_id).single();
+          setIncomingInvite({
+            id: inv.id,
+            room_id: inv.room_id,
+            fromName: fromProfile?.display_name,
+            fromAvatar: fromProfile?.avatar_url,
+          });
+        }
+      ).subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [myId]);
 
   if (screen === "loading") {
     return (
@@ -149,12 +209,32 @@ export default function App() {
       {screen === "invite" && (
         <InviteScreen myId={myId} prefillCode={prefillRoomCode} onMatched={handleMatched} onExit={goMenu} />
       )}
+      {screen === "room" && (
+        <RoomScreen
+          myId={myId}
+          roomId={roomId}
+          playerName={profile?.display_name}
+          avatarUrl={profile?.avatar_url}
+          onMatched={handleMatched}
+          onExit={goMenu}
+          onRandomMatch={() => setScreen("matchmaking")}
+        />
+      )}
       {screen === "friends" && (
         <FriendsScreen myId={myId} myFriendCode={profile?.friend_code} onMatched={handleMatched} onExit={goMenu} />
       )}
       {screen === "leaderboard" && <LeaderboardScreen myId={myId} onExit={goMenu} />}
       {screen === "profile" && <ProfileScreen myId={myId} onExit={goMenu} />}
       {screen === "game" && <OnlineGame roomId={roomId} myId={myId} onExit={goMenu} onMatched={handleMatched} />}
+
+      {incomingInvite && (
+        <IncomingInviteModal
+          invite={incomingInvite}
+          busy={inviteBusy}
+          onAccept={handleAcceptInvite}
+          onDecline={handleDeclineInvite}
+        />
+      )}
     </div>
   );
 }

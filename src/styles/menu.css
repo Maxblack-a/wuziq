@@ -338,6 +338,15 @@
   box-shadow: var(--shadow-card);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
+/* "邀请好友"并入主 CTA 之后,次级入口只剩"人机挑战"一张卡片——
+   不再让它跟之前两张并排时一样撑满整行,收窄居中,避免看起来
+   像一个被拉伸变形的异常宽按钮 */
+.secondary-row:has(.secondary-card:only-child) {
+  justify-content: center;
+}
+.secondary-row .secondary-card:only-child {
+  flex: 0 1 200px;
+}
 .secondary-card:active {
   transform: scale(0.97);
   box-shadow: none;
@@ -504,4 +513,74 @@
 
 @media (prefers-reduced-motion: reduce) {
   .fade-in-up { animation: none; }
+}
+
+/* ============================================================
+   对局房间(RoomScreen):双方头像 VS 布局 + 匹配/邀请入口
+   ============================================================ */
+.vs-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+  padding: var(--space-8) 0 var(--space-6);
+}
+
+.vs-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 96px;
+}
+
+.vs-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--wood-soft);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.vs-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* 还没人加入时的空位:虚线圈,跟已经有人的实底头像区分开,
+   一眼就能看出"这个位置还空着"而不是"加载失败" */
+.vs-avatar-empty {
+  background: transparent;
+  border: 2px dashed var(--border-token);
+  color: var(--fg-muted);
+}
+
+.vs-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--fg);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vs-divider {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: var(--wood);
+  flex-shrink: 0;
+}
+
+.room-action-row {
+  display: flex;
+  gap: var(--space-3);
 }

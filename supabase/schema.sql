@@ -349,8 +349,12 @@ create table if not exists game_invites (
   to_id uuid references profiles(id),
   room_id uuid references rooms(id),
   status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+  response_message text, -- 收到邀请的一方回应时可以顺手带一句话(不强制),比如"稍等我两分钟"
   created_at timestamptz not null default now()
 );
+
+-- 兼容已经建过表的老项目
+alter table game_invites add column if not exists response_message text;
 
 alter table game_invites enable row level security;
 
@@ -368,7 +372,7 @@ alter publication supabase_realtime add table game_invites;
 -- 接受好友对战邀请:接受的人在这一刻还不是房间的参与者,普通的 rooms_update RLS
 -- 策略("必须已经是参与者才能改这行")会直接拒绝这次更新——这是个鸡生蛋问题,
 -- 只能靠 security definer 函数来"破冰"
-create or replace function accept_game_invite(p_invite_id uuid)
+create or replace function accept_game_invite(p_invite_id uuid, p_message text default null)
 returns uuid
 language plpgsql
 security definer
@@ -396,7 +400,7 @@ begin
   end if;
 
   update rooms set player2_id = auth.uid(), status = 'lobby' where id = target_room.id;
-  update game_invites set status = 'accepted' where id = p_invite_id;
+  update game_invites set status = 'accepted', response_message = p_message where id = p_invite_id;
 
   return target_room.id;
 end;

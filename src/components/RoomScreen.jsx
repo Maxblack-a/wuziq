@@ -1,0 +1,234 @@
+import { useEffect, useRef, useState } from "react";
+import { supabase } from "../lib/supabase";
+import { shareInviteLink, isInTelegram, useTelegramBackButton } from "../lib/telegram";
+import { useOnlineUserIds } from "../lib/presence";
+import { IconAvatarFallback } from "./Icons";
+
+function randomCode() {
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // 去掉容易看混的字符
+  return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+}
+
+const BOT_USERNAME = import.meta.env.VITE_TELEGRAM_BOT_USERNAME || "your_bot";
+const APP_SHORT_NAME = import.meta.env.VITE_TELEGRAM_APP_NAME || "gomoku";
+
+// "开始对局"点进来之后的房间页:先是我一个人在房里,VS 位置空着,
+// 可以选"随机匹配"或者"邀请好友"把对手填进那个空位;对手一旦进来
+// (不管是接受了邀请、还是扫码/输房间号加入的),状态会变成 lobby,
+// 双方头像都亮出来,由房主点"开始游戏"才真正进对局——这一步之前是
+// 直接扔进真实对局,现在中间多了这一层"确认双方都到齐了"的缓冲。
+//
+// roomId 是可选的:从首页"开始对局"点进来时没有,这里自己建一间新房间;
+// 但如果是接受好友邀请、或者点邀请链接进来的(App.jsx 已经知道房间号了),
+// 就直接传进来,不再重复建房间。
+export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, avatarUrl, onMatched, onExit, onRandomMatch }) {
+  useTelegramBackButton(onExit);
+
+  const [roomId, setRoomId] = useState(incomingRoomId || null);
+  const [room, setRoom] = useState(null);
+  const [opponent, setOpponent] = useState(null);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [inviting, setInviting] = useState(false); // 是否展开"邀请好友"这个子面板
+  const [friends, setFriends] = useState([]);
+  const [invitedIds, setInvitedIds] = useState(new Set());
+  const [copiedFlash, setCopiedFlash] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const onlineIds = useOnlineUserIds();
+  const createdRef = useRef(false); // 防止重复建房间(比如 React 开发模式的双调用)
+  const onMatchedRef = useRef(onMatched);
+  onMatchedRef.current = onMatched;
+
+  // 没有现成房间号时,自己建一间——房主(player1)就是我
+  useEffect(() => {
+    if (incomingRoomId || createdRef.current) return;
+    createdRef.current = true;
+    (async () => {
+      const code = randomCode();
+      const { data, error } = await supabase
+        .from("rooms")
+        .insert({ code, mode: "invite", status: "waiting", player1_id: myId, current_turn: 1 })
+        .select()
+        .single();
+      if (error) { setErrorMsg("创建房间失败,请重试"); return; }
+      setRoomId(data.id);
+      setRoom(data);
+    })();
+  }, [incomingRoomId, myId]);
+
+  // 有现成房间号的话(接受邀请/扫码进来),直接把房间数据读出来
+  useEffect(() => {
+    if (!incomingRoomId) return;
+    supabase.from("rooms").select("*").eq("id", incomingRoomId).single()
+      .then(({ data }) => data && setRoom(data));
+  }, [incomingRoomId]);
+
+  // 订阅这间房间的变化:对手加入(player2_id 从空变有值)、状态从
+  // waiting → lobby → playing,都是同一行数据的 UPDATE,一个订阅够用
+  useEffect(() => {
+    if (!roomId) return;
+    const channel = supabase
+      .channel(`room-lobby-${roomId}`)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
+        (payload) => setRoom(payload.new)
+      ).subscribe();
+    return () => supabase.removeChannel(channel);
+  }, [roomId]);
+
+  // 对手进来之后,把 ta 的头像/昵称拉出来显示在 VS 的另一侧
+  useEffect(() => {
+    if (!room?.player2_id) { setOpponent(null); return; }
+    supabase.from("profiles").select("display_name, avatar_url").eq("id", room.player2_id).single()
+      .then(({ data }) => setOpponent(data));
+  }, [room?.player2_id]);
+
+  // 状态推进到 playing 的那一刻(房主点了"开始游戏"),不管我是房主
+  // 自己点的、还是作为对方在旁边看着状态变化的,都统一走 onMatched 进真实对局
+  useEffect(() => {
+    if (room?.status === "playing") onMatchedRef.current(roomId);
+  }, [room?.status, roomId]);
+
+  // 拉一次好友列表,给"邀请好友"面板用
+  useEffect(() => {
+    if (!myId) return;
+    supabase
+      .from("friendships")
+      .select("friend_id, profiles:friend_id(id, display_name, avatar_url, rating)")
+      .eq("user_id", myId)
+      .then(({ data }) => setFriends((data || []).map((r) => r.profiles).filter(Boolean)));
+  }, [myId]);
+
+  async function inviteFriend(friend) {
+    if (!roomId || invitedIds.has(friend.id)) return;
+    const { error } = await supabase.from("game_invites").insert({ from_id: myId, to_id: friend.id, room_id: roomId });
+    if (error) { setErrorMsg("邀请发送失败"); return; }
+    setInvitedIds((prev) => new Set(prev).add(friend.id));
+  }
+
+  async function handleShare() {
+    if (!room?.code) return;
+    const result = await shareInviteLink(`room_${room.code}`, BOT_USERNAME, APP_SHORT_NAME);
+    if (result.copied) {
+      setCopiedFlash(true);
+      setTimeout(() => setCopiedFlash(false), 2000);
+    }
+  }
+
+  async function handleStartGame() {
+    setStarting(true);
+    const { error } = await supabase.from("rooms").update({ status: "playing" }).eq("id", roomId);
+    if (error) { setStarting(false); setErrorMsg("开始失败,请重试"); return; }
+    // 不需要在这里手动 setScreen——上面那个订阅 room.status 变化的 effect
+    // 会自己触发 onMatched,房主自己这边和订阅是同一条路径,不用写两遍
+  }
+
+  const isHost = room?.player1_id === myId;
+  const hasOpponent = !!room?.player2_id;
+  const myName = playerName || "我";
+
+  return (
+    <div>
+      <button className="btn-ghost" onClick={onExit}>← 返回</button>
+      <div className="menu-header"><h2>对局房间</h2></div>
+
+      <div className="vs-row">
+        <div className="vs-slot">
+          <div className="vs-avatar">
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : <IconAvatarFallback size={28} />}
+          </div>
+          <div className="vs-name">{myName}</div>
+        </div>
+
+        <div className="vs-divider">VS</div>
+
+        <div className="vs-slot">
+          {opponent ? (
+            <>
+              <div className="vs-avatar">
+                {opponent.avatar_url ? <img src={opponent.avatar_url} alt="" /> : <IconAvatarFallback size={28} />}
+              </div>
+              <div className="vs-name">{opponent.display_name || "对手"}</div>
+            </>
+          ) : (
+            <>
+              <div className="vs-avatar vs-avatar-empty"><IconAvatarFallback size={28} /></div>
+              <div className="vs-name muted">等待加入</div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {!hasOpponent && (
+        <>
+          {!inviting ? (
+            <div className="room-action-row">
+              <button className="btn-primary" style={{ flex: 1 }} disabled={!roomId} onClick={onRandomMatch}>
+                随机匹配
+              </button>
+              <button className="btn-ghost" style={{ flex: 1 }} disabled={!roomId} onClick={() => setInviting(true)}>
+                邀请好友
+              </button>
+            </div>
+          ) : (
+            <div className="fade-in-up">
+              <button className="btn-ghost" style={{ marginBottom: "var(--space-3)" }} onClick={() => setInviting(false)}>
+                ← 返回匹配方式
+              </button>
+
+              {friends.length === 0 ? (
+                <p className="muted" style={{ fontSize: 13 }}>还没有好友,去"好友"页面添加一个吧。</p>
+              ) : (
+                friends.map((f) => (
+                  <div key={f.id} className="mode-card" style={{ marginBottom: "var(--space-2)" }}>
+                    <span className={`online-dot${onlineIds.has(f.id) ? " online" : ""}`} />
+                    <div style={{ flex: 1 }}>
+                      <div className="title">{f.display_name || "玩家"}</div>
+                      <div className="desc">{onlineIds.has(f.id) ? "在线" : "离线"}</div>
+                    </div>
+                    <button
+                      className="btn-ghost"
+                      style={{ padding: "8px 14px" }}
+                      disabled={invitedIds.has(f.id)}
+                      onClick={() => inviteFriend(f)}
+                    >
+                      {invitedIds.has(f.id) ? "已邀请" : "邀请"}
+                    </button>
+                  </div>
+                ))
+              )}
+
+              {room?.code && (
+                <div style={{ marginTop: "var(--space-4)" }}>
+                  <p className="muted" style={{ marginBottom: "var(--space-2)", fontSize: 13 }}>
+                    也可以直接分享房间链接,不限于好友
+                  </p>
+                  <div className="room-code-display mono">{room.code}</div>
+                  <button className="btn-ghost" style={{ width: "100%" }} onClick={handleShare}>
+                    {copiedFlash ? "已复制到剪贴板 ✓" : isInTelegram ? "分享邀请链接" : "复制邀请链接"}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {hasOpponent && room?.status === "lobby" && (
+        <div className="fade-in-up">
+          {isHost ? (
+            <button className="btn-primary" style={{ width: "100%" }} disabled={starting} onClick={handleStartGame}>
+              {starting ? "开始中…" : "开始游戏"}
+            </button>
+          ) : (
+            <div style={{ textAlign: "center", padding: "var(--space-4) 0" }}>
+              <div className="spinner" style={{ margin: "0 auto 12px" }} />
+              <p className="muted">对方已加入,等待房主开始游戏…</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {errorMsg && <p style={{ color: "var(--amber)", textAlign: "center", marginTop: "var(--space-3)" }}>{errorMsg}</p>}
+    </div>
+  );
+}
