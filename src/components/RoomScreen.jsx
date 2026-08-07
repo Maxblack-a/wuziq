@@ -57,21 +57,39 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   const onMatchedRef = useRef(onMatched);
   onMatchedRef.current = onMatched;
 
-  // 没有现成房间号时,自己建一间——房主(player1)就是我
+  // 没有现成房间号时,自己建一间——房主(player1)就是我。抽成一个独立函数
+  // 而不是直接写在 effect 里,是因为下面失败提示那边需要一个"重试"按钮,
+  // 重试要能重新调用这同一段逻辑,不能只在 effect 首次挂载时跑一次。
+  const buildingRef = useRef(false); // 防止"正在建的时候"重试按钮被连点触发第二次插入
+  async function createRoom() {
+    if (buildingRef.current) return;
+    buildingRef.current = true;
+    setErrorMsg("");
+    const code = randomCode();
+    const { data, error } = await supabase
+      .from("rooms")
+      .insert({ code, mode: "invite", status: "waiting", player1_id: myId, current_turn: 1 })
+      .select()
+      .single();
+    buildingRef.current = false;
+    if (error) {
+      // 之前这里只丢一句写死的"创建房间失败,请重试",真正的报错原因被吞掉了,
+      // 没法判断到底是登录会话还没就绪(RLS 拒绝)、网络问题、还是别的什么。
+      // 打到 console 方便接 USB 调试查看,同时也把 message 直接显示在页面上——
+      // 毕竟这是跑在 Telegram WebView 里,用户手机上大概率够不着控制台。
+      console.error("创建房间失败", error);
+      setErrorMsg(`创建房间失败:${error.message || error.code || "请重试"}`);
+      return;
+    }
+    setRoomId(data.id);
+    setRoom(data);
+  }
+
   useEffect(() => {
     if (incomingRoomId || createdRef.current) return;
     createdRef.current = true;
-    (async () => {
-      const code = randomCode();
-      const { data, error } = await supabase
-        .from("rooms")
-        .insert({ code, mode: "invite", status: "waiting", player1_id: myId, current_turn: 1 })
-        .select()
-        .single();
-      if (error) { setErrorMsg("创建房间失败,请重试"); return; }
-      setRoomId(data.id);
-      setRoom(data);
-    })();
+    createRoom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [incomingRoomId, myId]);
 
   // 有现成房间号的话(接受邀请/扫码进来),直接把房间数据读出来
@@ -353,7 +371,16 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
         </div>
       )}
 
-      {errorMsg && <p style={{ color: "var(--amber)", textAlign: "center", marginTop: "var(--space-3)" }}>{errorMsg}</p>}
+      {errorMsg && (
+        <div style={{ textAlign: "center", marginTop: "var(--space-3)" }}>
+          <p style={{ color: "var(--seal-red)", fontSize: 13 }}>{errorMsg}</p>
+          {!roomId && (
+            <button className="btn-ghost" style={{ marginTop: "var(--space-2)" }} onClick={createRoom}>
+              重试
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

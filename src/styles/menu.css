@@ -814,7 +814,7 @@
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);
-  padding: 12px var(--space-4);
+  padding: var(--space-2) var(--space-4);
   box-shadow: var(--shadow-modal);
   transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
 }
@@ -841,7 +841,10 @@
   justify-content: center;
 }
 
-/* ---- 描边邀请按钮 ---- */
+/* ---- 描边邀请按钮 ----
+   跟上面主 CTA 对齐高度:主 CTA 是"图标+两行文字"天然更高,这里内边距
+   比主 CTA 大一截(18px vs 主 CTA 的 8px)来补齐总高度,而不是让主 CTA
+   显得比这个按钮明显更"胖" */
 .btn-outline-pill {
   display: flex;
   align-items: center;
@@ -849,7 +852,7 @@
   gap: var(--space-2);
   width: 100%;
   margin-top: var(--space-2);
-  padding: var(--space-3) var(--space-6);
+  padding: 18px var(--space-6);
   border-radius: 999px;
   border: 1.4px solid var(--border-token);
   background: transparent;
