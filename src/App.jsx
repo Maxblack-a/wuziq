@@ -22,6 +22,9 @@ export default function App() {
   const [friendAddMsg, setFriendAddMsg] = useState(null);
   const [incomingInvite, setIncomingInvite] = useState(null); // { id, room_id, fromName, fromAvatar }
   const [inviteBusy, setInviteBusy] = useState(false);
+  // 临时调试用:排查"到底有没有走 Telegram 登录分支"这个问题专门加的,
+  // 确认好之后应该删掉这部分和下面显示它的那块 UI
+  const [debugMsg, setDebugMsg] = useState("");
 
   async function refreshProfile(uid) {
     const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
@@ -33,6 +36,9 @@ export default function App() {
     initTelegram();
 
     async function boot() {
+      // 临时调试信息:isInTelegram 是不是 true、initData 长度是不是 0,
+      // 直接决定了走的是 loginWithTelegram 还是 loginAnonymously 那条分支
+      setDebugMsg(`isInTelegram=${String(isInTelegram)} / initData长度=${getInitData().length}`);
       try {
         // 先看有没有现成的登录态,有就直接用,不用每次重开都重新走一遍完整流程。
         // 但要核对一下:这个缓存的账号,是不是真的对应当前打开 App 的这个 Telegram 用户——
@@ -105,6 +111,7 @@ export default function App() {
         }
       } catch (e) {
         console.error("登录失败", e);
+        setDebugMsg(`登录异常: ${e?.message || e}`);
         setScreen("menu");
       }
     }
@@ -187,6 +194,11 @@ export default function App() {
 
   return (
     <div className={`app-shell${screen === "menu" ? " app-shell-menu" : ""}`}>
+      {debugMsg && (
+        <div style={{ background: "#000", color: "#0f0", fontSize: 11, padding: "6px 10px", wordBreak: "break-all" }}>
+          {debugMsg}
+        </div>
+      )}
       {friendAddMsg && screen === "menu" && (
         <div className="panel" style={{ marginTop: 12, textAlign: "center" }}>
           <p>{friendAddMsg}</p>
