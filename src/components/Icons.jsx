@@ -91,3 +91,102 @@ export function IconAvatarFallback({ size = 22 }) {
     </svg>
   );
 }
+
+/* ============================================================
+   以下为「对局房间」重新设计新增的图标,风格跟上面保持一致
+   (线性 currentColor,除了 IconVsBadge 这种本身就是彩色装饰图形)
+   ============================================================ */
+
+// 返回箭头(细线 chevron,替换掉原来纯文本的 "← 返回")
+export function IconChevronLeft({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M15 5l-7 7 7 7" />
+    </svg>
+  );
+}
+
+export function IconChevronRight({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 5l7 7-7 7" />
+    </svg>
+  );
+}
+
+// 房间顶栏右上角的"更多"入口
+export function IconMoreHorizontal({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <circle cx="5" cy="12" r="1.8" />
+      <circle cx="12" cy="12" r="1.8" />
+      <circle cx="19" cy="12" r="1.8" />
+    </svg>
+  );
+}
+
+// "开始匹配"按钮左侧的筹码/铜钱堆图标
+export function IconCoinStack({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <ellipse cx="12" cy="16.2" rx="7.2" ry="2.6" />
+      <ellipse cx="12" cy="12" rx="7.2" ry="2.6" />
+      <ellipse cx="12" cy="7.8" rx="7.2" ry="2.6" />
+    </svg>
+  );
+}
+
+// "开始游戏"按钮左侧的播放三角
+export function IconPlay({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M8 5.5v13l11-6.5-11-6.5z" />
+    </svg>
+  );
+}
+
+// 邀请好友按钮左侧的"加好友"图标
+export function IconPersonPlus({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="8.2" r="3.2" />
+      <path d="M3 19c.8-3.4 3.2-5.2 6-5.2s5.2 1.8 6 5.2" />
+      <path d="M18 7.5v5" />
+      <path d="M15.5 10h5" />
+    </svg>
+  );
+}
+
+// 底部提示文案前的信息圆圈
+export function IconInfoCircle({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 11v5.5" />
+      <circle cx="12" cy="7.8" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// 标题两侧的小菱形装饰章
+export function IconDiamondOutline({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
+      <rect x="7" y="7" width="10" height="10" rx="1.5" transform="rotate(45 12 12)" />
+    </svg>
+  );
+}
+
+// VS 徽章:宣纸底色 + 两笔水墨飞白,压一个斜体粗体 "VS"——
+// 用 SVG 尽量还原设计图里那种"毛笔飞白"质感,不依赖外部位图素材
+export function IconVsBadge({ size = 64 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="48" fill="#F0E3C8" />
+      <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(91,56,35,0.18)" strokeWidth="1.5" />
+      <path d="M16 33c18-13 48-15 68-1" stroke="#3A2A1C" strokeWidth="7" strokeLinecap="round" opacity="0.8" />
+      <path d="M18 69c20 12 46 10 66-3" stroke="#3A2A1C" strokeWidth="6" strokeLinecap="round" opacity="0.5" />
+      <text x="50" y="61" textAnchor="middle" fontFamily="Georgia, 'Noto Serif SC', serif" fontStyle="italic" fontWeight="800" fontSize="30" fill="#2B2118">VS</text>
+    </svg>
+  );
+}

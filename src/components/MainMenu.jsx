@@ -1,20 +1,7 @@
 import { useState } from "react";
 import RulesModal from "./RulesModal";
 import { IconFriends, IconTrophy, IconProfile, IconRobot, IconArrowRight, IconSeal, IconAvatarFallback } from "./Icons";
-
-// 段位头衔:纯展示层的分档,不影响任何积分/匹配逻辑,只是把 rating
-// 翻译成一个更有"棋院感"的称呼,呼应参考图里"LV.12 棋士"的身份牌感。
-function titleForRating(rating) {
-  if (rating >= 1800) return "棋圣";
-  if (rating >= 1400) return "高手";
-  if (rating >= 1000) return "棋士";
-  return "棋童";
-}
-
-// 等级同样是从已有的 rating 字段派生出来的展示值,不新增任何数据库字段。
-function levelForRating(rating) {
-  return Math.max(1, Math.floor(((rating ?? 1200) - 800) / 40));
-}
+import { titleForRating, levelForRating } from "../lib/rank";
 
 export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
   const [showRules, setShowRules] = useState(false);

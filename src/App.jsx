@@ -215,6 +215,7 @@ export default function App() {
           roomId={roomId}
           playerName={profile?.display_name}
           avatarUrl={profile?.avatar_url}
+          rating={profile?.rating}
           onMatched={handleMatched}
           onExit={goMenu}
           onRandomMatch={() => setScreen("matchmaking")}
