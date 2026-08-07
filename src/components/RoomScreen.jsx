@@ -185,7 +185,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
       <div className="vs-row fade-in-up" style={{ animationDelay: "80ms" }}>
         <div className="vs-slot">
           <div className="vs-avatar">
-            {avatarUrl ? <img src={avatarUrl} alt="" /> : <IconAvatarFallback size={30} />}
+            {avatarUrl ? <img src={avatarUrl} alt="" /> : <IconAvatarFallback size={26} />}
             <span className="vs-avatar-badge">{myLevel}</span>
           </div>
           <div className="vs-name">{myName}</div>
@@ -197,14 +197,14 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
         </div>
 
         <div className="vs-center">
-          <IconVsBadge />
+          <IconVsBadge size={56} />
         </div>
 
         <div className="vs-slot">
           {opponent ? (
             <>
               <div className="vs-avatar">
-                {opponent.avatar_url ? <img src={opponent.avatar_url} alt="" /> : <IconAvatarFallback size={30} />}
+                {opponent.avatar_url ? <img src={opponent.avatar_url} alt="" /> : <IconAvatarFallback size={26} />}
                 <span className="vs-avatar-badge">{oppLevel}</span>
               </div>
               <div className="vs-name">{opponent.display_name || "对手"}</div>
@@ -217,16 +217,25 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
           ) : (
             <>
               <div className="vs-avatar vs-avatar-empty">
-                <IconAvatarFallback size={30} />
+                <IconAvatarFallback size={26} />
                 <span className="vs-avatar-badge">?</span>
               </div>
               <div className="vs-name muted">等待加入</div>
-              <div className="vs-search-text">寻找棋友中…</div>
-              <div className="vs-search-dots">
-                <span className="vs-search-dot" />
-                <span className="vs-search-dot" />
-                <span className="vs-search-dot" />
-              </div>
+              {invitedIds.size > 0 ? (
+                <>
+                  <div className="vs-search-text">已邀请,等待确认…</div>
+                  <div className="vs-search-dots">
+                    <span className="vs-search-dot" />
+                    <span className="vs-search-dot" />
+                    <span className="vs-search-dot" />
+                  </div>
+                </>
+              ) : (
+                <div className="vs-status-row">
+                  <span className="vs-status-dot offline" />
+                  空位待定
+                </div>
+              )}
             </>
           )}
         </div>

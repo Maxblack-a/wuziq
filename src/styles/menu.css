@@ -527,7 +527,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) 0 0;
+  padding: 0;
 }
 
 .room-icon-btn {
@@ -559,7 +559,7 @@
 /* ---- 标题区:菱形装饰章 + 印章感标题 + 分隔线(嵌鎏金小点)+ 模式说明 ---- */
 .room-title-wrap {
   text-align: center;
-  padding: var(--space-4) 0 var(--space-6);
+  padding: var(--space-2) 0 var(--space-4);
 }
 
 .room-title-row {
@@ -571,7 +571,7 @@
 }
 
 .room-title-text {
-  font-size: var(--text-title);
+  font-size: 28px;
 }
 
 .room-title-divider {
@@ -580,7 +580,7 @@
   max-width: 220px;
   height: 1px;
   background: var(--border-token);
-  margin: var(--space-3) auto 0;
+  margin: var(--space-2) auto 0;
 }
 .room-title-divider::after {
   content: "";
@@ -594,7 +594,7 @@
 }
 
 .room-subtitle {
-  margin-top: var(--space-3);
+  margin-top: var(--space-2);
   font-size: 14px;
   color: var(--text-secondary);
   letter-spacing: 0.05em;
@@ -606,21 +606,21 @@
   align-items: flex-start;
   justify-content: center;
   gap: var(--space-3);
-  padding: var(--space-2) 0 var(--space-6);
+  padding: 0 0 var(--space-4);
 }
 
 .vs-slot {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-2);
+  gap: 6px;
   width: 108px;
 }
 
 .vs-avatar {
   position: relative;
-  width: 96px;
-  height: 96px;
+  width: 84px;
+  height: 84px;
   border-radius: 50%;
   overflow: visible;
   background: var(--wood-soft);
@@ -667,7 +667,7 @@
 .vs-name {
   margin-top: 2px;
   font-weight: 700;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--fg);
   text-align: center;
   max-width: 100%;
@@ -708,7 +708,9 @@
   box-shadow: none;
 }
 
-/* "寻找棋友中…" + 三个跳动的小圆点,呼应设计图里那一排搜索指示点 */
+/* 真的发出邀请、有人在等待确认时才用这组"跳动小圆点",呼应设计图里
+   那一排搜索指示点——但不在房间刚建好、什么都还没做的默认状态出现,
+   不然会给人一种"系统在自动帮你找人"的错觉,其实什么都还没发生 */
 .vs-search-text {
   font-size: 12px;
   font-weight: 600;
@@ -738,7 +740,7 @@
 /* 中间的水墨飞白 VS 徽章,跟头像列垂直居中对齐 */
 .vs-center {
   flex-shrink: 0;
-  padding-top: 16px;
+  padding-top: 12px;
 }
 
 /* ---- 好友在线胶囊条 ---- */
@@ -749,15 +751,15 @@
   width: 100%;
   background: var(--wood-soft);
   border-radius: 999px;
-  padding: var(--space-3) var(--space-4);
+  padding: 10px var(--space-4);
   text-align: left;
   transition: transform 0.15s ease;
 }
 .friends-bar:active { transform: scale(0.98); }
 
 .friends-bar-icon {
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.55);
   color: var(--wood);
@@ -799,11 +801,11 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  margin-top: var(--space-4);
+  margin-top: var(--space-3);
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);
-  padding: var(--space-4);
+  padding: 14px var(--space-4);
   box-shadow: var(--shadow-modal);
   transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
 }
@@ -818,8 +820,8 @@
 }
 
 .cta-primary-icon {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   border-radius: 50%;
   flex-shrink: 0;
   background: rgba(198, 161, 91, 0.15);
@@ -837,8 +839,8 @@
   justify-content: center;
   gap: var(--space-2);
   width: 100%;
-  margin-top: var(--space-3);
-  padding: var(--space-4) var(--space-6);
+  margin-top: var(--space-2);
+  padding: var(--space-3) var(--space-6);
   border-radius: 999px;
   border: 1.4px solid var(--border-token);
   background: transparent;
@@ -856,8 +858,8 @@
   align-items: center;
   justify-content: center;
   gap: 6px;
-  margin-top: var(--space-4);
-  padding-bottom: var(--space-4);
+  margin-top: var(--space-3);
+  padding-bottom: var(--space-2);
   font-size: 12px;
   color: var(--text-secondary);
   text-align: center;

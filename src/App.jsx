@@ -186,7 +186,7 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${screen === "menu" ? " app-shell-menu" : ""}`}>
       {friendAddMsg && screen === "menu" && (
         <div className="panel" style={{ marginTop: 12, textAlign: "center" }}>
           <p>{friendAddMsg}</p>
