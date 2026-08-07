@@ -14,7 +14,6 @@ import {
   IconPersonPlus,
   IconInfoCircle,
   IconDiamondOutline,
-  IconVsBadge,
   IconFriends,
 } from "./Icons";
 
@@ -172,9 +171,9 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
           鎏金小点)再接一行"五子棋 · 标准模式"的模式说明 */}
       <div className="room-title-wrap fade-in-up" style={{ animationDelay: "40ms" }}>
         <div className="room-title-row">
-          <IconDiamondOutline />
+          <IconDiamondOutline size={11} />
           <h1 className="room-title-text">对局房间</h1>
-          <IconDiamondOutline />
+          <IconDiamondOutline size={11} />
         </div>
         <div className="room-title-divider" />
         <p className="room-subtitle">五子棋 · 标准模式</p>
@@ -197,7 +196,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
         </div>
 
         <div className="vs-center">
-          <IconVsBadge size={56} />
+          <span className="vs-plain-text">VS</span>
         </div>
 
         <div className="vs-slot">
@@ -260,7 +259,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
             onClick={onRandomMatch}
           >
             <span className="cta-primary-lead">
-              <span className="cta-primary-icon"><IconCoinStack size={20} /></span>
+              <span className="cta-primary-icon"><IconCoinStack size={17} /></span>
               <span className="cta-primary-text">
                 <span className="cta-primary-title">开始匹配</span>
                 <span className="cta-primary-sub">START MATCH</span>
@@ -335,7 +334,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
           {isHost ? (
             <button className="room-action-primary" disabled={starting} onClick={handleStartGame}>
               <span className="cta-primary-lead">
-                <span className="cta-primary-icon"><IconPlay size={18} /></span>
+                <span className="cta-primary-icon"><IconPlay size={17} /></span>
                 <span className="cta-primary-text">
                   <span className="cta-primary-title">{starting ? "开始中…" : "开始游戏"}</span>
                   <span className="cta-primary-sub">START GAME</span>

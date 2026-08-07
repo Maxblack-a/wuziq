@@ -94,7 +94,7 @@ export function IconAvatarFallback({ size = 22 }) {
 
 /* ============================================================
    以下为「对局房间」重新设计新增的图标,风格跟上面保持一致
-   (线性 currentColor,除了 IconVsBadge 这种本身就是彩色装饰图形)
+   (线性 currentColor)
    ============================================================ */
 
 // 返回箭头(细线 chevron,替换掉原来纯文本的 "← 返回")
@@ -173,20 +173,6 @@ export function IconDiamondOutline({ size = 14 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
       <rect x="7" y="7" width="10" height="10" rx="1.5" transform="rotate(45 12 12)" />
-    </svg>
-  );
-}
-
-// VS 徽章:宣纸底色 + 两笔水墨飞白,压一个斜体粗体 "VS"——
-// 用 SVG 尽量还原设计图里那种"毛笔飞白"质感,不依赖外部位图素材
-export function IconVsBadge({ size = 64 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="48" fill="#F0E3C8" />
-      <circle cx="50" cy="50" r="47" fill="none" stroke="rgba(91,56,35,0.18)" strokeWidth="1.5" />
-      <path d="M16 33c18-13 48-15 68-1" stroke="#3A2A1C" strokeWidth="7" strokeLinecap="round" opacity="0.8" />
-      <path d="M18 69c20 12 46 10 66-3" stroke="#3A2A1C" strokeWidth="6" strokeLinecap="round" opacity="0.5" />
-      <text x="50" y="61" textAnchor="middle" fontFamily="Georgia, 'Noto Serif SC', serif" fontStyle="italic" fontWeight="800" fontSize="30" fill="#2B2118">VS</text>
     </svg>
   );
 }
