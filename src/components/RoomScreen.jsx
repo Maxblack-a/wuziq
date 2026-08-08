@@ -484,7 +484,6 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
               <p className="friend-section-label" style={{ margin: "0 0 var(--space-2)" }}>
                 也可以直接分享房间链接,不限于好友
               </p>
-              <div className="room-code-display mono">{room.code}</div>
               <button className="btn-ghost" style={{ width: "100%" }} onClick={handleShare}>
                 {copiedFlash ? "已复制到剪贴板 ✓" : isInTelegram ? "分享邀请链接" : "复制邀请链接"}
               </button>

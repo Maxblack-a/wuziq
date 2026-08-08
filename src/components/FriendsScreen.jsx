@@ -1,12 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useTelegramBackButton } from "../lib/telegram";
-import {
-  IconAvatarFallback,
-  IconSearch,
-  IconCheck,
-  IconClose,
-} from "./Icons";
+import { IconAvatarFallback, IconSearch } from "./Icons";
 
 function randomRoomCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -14,13 +9,15 @@ function randomRoomCode() {
 }
 
 // 加好友的方式:搜索对方昵称 → 发送好友申请 → 对方同意 → 双方互为好友。
-// 原来那套"好友码"(自己一个永久码,对方输入/扫码添加)已经整个去掉了,
-// 不再展示、不再生成新的好友码深链接——这里只保留"搜索昵称"这一条路径。
+// 原来那套"好友码"已经整个去掉了。
+//
+// 收到的好友申请、对战邀请不在这个页面里处理了——改成了 App.jsx 里全局的
+// 强制弹窗(IncomingFriendRequestModal / IncomingInviteModal),不管停在
+// 哪个页面,一来就弹出来,必须点同意/拒绝才能关掉,不会被漏掉、也不用
+// 专门跑来这个页面才能看到,所以这里不用再重复展示一份列表。
 export default function FriendsScreen({ myId, onMatched, onExit }) {
   useTelegramBackButton(onExit);
   const [friends, setFriends] = useState([]);
-  const [invites, setInvites] = useState([]);
-  const [friendRequests, setFriendRequests] = useState([]); // 别人发给我、还没处理的好友申请
   const [sentRequestIds, setSentRequestIds] = useState(new Set()); // 我已经发出去、对方还没处理的申请
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -42,26 +39,6 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
     setFriends((data || []).map((r) => r.profiles).filter(Boolean));
   }
 
-  async function loadInvites() {
-    const { data } = await supabase
-      .from("game_invites")
-      .select("id, room_id, status, profiles:from_id(display_name)")
-      .eq("to_id", myId)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
-    setInvites(data || []);
-  }
-
-  async function loadFriendRequests() {
-    const { data } = await supabase
-      .from("friend_requests")
-      .select("id, from_id, profiles:from_id(id, display_name, avatar_url, rating)")
-      .eq("to_id", myId)
-      .eq("status", "pending")
-      .order("created_at", { ascending: false });
-    setFriendRequests(data || []);
-  }
-
   async function loadSentRequests() {
     const { data } = await supabase
       .from("friend_requests")
@@ -74,25 +51,7 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
   useEffect(() => {
     if (!myId) return;
     loadFriends();
-    loadInvites();
-    loadFriendRequests();
     loadSentRequests();
-
-    // 对战邀请:别人邀我打一局
-    const inviteChannel = supabase
-      .channel(`invites-${myId}`)
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "game_invites", filter: `to_id=eq.${myId}` },
-        () => loadInvites()
-      ).subscribe();
-
-    // 好友申请:别人搜到我、申请加我为好友
-    const requestChannel = supabase
-      .channel(`friend-requests-${myId}`)
-      .on("postgres_changes",
-        { event: "INSERT", schema: "public", table: "friend_requests", filter: `to_id=eq.${myId}` },
-        () => loadFriendRequests()
-      ).subscribe();
 
     // 我发出去的申请被对方同意/拒绝了——刷新"已发送"状态和好友列表,
     // 不然按钮会一直卡在"已发送"、搜索结果也不会变成"已是好友"
@@ -108,11 +67,7 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
         }
       ).subscribe();
 
-    return () => {
-      supabase.removeChannel(inviteChannel);
-      supabase.removeChannel(requestChannel);
-      supabase.removeChannel(sentChannel);
-    };
+    return () => supabase.removeChannel(sentChannel);
   }, [myId]);
 
   // 搜昵称:防抖 400ms 再查,避免每敲一个字就打一次库
@@ -146,22 +101,6 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
       loadFriends();
     } else {
       setSentRequestIds((prev) => new Set(prev).add(targetId));
-    }
-  }
-
-  async function respondFriendRequest(req, accept) {
-    const { data, error } = await supabase.rpc("respond_friend_request", {
-      p_request_id: req.id, p_accept: accept,
-    });
-    if (error || data?.error) {
-      setErrorMsg(data?.error || "操作失败,请重试");
-      return;
-    }
-    setFriendRequests((prev) => prev.filter((r) => r.id !== req.id));
-    if (accept) {
-      setSuccessMsg(`已添加 ${req.profiles?.display_name || "好友"}`);
-      setTimeout(() => setSuccessMsg(""), 3000);
-      loadFriends();
     }
   }
 
@@ -217,21 +156,6 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
     inviteChannelsRef.current.push(channel);
   }
 
-  async function respondInvite(invite, accept) {
-    if (accept) {
-      const { data: newRoomId, error } = await supabase.rpc("accept_game_invite", { p_invite_id: invite.id });
-      if (error || !newRoomId) {
-        setErrorMsg("对局已失效,可能对方已经取消或超时");
-        loadInvites();
-        return;
-      }
-      onMatched(newRoomId);
-    } else {
-      await supabase.from("game_invites").update({ status: "declined" }).eq("id", invite.id);
-      loadInvites();
-    }
-  }
-
   return (
     <div>
       <button className="btn-ghost" onClick={onExit}>← 返回</button>
@@ -282,48 +206,6 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
         <p style={{ color: errorMsg ? "var(--amber)" : "var(--jade)", marginTop: 4, marginBottom: 8, fontSize: 13 }}>
           {errorMsg || `${successMsg} ✓`}
         </p>
-      )}
-
-      {friendRequests.length > 0 && (
-        <>
-          <p className="friend-section-label">好友申请</p>
-          {friendRequests.map((req) => (
-            <div key={req.id} className="friend-row">
-              <div className="friend-row-avatar">
-                {req.profiles?.avatar_url ? <img src={req.profiles.avatar_url} alt="" /> : <IconAvatarFallback size={18} />}
-              </div>
-              <div className="friend-row-info">
-                <div className="friend-row-name">{req.profiles?.display_name || "玩家"}</div>
-                <div className="friend-row-meta">申请添加你为好友</div>
-              </div>
-              <div className="friend-row-actions">
-                <button className="friend-request-icon-btn decline" aria-label="拒绝" onClick={() => respondFriendRequest(req, false)}>
-                  <IconClose size={15} />
-                </button>
-                <button className="friend-request-icon-btn accept" aria-label="同意" onClick={() => respondFriendRequest(req, true)}>
-                  <IconCheck size={15} />
-                </button>
-              </div>
-            </div>
-          ))}
-        </>
-      )}
-
-      {invites.length > 0 && (
-        <>
-          <p className="friend-section-label">对战邀请</p>
-          {invites.map((inv) => (
-            <div key={inv.id} className="friend-row">
-              <div className="friend-row-info">
-                <div className="friend-row-name">{inv.profiles?.display_name || "好友"} 邀请你对战</div>
-              </div>
-              <div className="friend-row-actions">
-                <button className="friend-action-btn ghost" onClick={() => respondInvite(inv, false)}>忽略</button>
-                <button className="friend-action-btn" onClick={() => respondInvite(inv, true)}>接受</button>
-              </div>
-            </div>
-          ))}
-        </>
       )}
 
       <p className="friend-section-label">好友列表({friends.length}）</p>
