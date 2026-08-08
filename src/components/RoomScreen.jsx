@@ -178,14 +178,17 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     onExit();
   }
 
-  useTelegramBackButton(handleExit);
+  // 物理/系统返回键(Telegram 原生 BackButton)跟页面自己顶栏的 "‹" 应该是
+  // 同一个"返回"动作,行为不能不一样——不然会出现"点页面图标是先收起
+  // 邀请面板,按系统返回键却直接把房间退了"这种同一操作两种结果的情况。
+  // 所以这里也接上 handleTopBack,而不是原来写死的 handleExit。
+  useTelegramBackButton(handleTopBack);
 
-  // 页面自己的返回逻辑(跟上面 Telegram 原生返回键的 handleExit 是两回事,
-  // 那个不动)——顶栏这个 "‹" 图标要感知当前在不在"邀请好友"这个子面板里:
-  // 面板开着就先收起面板,回到"开始匹配/邀请好友"那一层;面板没开着,
-  // 说明已经是最外层了,这时候点它才是真的退出房间。这样就不需要再在
-  // 面板里单独放一个"返回匹配方式"的文字链接,两个长得很像又离得很近的
-  // 返回控件容易被误触成另一个。
+  // 顶栏这个 "‹" 图标(以及上面接的物理/系统返回键)要感知当前在不在
+  // "邀请好友"这个子面板里:面板开着就先收起面板,回到"开始匹配/邀请好友"
+  // 那一层;面板没开着,说明已经是最外层了,这时候点它才是真的退出房间。
+  // 这样就不需要再在面板里单独放一个"返回匹配方式"的文字链接,两个长得
+  // 很像又离得很近的返回控件容易被误触成另一个。
   function handleTopBack() {
     if (inviting) {
       setInviting(false);
