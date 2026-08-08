@@ -754,6 +754,48 @@
   color: var(--wood);
 }
 
+/* ---- 邀请好友面板打开时,VS 区收成一条紧凑状态条 ----
+   头像缩小、段位胶囊和"在线/离线"文字这些次要信息直接隐掉,只留
+   "谁 vs 谁"这一眼状态,把垂直空间让给下面真正要操作的好友列表 */
+.vs-row-compact {
+  padding: 2px 0 10px;
+  gap: var(--space-2);
+}
+.vs-row-compact .vs-slot {
+  gap: 4px;
+  width: auto;
+}
+.vs-row-compact .vs-avatar {
+  width: 40px;
+  height: 40px;
+  border-width: 2px;
+}
+.vs-row-compact .vs-avatar-badge {
+  width: 18px;
+  height: 15px;
+  font-size: 9px;
+  right: -3px;
+  bottom: -1px;
+  border-width: 1.5px;
+}
+.vs-row-compact .vs-name {
+  font-size: 12px;
+  margin-top: 0;
+  max-width: 72px;
+}
+.vs-row-compact .vs-level-tag,
+.vs-row-compact .vs-status-row,
+.vs-row-compact .vs-search-text,
+.vs-row-compact .vs-search-dots {
+  display: none;
+}
+.vs-row-compact .vs-center {
+  padding-top: 8px;
+}
+.vs-row-compact .vs-plain-text {
+  font-size: 17px;
+}
+
 /* ---- 好友在线:辅助信息行,不是按钮——去掉实心底色和胶囊形状,
    换成一条更轻的分割线 + 小字,视觉上明显退到"开始匹配/邀请好友"
    这两个正经按钮之后,只是顺手能点进去看好友列表而已 ---- */

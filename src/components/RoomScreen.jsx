@@ -180,6 +180,20 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
 
   useTelegramBackButton(handleExit);
 
+  // 页面自己的返回逻辑(跟上面 Telegram 原生返回键的 handleExit 是两回事,
+  // 那个不动)——顶栏这个 "‹" 图标要感知当前在不在"邀请好友"这个子面板里:
+  // 面板开着就先收起面板,回到"开始匹配/邀请好友"那一层;面板没开着,
+  // 说明已经是最外层了,这时候点它才是真的退出房间。这样就不需要再在
+  // 面板里单独放一个"返回匹配方式"的文字链接,两个长得很像又离得很近的
+  // 返回控件容易被误触成另一个。
+  function handleTopBack() {
+    if (inviting) {
+      setInviting(false);
+      return;
+    }
+    handleExit();
+  }
+
   // 拉一次好友列表,给"邀请好友"面板和"好友在线"这行胶囊条用
   useEffect(() => {
     if (!myId) return;
@@ -266,7 +280,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
       {/* 顶栏:左返回 / 右更多——Telegram 原生的 Close/标题栏在这一层之外,
           这里只是页面自己的内容,严格对应设计图里"< ... "那一行 */}
       <div className="room-topbar fade-in-up">
-        <button className="room-icon-btn" onClick={handleExit} aria-label="返回">
+        <button className="room-icon-btn" onClick={handleTopBack} aria-label={inviting ? "返回匹配方式" : "退出房间"}>
           <IconChevronLeft />
         </button>
         <button className="room-icon-btn" onClick={handleShare} disabled={!room?.code} aria-label="更多操作">
@@ -277,20 +291,27 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
       {promotedFlash && <div className="room-toast fade-in-up">对方已离开,你已成为房主</div>}
 
       {/* 标题区:两侧小菱形装饰章 + 印章感标题,下方一条分隔线(中间嵌一个
-          鎏金小点)再接一行"五子棋 · 标准模式"的模式说明 */}
-      <div className="room-title-wrap fade-in-up" style={{ animationDelay: "40ms" }}>
-        <div className="room-title-row">
-          <IconDiamondOutline size={11} />
-          <h1 className="room-title-text">对局房间</h1>
-          <IconDiamondOutline size={11} />
+          鎏金小点)再接一行"五子棋 · 标准模式"的模式说明。
+          进了邀请好友这个子面板之后就不再需要——房间是哪个、什么模式,
+          用户点进来那一下已经看过了,这里再占一截高度只会把下面真正
+          要操作的好友列表往下挤,所以邀请面板打开时直接不渲染这块。 */}
+      {!inviting && (
+        <div className="room-title-wrap fade-in-up" style={{ animationDelay: "40ms" }}>
+          <div className="room-title-row">
+            <IconDiamondOutline size={11} />
+            <h1 className="room-title-text">对局房间</h1>
+            <IconDiamondOutline size={11} />
+          </div>
+          <div className="room-title-divider" />
+          <p className="room-subtitle">五子棋 · 标准模式</p>
         </div>
-        <div className="room-title-divider" />
-        <p className="room-subtitle">五子棋 · 标准模式</p>
-      </div>
+      )}
 
       {/* VS 对阵区:双方头像 + 六边形等级徽章 + 昵称 + 段位胶囊 + 在线状态,
-          中间是水墨飞白风格的 VS 徽章 */}
-      <div className="vs-row fade-in-up" style={{ animationDelay: "80ms" }}>
+          中间是水墨飞白风格的 VS 徽章。邀请面板打开时切换成紧凑条
+          (.vs-row-compact 收窄头像、隐去段位胶囊和在线文字这些次要信息),
+          只保留"谁 vs 谁"这一眼状态,把空间让给下面的好友列表 */}
+      <div className={`vs-row fade-in-up${inviting ? " vs-row-compact" : ""}`} style={{ animationDelay: "80ms" }}>
         <div className="vs-slot">
           <div className="vs-avatar">
             {avatarUrl ? <img src={avatarUrl} alt="" /> : <IconAvatarFallback size={26} />}
@@ -406,10 +427,6 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
 
       {!hasOpponent && inviting && (
         <div className="fade-in-up" style={{ marginTop: "var(--space-2)" }}>
-          <button className="room-back-link" onClick={() => setInviting(false)}>
-            <IconChevronLeft size={16} /> 返回匹配方式
-          </button>
-
           <p className="friend-section-label">好友列表</p>
           {friends.length === 0 ? (
             <p className="muted" style={{ fontSize: 13, marginBottom: "var(--space-2)" }}>还没有好友,可以在下面搜索昵称添加。</p>
