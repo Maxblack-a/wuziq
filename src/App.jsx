@@ -19,7 +19,6 @@ export default function App() {
   const [screen, setScreen] = useState("loading"); // loading | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile
   const [roomId, setRoomId] = useState(null);
   const [prefillRoomCode, setPrefillRoomCode] = useState(null);
-  const [friendAddMsg, setFriendAddMsg] = useState(null);
   const [incomingInvite, setIncomingInvite] = useState(null); // { id, room_id, fromName, fromAvatar }
   const [inviteBusy, setInviteBusy] = useState(false);
 
@@ -60,21 +59,16 @@ export default function App() {
         setMyId(uid);
         initPresence(uid); // 往"在线用户"这个全局频道报到,好友列表能看到谁在线
 
-        // 深链接参数分两种前缀:room_邀请码 用于加入对局,friend_好友码 用于加好友。
-        // 这个必须放在"自动续局"检查之前——用户点了一条明确的邀请/好友链接进来,
-        // 这是当下最强的意图,不能被"你还有一局没下完"这种被动逻辑悄悄吞掉、
-        // 带去了别的地方,那样点链接等于白点。
+        // 深链接参数:room_邀请码,用于加入对局。这个必须放在"自动续局"检查
+        // 之前——用户点了一条明确的邀请链接进来,这是当下最强的意图,不能被
+        // "你还有一局没下完"这种被动逻辑悄悄吞掉、带去了别的地方,那样点链接
+        // 等于白点。
+        // (原来这里还有一个 friend_好友码 分支,好友码那套设计已经去掉了,
+        // 加好友改成了在"好友"页/房间邀请面板里搜索昵称、发申请)
         const param = getStartParam();
         if (param?.startsWith("room_")) {
           setPrefillRoomCode(param.slice(5));
           setScreen("invite");
-          return;
-        }
-        if (param?.startsWith("friend_")) {
-          const code = param.slice(7);
-          const { data } = await supabase.rpc("add_friend_by_code", { my_id: uid, target_code: code });
-          setFriendAddMsg(data?.error ? data.error : `已添加 ${data?.display_name || "好友"}`);
-          setScreen("menu");
           return;
         }
 
@@ -188,13 +182,6 @@ export default function App() {
 
   return (
     <div className={`app-shell${screen === "menu" ? " app-shell-menu" : ""}`}>
-      {friendAddMsg && screen === "menu" && (
-        <div className="panel" style={{ marginTop: 12, textAlign: "center" }}>
-          <p>{friendAddMsg}</p>
-          <button className="btn-ghost" style={{ marginTop: 8 }} onClick={() => setFriendAddMsg(null)}>知道了</button>
-        </div>
-      )}
-
       {screen === "menu" && (
         <MainMenu onSelect={setScreen} playerName={profile?.display_name} rating={profile?.rating} avatarUrl={profile?.avatar_url} />
       )}
@@ -223,7 +210,7 @@ export default function App() {
         />
       )}
       {screen === "friends" && (
-        <FriendsScreen myId={myId} myFriendCode={profile?.friend_code} onMatched={handleMatched} onExit={goMenu} />
+        <FriendsScreen myId={myId} onMatched={handleMatched} onExit={goMenu} />
       )}
       {screen === "leaderboard" && <LeaderboardScreen myId={myId} onExit={goMenu} />}
       {screen === "profile" && <ProfileScreen myId={myId} onExit={goMenu} />}

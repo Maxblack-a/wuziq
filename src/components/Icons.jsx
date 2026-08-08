@@ -176,3 +176,31 @@ export function IconDiamondOutline({ size = 14 }) {
     </svg>
   );
 }
+
+// 搜索昵称加好友:输入框左侧的放大镜
+export function IconSearch({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M20 20l-4.3-4.3" />
+    </svg>
+  );
+}
+
+// 好友申请 · 同意
+export function IconCheck({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12.5l5 5L20 7" />
+    </svg>
+  );
+}
+
+// 好友申请 · 拒绝/取消
+export function IconClose({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}

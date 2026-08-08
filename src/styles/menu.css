@@ -895,3 +895,157 @@
   margin-bottom: var(--space-3);
 }
 .room-back-link:active { opacity: 0.7; }
+
+/* ============================================================
+   加好友:搜索昵称 + 发送申请。房间页"邀请好友"面板、好友页共用
+   这一套——两处都是同一件事(找人、发申请),没必要各起一套样式。
+   ============================================================ */
+
+/* 小节标题,比如"好友列表" / "搜索结果" / "好友申请" */
+.friend-section-label {
+  font-size: var(--text-caption);
+  color: var(--fg-muted);
+  margin: var(--space-4) 0 var(--space-2);
+  letter-spacing: 0.02em;
+}
+.friend-section-label:first-child { margin-top: 0; }
+
+/* 搜索框:放大镜图标 + 输入框,同一套墨色描边语言 */
+.friend-search-box {
+  position: relative;
+  margin-bottom: var(--space-2);
+}
+.friend-search-box input {
+  width: 100%;
+  padding: 12px 14px 12px 40px;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s ease;
+}
+.friend-search-box input:focus {
+  outline: none;
+  border-color: var(--wood);
+}
+.friend-search-box-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-muted);
+  pointer-events: none;
+  display: flex;
+}
+.friend-search-box-spinner {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.friend-search-hint {
+  font-size: 12px;
+  color: var(--fg-muted);
+  padding: 2px 2px var(--space-3);
+}
+
+/* 一行:头像 + 昵称/状态 + 操作按钮。好友列表、搜索结果、好友申请、
+   对战邀请统一用这一个组件形状,只是右侧按钮内容不同 */
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  box-shadow: var(--shadow-card);
+}
+
+.friend-row-avatar {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--wood-soft);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.friend-row-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.friend-row-avatar .online-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  margin: 0;
+  background: var(--surface);
+}
+
+.friend-row-info { flex: 1; min-width: 0; }
+.friend-row-name {
+  font-weight: 600;
+  font-size: var(--text-body);
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.friend-row-meta {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+.friend-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.friend-action-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: var(--wood);
+  color: var(--accent-fg);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+.friend-action-btn:active { transform: scale(0.94); }
+.friend-action-btn:disabled { opacity: 0.5; }
+
+.friend-action-btn.ghost {
+  background: transparent;
+  border: 1px solid var(--border-token);
+  color: var(--text-secondary);
+}
+
+/* 好友申请:圆形的同意(墨色实心)/ 拒绝(描边)图标按钮 */
+.friend-request-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.friend-request-icon-btn:active { transform: scale(0.9); }
+.friend-request-icon-btn.accept {
+  background: var(--wood);
+  color: var(--accent-fg);
+}
+.friend-request-icon-btn.decline {
+  background: transparent;
+  border: 1px solid var(--border-token);
+  color: var(--fg-muted);
+}

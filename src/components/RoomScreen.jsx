@@ -15,6 +15,7 @@ import {
   IconInfoCircle,
   IconDiamondOutline,
   IconFriends,
+  IconSearch,
 } from "./Icons";
 
 function randomCode() {
@@ -48,6 +49,10 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   const [inviting, setInviting] = useState(false); // 是否展开"邀请好友"这个子面板
   const [friends, setFriends] = useState([]);
   const [invitedIds, setInvitedIds] = useState(new Set());
+  const [friendQuery, setFriendQuery] = useState(""); // 邀请面板里"搜索昵称加好友"的输入
+  const [friendSearchResults, setFriendSearchResults] = useState([]);
+  const [friendSearching, setFriendSearching] = useState(false);
+  const [sentFriendRequestIds, setSentFriendRequestIds] = useState(new Set());
   const [copiedFlash, setCopiedFlash] = useState(false);
   const [promotedFlash, setPromotedFlash] = useState(false); // 对方退出、我被自动扶正当房主的提示
   const [starting, setStarting] = useState(false);
@@ -190,6 +195,42 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     const { error } = await supabase.from("game_invites").insert({ from_id: myId, to_id: friend.id, room_id: roomId });
     if (error) { setErrorMsg("邀请发送失败"); return; }
     setInvitedIds((prev) => new Set(prev).add(friend.id));
+  }
+
+  // 邀请面板里顺带能搜昵称加好友——房间里想拉的人如果还不是好友,
+  // 不用先跳去"好友"页,当场搜到、发申请,等对方同意了下次就能直接邀他对战。
+  // 搜索/发申请这套逻辑跟 FriendsScreen 里那份是同一个功能,这里是个精简版。
+  useEffect(() => {
+    const q = friendQuery.trim();
+    if (!q) { setFriendSearchResults([]); setFriendSearching(false); return; }
+    setFriendSearching(true);
+    const t = setTimeout(async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("id, display_name, avatar_url, rating")
+        .ilike("display_name", `%${q}%`)
+        .neq("id", myId)
+        .limit(20);
+      setFriendSearchResults(data || []);
+      setFriendSearching(false);
+    }, 400);
+    return () => clearTimeout(t);
+  }, [friendQuery, myId]);
+
+  async function sendFriendRequest(targetId) {
+    const { data, error } = await supabase.rpc("send_friend_request", { p_to_id: targetId });
+    if (error || data?.error) { setErrorMsg(data?.error || "申请发送失败"); return; }
+    if (data?.status === "auto_accepted") {
+      // 对方之前也申请过我,已经直接成为好友——刷新好友列表,这样 TA 马上
+      // 会出现在上面的"邀请对战"名单里,不用等再打开一次这个面板
+      const { data: fr } = await supabase
+        .from("friendships")
+        .select("friend_id, profiles:friend_id(id, display_name, avatar_url, rating)")
+        .eq("user_id", myId);
+      setFriends((fr || []).map((r) => r.profiles).filter(Boolean));
+    } else {
+      setSentFriendRequestIds((prev) => new Set(prev).add(targetId));
+    }
   }
 
   async function handleShare() {
@@ -369,31 +410,78 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
             <IconChevronLeft size={16} /> 返回匹配方式
           </button>
 
+          <p className="friend-section-label">好友列表</p>
           {friends.length === 0 ? (
-            <p className="muted" style={{ fontSize: 13 }}>还没有好友,去"好友"页面添加一个吧。</p>
+            <p className="muted" style={{ fontSize: 13, marginBottom: "var(--space-2)" }}>还没有好友,可以在下面搜索昵称添加。</p>
           ) : (
             friends.map((f) => (
-              <div key={f.id} className="mode-card" style={{ marginBottom: "var(--space-2)" }}>
-                <span className={`online-dot${onlineIds.has(f.id) ? " online" : ""}`} />
-                <div style={{ flex: 1 }}>
-                  <div className="title">{f.display_name || "玩家"}</div>
-                  <div className="desc">{onlineIds.has(f.id) ? "在线" : "离线"}</div>
+              <div key={f.id} className="friend-row">
+                <div className="friend-row-avatar">
+                  {f.avatar_url ? <img src={f.avatar_url} alt="" /> : <IconAvatarFallback size={18} />}
+                  <span className={`online-dot${onlineIds.has(f.id) ? " online" : ""}`} />
                 </div>
-                <button
-                  className="btn-ghost"
-                  style={{ padding: "8px 14px" }}
-                  disabled={invitedIds.has(f.id)}
-                  onClick={() => inviteFriend(f)}
-                >
-                  {invitedIds.has(f.id) ? "已邀请" : "邀请"}
-                </button>
+                <div className="friend-row-info">
+                  <div className="friend-row-name">{f.display_name || "玩家"}</div>
+                  <div className="friend-row-meta">{onlineIds.has(f.id) ? "在线" : "离线"}</div>
+                </div>
+                <div className="friend-row-actions">
+                  <button
+                    className="friend-action-btn ghost"
+                    disabled={invitedIds.has(f.id)}
+                    onClick={() => inviteFriend(f)}
+                  >
+                    {invitedIds.has(f.id) ? "已邀请" : "邀请"}
+                  </button>
+                </div>
               </div>
             ))
           )}
 
+          {/* 搜索昵称加好友:想拉的人还不是好友时,当场搜、当场发申请,
+              不用先跳去"好友"页——取代了原来的好友码设计 */}
+          <p className="friend-section-label">搜索昵称加好友</p>
+          <div className="friend-search-box">
+            <span className="friend-search-box-icon"><IconSearch size={17} /></span>
+            <input
+              value={friendQuery}
+              onChange={(e) => setFriendQuery(e.target.value)}
+              placeholder="输入对方的昵称"
+            />
+            {friendSearching && <span className="friend-search-box-spinner"><span className="spinner" style={{ width: 16, height: 16, borderWidth: 2 }} /></span>}
+          </div>
+
+          {friendQuery.trim() && !friendSearching && friendSearchResults.length === 0 && (
+            <p className="friend-search-hint">没有找到昵称包含"{friendQuery.trim()}"的玩家</p>
+          )}
+
+          {friendSearchResults.map((u) => {
+            const isFriend = friends.some((f) => f.id === u.id);
+            const isSent = sentFriendRequestIds.has(u.id);
+            return (
+              <div key={u.id} className="friend-row">
+                <div className="friend-row-avatar">
+                  {u.avatar_url ? <img src={u.avatar_url} alt="" /> : <IconAvatarFallback size={18} />}
+                </div>
+                <div className="friend-row-info">
+                  <div className="friend-row-name">{u.display_name || "玩家"}</div>
+                  <div className="friend-row-meta mono">积分 {u.rating}</div>
+                </div>
+                <div className="friend-row-actions">
+                  <button
+                    className="friend-action-btn ghost"
+                    disabled={isFriend || isSent}
+                    onClick={() => sendFriendRequest(u.id)}
+                  >
+                    {isFriend ? "已是好友" : isSent ? "已发送" : "加好友"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+
           {room?.code && (
             <div style={{ marginTop: "var(--space-4)" }}>
-              <p className="muted" style={{ marginBottom: "var(--space-2)", fontSize: 13 }}>
+              <p className="friend-section-label" style={{ margin: "0 0 var(--space-2)" }}>
                 也可以直接分享房间链接,不限于好友
               </p>
               <div className="room-code-display mono">{room.code}</div>
