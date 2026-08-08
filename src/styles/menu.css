@@ -606,7 +606,7 @@
   align-items: flex-start;
   justify-content: center;
   gap: var(--space-3);
-  padding: 0 0 var(--space-3);
+  padding: 0 0 4px;
 }
 
 .vs-slot {
@@ -752,26 +752,29 @@
   color: var(--wood);
 }
 
-/* ---- 好友在线胶囊条 ---- */
+/* ---- 好友在线:辅助信息行,不是按钮——去掉实心底色和胶囊形状,
+   换成一条更轻的分割线 + 小字,视觉上明显退到"开始匹配/邀请好友"
+   这两个正经按钮之后,只是顺手能点进去看好友列表而已 ---- */
 .friends-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   width: 100%;
-  margin-top: var(--space-2);
-  background: var(--wood-soft);
-  border-radius: 999px;
-  padding: 10px var(--space-4);
+  margin-top: var(--space-3);
+  padding: var(--space-2) 2px 0;
+  background: transparent;
+  border-top: 1px solid var(--border-token);
+  border-radius: 0;
   text-align: left;
-  transition: transform 0.15s ease;
+  transition: opacity 0.15s ease;
 }
-.friends-bar:active { transform: scale(0.98); }
+.friends-bar:active { opacity: 0.6; }
 
 .friends-bar-icon {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--wood-soft);
   color: var(--wood);
   display: flex;
   align-items: center;
@@ -781,13 +784,13 @@
 
 .friends-bar-text {
   flex: 1;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--fg);
+  color: var(--text-secondary);
 }
 
 .friends-bar-count {
-  color: var(--seal-red);
+  color: var(--wood);
   font-weight: 700;
   margin: 0 1px;
 }
@@ -811,9 +814,9 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  /* 整块"开始匹配"起的按钮区跟着标题/VS 区一起往上收一截,而不是
-     沿用原来 +space-2 的正向间距,让底部内容不显得空落落 */
-  margin-top: -14px;
+  /* 整块"开始匹配"起的按钮区跟 VS 区之间的空当已经在 .vs-row 那边收窄了,
+     这里恢复正常的正向间距,按钮之间该有的呼吸感不能省 */
+  margin-top: var(--space-2);
   background: #5C564D;
   color: #FBF6EC;
   border-radius: var(--radius-lg);
@@ -834,7 +837,7 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  margin-top: var(--space-2);
+  margin-top: var(--space-3);
   background: #F7F1E6;
   color: #6B5542;
   border-radius: var(--radius-lg);
