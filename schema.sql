@@ -367,7 +367,10 @@ create policy "friendships_select" on friendships for select using (auth.uid() =
 drop policy if exists "friendships_delete" on friendships;
 create policy "friendships_delete" on friendships for delete using (auth.uid() = user_id);
 
--- 用好友码添加好友:一次性把双方的关系都建好
+-- 已弃用:"好友码"这套加好友方式已经从产品设计里去掉了,改成下面的
+-- "搜索昵称 + 发送申请 + 对方同意"模式。这个函数和上面 friend_code 相关的
+-- 字段/触发器不再被前端调用,原样留着只是为了不破坏已经部署过的老数据库
+-- 结构(万一还有历史数据/深链接依赖它),新项目可以忽略、不必特地删掉。
 create or replace function add_friend_by_code(my_id uuid, target_code text)
 returns jsonb
 language plpgsql
@@ -401,6 +404,115 @@ begin
   );
 end;
 $$;
+
+-- ============================================================
+-- 加好友新方式:搜索用户昵称 → 发送好友申请 → 对方同意 → 双方互为好友。
+-- 取代上面的好友码方案。用一张单独的申请表存"谁申请了谁",
+-- 通过之后才在 friendships 里各写一行(跟原来好友码那套落地方式一致,
+-- 这样好友列表/在线胶囊条等下游查询完全不用改)。
+-- ============================================================
+create table if not exists friend_requests (
+  id uuid primary key default gen_random_uuid(),
+  from_id uuid references profiles(id) on delete cascade,
+  to_id uuid references profiles(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'accepted', 'declined')),
+  created_at timestamptz not null default now(),
+  unique(from_id, to_id) -- 同一个人不能对同一个目标同时挂着好几条申请
+);
+
+alter table friend_requests enable row level security;
+
+-- 只有申请的发起人或接收人能看到这条申请
+drop policy if exists "friend_requests_select" on friend_requests;
+create policy "friend_requests_select" on friend_requests for select using (
+  auth.uid() = from_id or auth.uid() = to_id
+);
+
+alter publication supabase_realtime add table friend_requests;
+
+-- 发送好友申请。如果对方之前已经先申请过我(双方都待处理、谁也没点同意),
+-- 这里直接判定为互相同意、当场加好友,不用再走一遍"对方同意"的流程——
+-- 不然会出现两个人都点了"申请",却都在傻等对方点同意的死锁体验。
+-- 已经是好友、或者申请对象是自己,直接返回错误提示,不让重复写入。
+create or replace function send_friend_request(p_to_id uuid)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  reverse_req record;
+begin
+  if me is null then
+    return jsonb_build_object('error', '未登录');
+  end if;
+  if p_to_id = me then
+    return jsonb_build_object('error', '不能添加自己');
+  end if;
+  if not exists(select 1 from profiles where id = p_to_id) then
+    return jsonb_build_object('error', '用户不存在');
+  end if;
+  if exists(select 1 from friendships where user_id = me and friend_id = p_to_id) then
+    return jsonb_build_object('error', '你们已经是好友了');
+  end if;
+
+  select * into reverse_req from friend_requests
+  where from_id = p_to_id and to_id = me and status = 'pending';
+
+  if reverse_req.id is not null then
+    insert into friendships (user_id, friend_id) values (me, p_to_id) on conflict do nothing;
+    insert into friendships (user_id, friend_id) values (p_to_id, me) on conflict do nothing;
+    update friend_requests set status = 'accepted' where id = reverse_req.id;
+    return jsonb_build_object('status', 'auto_accepted');
+  end if;
+
+  insert into friend_requests (from_id, to_id, status)
+  values (me, p_to_id, 'pending')
+  on conflict (from_id, to_id) do update
+    set status = 'pending', created_at = now()
+    where friend_requests.status = 'declined'; -- 之前被拒绝过的话,允许重新申请一次
+
+  return jsonb_build_object('status', 'pending');
+end;
+$$;
+
+grant execute on function send_friend_request(uuid) to authenticated;
+
+-- 回应收到的好友申请:同意就双向写 friendships,拒绝就只是标记状态,
+-- 不删除这条记录(留着能防止对方短时间内反复重复申请刷屏)。
+create or replace function respond_friend_request(p_request_id uuid, p_accept boolean)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  req record;
+begin
+  if me is null then
+    return jsonb_build_object('error', '未登录');
+  end if;
+
+  select * into req from friend_requests
+  where id = p_request_id and to_id = me and status = 'pending';
+
+  if req.id is null then
+    return jsonb_build_object('error', '申请不存在或已处理');
+  end if;
+
+  if p_accept then
+    insert into friendships (user_id, friend_id) values (me, req.from_id) on conflict do nothing;
+    insert into friendships (user_id, friend_id) values (req.from_id, me) on conflict do nothing;
+    update friend_requests set status = 'accepted' where id = p_request_id;
+    return jsonb_build_object('status', 'accepted');
+  else
+    update friend_requests set status = 'declined' where id = p_request_id;
+    return jsonb_build_object('status', 'declined');
+  end if;
+end;
+$$;
+
+grant execute on function respond_friend_request(uuid, boolean) to authenticated;
 
 -- ============================================================
 -- 对战邀请通知:好友之间发起邀请,对方下次打开/在线时能看到并一键加入

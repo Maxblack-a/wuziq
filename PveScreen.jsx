@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import Board from "./Board";
 import ResultModal from "./ResultModal";
+import { IconChevronLeft, IconUndo } from "./Icons";
 import { createEmptyBoard, checkWin, isBoardFull, cloneBoard, BLACK, WHITE } from "../game/logic";
 import { getAiMove } from "../game/ai";
 import { useTelegramBackButton, hapticNotify, confirmDialog } from "../lib/telegram";
@@ -101,26 +102,30 @@ export default function PveScreen({ onExit }) {
   return (
     <div>
       <div className="game-layout">
+        {/* 顶部状态栏:返回 + 回合状态,复用 RoomScreen 里已经在用的
+            room-topbar / room-icon-btn 样式,跟全局设计系统保持一致 */}
+        <div className="room-topbar pve-topbar">
+          <button className="room-icon-btn" onClick={onExit} aria-label="返回">
+            <IconChevronLeft />
+          </button>
+          <div className="pve-turn-pill">
+            {thinking ? (
+              <><div className="spinner" /> AI 思考中</>
+            ) : (
+              <>
+                <div className={`turn-dot black${turn === 1 ? " active" : ""}`} />
+                <div className={`turn-dot white${turn === 2 ? " active" : ""}`} />
+                {turn === 1 ? "轮到你" : "对方回合"}
+              </>
+            )}
+          </div>
+        </div>
+
         <div className="game-board-col">
           <Board board={board} onCellClick={handleCellClick} lastMove={lastMove} winLine={winInfo} disabled={thinking} onIllegalTap={() => hapticNotify("warning")} previewColor={BLACK} />
         </div>
 
         <div className="game-info-col">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <button className="btn-ghost" onClick={onExit}>← 返回</button>
-            <div className="turn-indicator">
-              {thinking ? (
-                <><div className="spinner" /> AI 思考中</>
-              ) : (
-                <>
-                  <div className={`turn-dot black${turn === 1 ? " active" : ""}`} />
-                  <div className={`turn-dot white${turn === 2 ? " active" : ""}`} />
-                  {turn === 1 ? "轮到你" : "对方回合"}
-                </>
-              )}
-            </div>
-          </div>
-
           <div className="diff-row">
             {[["easy", "简单"], ["medium", "中等"], ["hard", "困难"]].map(([key, label]) => (
               <button
@@ -132,10 +137,12 @@ export default function PveScreen({ onExit }) {
               </button>
             ))}
           </div>
-          <p className="muted" style={{ fontSize: 12, textAlign: "center" }}>人机对战不计入积分和战绩</p>
+          <p className="muted pve-disclaimer">人机对战不计入积分和战绩</p>
 
           <div style={{ display: "flex", justifyContent: "center" }}>
-            <button className="btn-ghost" onClick={undo} disabled={history.length < 1 || thinking || !!result}>悔棋</button>
+            <button className="btn-undo" onClick={undo} disabled={history.length < 1 || thinking || !!result}>
+              <IconUndo size={15} /> 悔棋
+            </button>
           </div>
         </div>
       </div>

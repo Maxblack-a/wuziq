@@ -176,3 +176,42 @@ export function IconDiamondOutline({ size = 14 }) {
     </svg>
   );
 }
+
+// 搜索昵称加好友:输入框左侧的放大镜
+export function IconSearch({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M20 20l-4.3-4.3" />
+    </svg>
+  );
+}
+
+// 好友申请 · 同意
+export function IconCheck({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12.5l5 5L20 7" />
+    </svg>
+  );
+}
+
+// 好友申请 · 拒绝/取消
+export function IconClose({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+// 人机对战 · 悔棋(逆时针回退箭头,跟"返回"的 chevron 区分开,
+// 一眼能看出这是"撤销上一步"而不是"离开页面")
+export function IconUndo({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 10H15.5C18 10 20 12 20 14.5C20 17 18 19 15.5 19H10" />
+      <path d="M10 6.5L6 10L10 13.5" />
+    </svg>
+  );
+}

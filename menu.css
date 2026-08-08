@@ -26,11 +26,6 @@
   z-index: 0;
   pointer-events: none;
   user-select: none;
-  /* 素材本身偏亮、偏灰,跟设计图里那种更深、更暖的暖褐调有肉眼可见的
-     色差——不改图片文件,用滤镜在渲染层把它压暗、提饱和度、加暖,
-     对齐设计图的整体基调(参数是拿设计图实测的色值反推出来的,不是
-     拍脑袋)。不裁剪、不改源图,只是显示时的颜色矫正。 */
-  filter: brightness(0.8) contrast(1.15) saturate(1.15);
   /* 底部 10% 渐隐透明,融入下方 app-shell 的暖褐渐变,避免硬边——
      只淡出图片本身最后一截,在线状态行叠在它上面的稳定色区,不受影响 */
   mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
@@ -484,14 +479,16 @@
   flex: 1;
   padding: var(--space-2);
   border-radius: var(--radius-sm);
-  background: var(--wood-soft);
+  background: var(--surface);
+  border: 1px solid var(--border-token);
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .diff-btn.active {
   background: var(--wood);
+  border-color: var(--wood);
   color: var(--accent-fg);
 }
 
@@ -611,7 +608,7 @@
   align-items: flex-start;
   justify-content: center;
   gap: var(--space-3);
-  padding: 0 0 var(--space-3);
+  padding: 0 0 4px;
 }
 
 .vs-slot {
@@ -757,25 +754,29 @@
   color: var(--wood);
 }
 
-/* ---- 好友在线胶囊条 ---- */
+/* ---- 好友在线:辅助信息行,不是按钮——去掉实心底色和胶囊形状,
+   换成一条更轻的分割线 + 小字,视觉上明显退到"开始匹配/邀请好友"
+   这两个正经按钮之后,只是顺手能点进去看好友列表而已 ---- */
 .friends-bar {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   width: 100%;
-  background: var(--wood-soft);
-  border-radius: 999px;
-  padding: 10px var(--space-4);
+  margin-top: var(--space-3);
+  padding: var(--space-2) 2px 0;
+  background: transparent;
+  border-top: 1px solid var(--border-token);
+  border-radius: 0;
   text-align: left;
-  transition: transform 0.15s ease;
+  transition: opacity 0.15s ease;
 }
-.friends-bar:active { transform: scale(0.98); }
+.friends-bar:active { opacity: 0.6; }
 
 .friends-bar-icon {
-  width: 32px;
-  height: 32px;
+  width: 26px;
+  height: 26px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.55);
+  background: var(--wood-soft);
   color: var(--wood);
   display: flex;
   align-items: center;
@@ -785,13 +786,13 @@
 
 .friends-bar-text {
   flex: 1;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
-  color: var(--fg);
+  color: var(--text-secondary);
 }
 
 .friends-bar-count {
-  color: var(--seal-red);
+  color: var(--wood);
   font-weight: 700;
   margin: 0 1px;
 }
@@ -815,16 +816,40 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
+  /* 整块"开始匹配"起的按钮区跟 VS 区之间的空当已经在 .vs-row 那边收窄了,
+     这里恢复正常的正向间距,按钮之间该有的呼吸感不能省 */
   margin-top: var(--space-2);
-  background: var(--ink-token);
+  background: #5C564D;
   color: #FBF6EC;
   border-radius: var(--radius-lg);
   padding: var(--space-2) var(--space-4);
+  border: 1.4px solid rgba(198, 161, 91, 0.6);
   box-shadow: var(--shadow-modal);
   transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
 }
 .room-action-primary:active { transform: scale(0.98); box-shadow: var(--shadow-card); }
 .room-action-primary:disabled { opacity: 0.5; box-shadow: none; }
+
+/* ---- 邀请好友按钮:跟上面"开始匹配"同一套设计语言(同样的
+   cta-primary-lead/-icon/-text/-title/-sub/-arrow 结构、同样的圆角、
+   同样的金色描边),只是底色反过来用浅米色,两者视觉分量完全对等,
+   不做主次区分 ---- */
+.room-action-invite {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: var(--space-3);
+  background: #F7F1E6;
+  color: #6B5542;
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-4);
+  border: 1.4px solid rgba(198, 161, 91, 0.6);
+  box-shadow: var(--shadow-modal);
+  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+}
+.room-action-invite:active { transform: scale(0.98); box-shadow: var(--shadow-card); }
+.room-action-invite:disabled { opacity: 0.5; box-shadow: none; }
 
 .cta-primary-lead {
   display: flex;
@@ -845,29 +870,6 @@
   align-items: center;
   justify-content: center;
 }
-
-/* ---- 描边邀请按钮 ----
-   跟上面主 CTA 对齐高度:主 CTA 是"图标+两行文字"天然更高,这里内边距
-   比主 CTA 大一截(18px vs 主 CTA 的 8px)来补齐总高度,而不是让主 CTA
-   显得比这个按钮明显更"胖" */
-.btn-outline-pill {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  width: 100%;
-  margin-top: var(--space-2);
-  padding: 18px var(--space-6);
-  border-radius: 999px;
-  border: 1.4px solid var(--border-token);
-  background: transparent;
-  color: var(--ink-token);
-  font-size: 15px;
-  font-weight: 600;
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-.btn-outline-pill:active { background: var(--wood-soft); transform: scale(0.98); }
-.btn-outline-pill:disabled { opacity: 0.4; }
 
 /* ---- 底部的房间自动解散提示 ---- */
 .room-footnote {
@@ -895,3 +897,157 @@
   margin-bottom: var(--space-3);
 }
 .room-back-link:active { opacity: 0.7; }
+
+/* ============================================================
+   加好友:搜索昵称 + 发送申请。房间页"邀请好友"面板、好友页共用
+   这一套——两处都是同一件事(找人、发申请),没必要各起一套样式。
+   ============================================================ */
+
+/* 小节标题,比如"好友列表" / "搜索结果" / "好友申请" */
+.friend-section-label {
+  font-size: var(--text-caption);
+  color: var(--fg-muted);
+  margin: var(--space-4) 0 var(--space-2);
+  letter-spacing: 0.02em;
+}
+.friend-section-label:first-child { margin-top: 0; }
+
+/* 搜索框:放大镜图标 + 输入框,同一套墨色描边语言 */
+.friend-search-box {
+  position: relative;
+  margin-bottom: var(--space-2);
+}
+.friend-search-box input {
+  width: 100%;
+  padding: 12px 14px 12px 40px;
+  font-size: 15px;
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-md);
+  transition: border-color 0.15s ease;
+}
+.friend-search-box input:focus {
+  outline: none;
+  border-color: var(--wood);
+}
+.friend-search-box-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-muted);
+  pointer-events: none;
+  display: flex;
+}
+.friend-search-box-spinner {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.friend-search-hint {
+  font-size: 12px;
+  color: var(--fg-muted);
+  padding: 2px 2px var(--space-3);
+}
+
+/* 一行:头像 + 昵称/状态 + 操作按钮。好友列表、搜索结果、好友申请、
+   对战邀请统一用这一个组件形状,只是右侧按钮内容不同 */
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 10px var(--space-3);
+  background: var(--surface);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+  box-shadow: var(--shadow-card);
+}
+
+.friend-row-avatar {
+  position: relative;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--wood-soft);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.friend-row-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.friend-row-avatar .online-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  margin: 0;
+  background: var(--surface);
+}
+
+.friend-row-info { flex: 1; min-width: 0; }
+.friend-row-name {
+  font-weight: 600;
+  font-size: var(--text-body);
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.friend-row-meta {
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+.friend-row-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.friend-action-btn {
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: var(--radius-sm);
+  background: var(--wood);
+  color: var(--accent-fg);
+  transition: transform 0.15s ease, opacity 0.15s ease;
+  white-space: nowrap;
+}
+.friend-action-btn:active { transform: scale(0.94); }
+.friend-action-btn:disabled { opacity: 0.5; }
+
+.friend-action-btn.ghost {
+  background: transparent;
+  border: 1px solid var(--border-token);
+  color: var(--text-secondary);
+}
+
+/* 好友申请:圆形的同意(墨色实心)/ 拒绝(描边)图标按钮 */
+.friend-request-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+}
+.friend-request-icon-btn:active { transform: scale(0.9); }
+.friend-request-icon-btn.accept {
+  background: var(--wood);
+  color: var(--accent-fg);
+}
+.friend-request-icon-btn.decline {
+  background: transparent;
+  border: 1px solid var(--border-token);
+  color: var(--fg-muted);
+}

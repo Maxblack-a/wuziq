@@ -1,24 +1,63 @@
 .board-wrap {
   width: 100%;
-  /* 之前固定 480px,横屏时可用高度往往远小于480px,正方形棋盘会被撑得超出屏幕。
-     改成同时用视口高度做上限,横屏、竖屏都不会超出实际可视范围 */
-  max-width: min(480px, 85vh, 85vw);
+  /* 之前 max-width 只给到 85vw/85vh,15列一分,单格触摸目标在常见手机
+     宽度下只有约20px,远低于44px的可用性建议下限,很容易点错相邻格。
+     现在尽量把棋盘撑到接近整屏宽度(配合 .game-board-col 的出血负边距
+     抵消掉外层 app-shell 的左右留白),并把棋盘自身的内边距从16px收窄到
+     8px,把这部分空间也让给格子本身。 */
+  max-width: min(560px, 92vh, 98vw);
   margin: 0 auto;
-  aspect-ratio: 1 / 1;
+  position: relative;
+  /* 原来用 aspect-ratio:1/1 撑出正方形。问题是 .board-grid::before 网格线
+     是靠 position:absolute + inset:calc(100%/30) 定位的,而"绝对定位子元素
+     的百分比 inset 相对父元素的百分比高度"这条链路,依赖父元素(.board-wrap)
+     的高度被解析成"确定尺寸(definite size)"——aspect-ratio 撑出来的高度在
+     部分安卓系统 WebView(Telegram 内置浏览器常见)里并不总是被当成确定尺寸,
+     于是子元素的百分比高度/inset 解析基准就变得不稳定,实测表现正是棋盘
+     网格线整体偏向左下,右侧和顶部多出一截空白——不是设计需要,是这个
+     WebView 兼容性问题导致的渲染 bug。
+     改用"padding-top:100%撑出等高" 这个更老、兼容性覆盖面更广的经典做法:
+     .board-wrap 自己不再放内容,只负责用 padding-top 撑出一个确定的正方形
+     高度;真正的背景/内边距/网格全部挪到内部绝对定位铺满的 .board-inner 里,
+     它的 inset:0 直接是 0 这个具体数值,不再依赖任何"自动高度"百分比换算,
+     彻底绕开这个问题。 */
+  padding-top: 100%;
+}
+
+.board-inner {
+  position: absolute;
+  inset: 0;
   border-radius: var(--radius-md);
-  padding: var(--space-4);
+  padding: var(--board-padding);
   background:
     repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 40px),
     linear-gradient(160deg, var(--board-wood-1), var(--board-wood-2));
   box-shadow: inset 0 2px 12px rgba(0,0,0,0.45), var(--shadow-modal);
-  position: relative;
-  transition: opacity 0.2s ease, filter 0.2s ease;
+  --board-padding: var(--space-2);
 }
 
-/* 不是自己回合时,棋盘整体压暗一点,而不是看起来跟平时一模一样却点不动 */
-.board-wrap.board-disabled {
-  opacity: 0.75;
-  filter: saturate(0.7);
+/* 不是自己回合时,只压暗棋盘格子这一层(0.75→0.55），角标文字作为同级
+   元素叠在上面,不会被这层opacity一起拖暗,保持清晰可读 */
+.board-wrap.board-disabled .board-grid {
+  opacity: 0.55;
+  filter: saturate(0.5) brightness(0.9);
+  pointer-events: none;
+}
+
+.board-disabled-badge {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(23, 23, 23, 0.55);
+  color: #FBF6EC;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .board-grid {
@@ -28,6 +67,7 @@
   display: grid;
   grid-template-columns: repeat(15, 1fr);
   grid-template-rows: repeat(15, 1fr);
+  transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
 /* 网格线用背景绘制,而不是每个格子加边框,避免线条粗细不均 */
@@ -129,7 +169,7 @@
 
 .win-line-svg {
   position: absolute;
-  inset: 14px;
+  inset: 0;
   pointer-events: none;
   z-index: 3;
 }
@@ -157,6 +197,11 @@
 
 .game-board-col {
   width: 100%;
+  /* 抵消 app-shell 左右各 --space-4 的留白,让棋盘尽量撑满屏幕宽度——
+     这样 15×15 格子实际分到的触摸面积才能明显变大,而不是被外层padding
+     限制住(board-wrap 的 max-width 放大了也没用,父容器窄它照样窄) */
+  margin: 0 calc(var(--space-4) * -1);
+  padding: 0 var(--space-2);
 }
 
 .game-info-col {
@@ -170,13 +215,19 @@
 @media (orientation: landscape) and (max-height: 500px) {
   .game-layout {
     flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: center;
     gap: 24px;
   }
+  .pve-topbar {
+    flex: 1 1 100%;
+  }
   .game-board-col {
     width: min(480px, 85vh, 60vw);
     flex: 0 0 auto;
+    margin: 0;
+    padding: 0;
   }
   .game-info-col {
     flex: 1 1 auto;
@@ -184,6 +235,22 @@
     max-width: 260px;
   }
 }
+.pve-topbar {
+  margin-bottom: var(--space-2);
+}
+
+.pve-turn-pill {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--wood-soft);
+  color: var(--ink-token);
+  font-size: 13px;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+}
+
 .turn-indicator {
   display: flex;
   align-items: center;
@@ -193,12 +260,38 @@
 }
 
 .turn-dot {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
+  transition: box-shadow 0.15s ease;
 }
 .turn-dot.black { background: var(--stone-black); }
 .turn-dot.white { background: var(--stone-white); border: 1px solid var(--ink-line); }
 .turn-dot.active {
-  box-shadow: 0 0 0 3px rgba(91, 56, 35, 0.3);
+  box-shadow: 0 0 0 3px rgba(91, 56, 35, 0.35);
 }
+
+.pve-disclaimer {
+  font-size: 12px;
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+/* 悔棋:跟顶部"返回"的圆形图标按钮区分开——这里是个带边框的胶囊按钮
+   （图标+文字），一眼能看出是"操作类"按钮而不是"导航类"按钮；
+   disabled 态明显降低不透明度并保留 cursor:not-allowed 提示不可点 */
+.btn-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--surface);
+  color: var(--ink-token);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-md);
+  padding: var(--space-2) var(--space-4);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
+}
+.btn-undo:active { background: var(--wood-soft); transform: scale(0.97); }
+.btn-undo:disabled { opacity: 0.4; cursor: not-allowed; }

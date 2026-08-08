@@ -5,6 +5,7 @@ import MatchmakingScreen from "./components/MatchmakingScreen";
 import InviteScreen from "./components/InviteScreen";
 import RoomScreen from "./components/RoomScreen";
 import IncomingInviteModal from "./components/IncomingInviteModal";
+import IncomingFriendRequestModal from "./components/IncomingFriendRequestModal";
 import OnlineGame from "./components/OnlineGame";
 import FriendsScreen from "./components/FriendsScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
@@ -19,15 +20,44 @@ export default function App() {
   const [screen, setScreen] = useState("loading"); // loading | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile
   const [roomId, setRoomId] = useState(null);
   const [prefillRoomCode, setPrefillRoomCode] = useState(null);
-  const [friendAddMsg, setFriendAddMsg] = useState(null);
-  const [incomingInvite, setIncomingInvite] = useState(null); // { id, room_id, fromName, fromAvatar }
-  const [inviteBusy, setInviteBusy] = useState(false);
+  // 对战邀请、好友申请统一进这一个队列,一个个强制弹窗处理——两种通知
+  // 都是"必须回应"的事,不用两套并行的状态各管各的。队首这一条决定当前
+  // 弹的是哪个弹窗,处理完(同意/拒绝)就出队,轮到下一条。
+  // 每一项: { kind: 'invite' | 'friend_request', id, fromName, fromAvatar, room_id?, created_at }
+  const [notifQueue, setNotifQueue] = useState([]);
+  const [notifBusy, setNotifBusy] = useState(false);
 
 
   async function refreshProfile(uid) {
     const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
     setProfile(data);
     return data;
+  }
+
+  // 查一遍所有还没处理的对战邀请 + 好友申请,按发起时间排好序塞进队列。
+  // 只在登录成功后跑一次——实时订阅(下面那个 effect)只能抓到"订阅开始之后
+  // 新发生"的事件,订阅开始之前就已经存在、但还没处理的,得靠这次主动查询补上,
+  // 不然用户如果是在收到邀请之后才重新打开 App,会永远看不到这条弹窗。
+  async function loadPendingNotifications(uid) {
+    const [{ data: invites }, { data: requests }] = await Promise.all([
+      supabase.from("game_invites")
+        .select("id, room_id, created_at, profiles:from_id(display_name, avatar_url)")
+        .eq("to_id", uid).eq("status", "pending").order("created_at", { ascending: true }),
+      supabase.from("friend_requests")
+        .select("id, from_id, created_at, profiles:from_id(display_name, avatar_url)")
+        .eq("to_id", uid).eq("status", "pending").order("created_at", { ascending: true }),
+    ]);
+    const items = [
+      ...(invites || []).map((i) => ({
+        kind: "invite", id: i.id, room_id: i.room_id,
+        fromName: i.profiles?.display_name, fromAvatar: i.profiles?.avatar_url, created_at: i.created_at,
+      })),
+      ...(requests || []).map((r) => ({
+        kind: "friend_request", id: r.id,
+        fromName: r.profiles?.display_name, fromAvatar: r.profiles?.avatar_url, created_at: r.created_at,
+      })),
+    ].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+    if (items.length) setNotifQueue((prev) => [...prev, ...items]);
   }
 
   useEffect(() => {
@@ -59,22 +89,18 @@ export default function App() {
         }
         setMyId(uid);
         initPresence(uid); // 往"在线用户"这个全局频道报到,好友列表能看到谁在线
+        loadPendingNotifications(uid); // 补一次:上次关闭 App 期间收到的邀请/申请,实时订阅是抓不到的,得主动查一遍
 
-        // 深链接参数分两种前缀:room_邀请码 用于加入对局,friend_好友码 用于加好友。
-        // 这个必须放在"自动续局"检查之前——用户点了一条明确的邀请/好友链接进来,
-        // 这是当下最强的意图,不能被"你还有一局没下完"这种被动逻辑悄悄吞掉、
-        // 带去了别的地方,那样点链接等于白点。
+        // 深链接参数:room_邀请码,用于加入对局。这个必须放在"自动续局"检查
+        // 之前——用户点了一条明确的邀请链接进来,这是当下最强的意图,不能被
+        // "你还有一局没下完"这种被动逻辑悄悄吞掉、带去了别的地方,那样点链接
+        // 等于白点。
+        // (原来这里还有一个 friend_好友码 分支,好友码那套设计已经去掉了,
+        // 加好友改成了在"好友"页/房间邀请面板里搜索昵称、发申请)
         const param = getStartParam();
         if (param?.startsWith("room_")) {
           setPrefillRoomCode(param.slice(5));
           setScreen("invite");
-          return;
-        }
-        if (param?.startsWith("friend_")) {
-          const code = param.slice(7);
-          const { data } = await supabase.rpc("add_friend_by_code", { my_id: uid, target_code: code });
-          setFriendAddMsg(data?.error ? data.error : `已添加 ${data?.display_name || "好友"}`);
-          setScreen("menu");
           return;
         }
 
@@ -129,37 +155,50 @@ export default function App() {
     setScreen(data?.status === "playing" ? "game" : "room");
   }
 
-  // 接受/拒绝好友对战邀请,都可以顺手带一句话(选填)。这两个函数挂在
-  // App 顶层是因为邀请弹窗本身也是全局的,跟当前具体在哪个 screen 无关。
+  // 接受/拒绝好友对战邀请,都可以顺手带一句话(选填)。
+  // 好友申请没有留言这一说,同意/拒绝各自一个按钮就够了。
+  // 两组处理完都是"出队":把队首这条挪走,轮到下一条(如果还有的话)自动弹出来。
   async function handleAcceptInvite(message) {
-    if (!incomingInvite) return;
-    setInviteBusy(true);
+    const current = notifQueue[0];
+    if (!current || current.kind !== "invite") return;
+    setNotifBusy(true);
     const { data: newRoomId, error } = await supabase.rpc("accept_game_invite", {
-      p_invite_id: incomingInvite.id,
+      p_invite_id: current.id,
       p_message: message,
     });
-    setInviteBusy(false);
-    setIncomingInvite(null);
+    setNotifBusy(false);
+    setNotifQueue((prev) => prev.slice(1));
     if (!error && newRoomId) {
       handleMatched(newRoomId);
     }
   }
 
   async function handleDeclineInvite(message) {
-    if (!incomingInvite) return;
-    setInviteBusy(true);
+    const current = notifQueue[0];
+    if (!current || current.kind !== "invite") return;
+    setNotifBusy(true);
     await supabase.from("game_invites")
       .update({ status: "declined", response_message: message })
-      .eq("id", incomingInvite.id);
-    setInviteBusy(false);
-    setIncomingInvite(null);
+      .eq("id", current.id);
+    setNotifBusy(false);
+    setNotifQueue((prev) => prev.slice(1));
   }
 
-  // 全局监听发给我的对战邀请:不管当前停在哪个页面,只要有好友邀请就弹窗,
-  // 不需要专门跑到"好友"页面才能看到。只在拿到登录身份之后才订阅。
+  async function handleRespondFriendRequest(accept) {
+    const current = notifQueue[0];
+    if (!current || current.kind !== "friend_request") return;
+    setNotifBusy(true);
+    await supabase.rpc("respond_friend_request", { p_request_id: current.id, p_accept: accept });
+    setNotifBusy(false);
+    setNotifQueue((prev) => prev.slice(1));
+  }
+
+  // 全局监听发给我的对战邀请 + 好友申请:不管当前停在哪个页面,只要有新的
+  // 就推进队列弹窗,不需要专门跑到"好友"页面才能看到。只在拿到登录身份
+  // 之后才订阅;订阅开始之前已经存在的,靠上面 loadPendingNotifications 补。
   useEffect(() => {
     if (!myId) return;
-    const channel = supabase
+    const inviteChannel = supabase
       .channel(`global-invites-${myId}`)
       .on("postgres_changes",
         { event: "INSERT", schema: "public", table: "game_invites", filter: `to_id=eq.${myId}` },
@@ -167,15 +206,32 @@ export default function App() {
           const inv = payload.new;
           const { data: fromProfile } = await supabase
             .from("profiles").select("display_name, avatar_url").eq("id", inv.from_id).single();
-          setIncomingInvite({
-            id: inv.id,
-            room_id: inv.room_id,
-            fromName: fromProfile?.display_name,
-            fromAvatar: fromProfile?.avatar_url,
-          });
+          setNotifQueue((prev) => [...prev, {
+            kind: "invite", id: inv.id, room_id: inv.room_id,
+            fromName: fromProfile?.display_name, fromAvatar: fromProfile?.avatar_url,
+          }]);
         }
       ).subscribe();
-    return () => supabase.removeChannel(channel);
+
+    const requestChannel = supabase
+      .channel(`global-friend-requests-${myId}`)
+      .on("postgres_changes",
+        { event: "INSERT", schema: "public", table: "friend_requests", filter: `to_id=eq.${myId}` },
+        async (payload) => {
+          const req = payload.new;
+          const { data: fromProfile } = await supabase
+            .from("profiles").select("display_name, avatar_url").eq("id", req.from_id).single();
+          setNotifQueue((prev) => [...prev, {
+            kind: "friend_request", id: req.id,
+            fromName: fromProfile?.display_name, fromAvatar: fromProfile?.avatar_url,
+          }]);
+        }
+      ).subscribe();
+
+    return () => {
+      supabase.removeChannel(inviteChannel);
+      supabase.removeChannel(requestChannel);
+    };
   }, [myId]);
 
   if (screen === "loading") {
@@ -188,13 +244,6 @@ export default function App() {
 
   return (
     <div className={`app-shell${screen === "menu" ? " app-shell-menu" : ""}`}>
-      {friendAddMsg && screen === "menu" && (
-        <div className="panel" style={{ marginTop: 12, textAlign: "center" }}>
-          <p>{friendAddMsg}</p>
-          <button className="btn-ghost" style={{ marginTop: 8 }} onClick={() => setFriendAddMsg(null)}>知道了</button>
-        </div>
-      )}
-
       {screen === "menu" && (
         <MainMenu onSelect={setScreen} playerName={profile?.display_name} rating={profile?.rating} avatarUrl={profile?.avatar_url} />
       )}
@@ -223,18 +272,26 @@ export default function App() {
         />
       )}
       {screen === "friends" && (
-        <FriendsScreen myId={myId} myFriendCode={profile?.friend_code} onMatched={handleMatched} onExit={goMenu} />
+        <FriendsScreen myId={myId} onMatched={handleMatched} onExit={goMenu} />
       )}
       {screen === "leaderboard" && <LeaderboardScreen myId={myId} onExit={goMenu} />}
       {screen === "profile" && <ProfileScreen myId={myId} onExit={goMenu} />}
       {screen === "game" && <OnlineGame roomId={roomId} myId={myId} onExit={goMenu} onMatched={handleMatched} />}
 
-      {incomingInvite && (
+      {notifQueue[0]?.kind === "invite" && (
         <IncomingInviteModal
-          invite={incomingInvite}
-          busy={inviteBusy}
+          invite={notifQueue[0]}
+          busy={notifBusy}
           onAccept={handleAcceptInvite}
           onDecline={handleDeclineInvite}
+        />
+      )}
+      {notifQueue[0]?.kind === "friend_request" && (
+        <IncomingFriendRequestModal
+          request={notifQueue[0]}
+          busy={notifBusy}
+          onAccept={() => handleRespondFriendRequest(true)}
+          onDecline={() => handleRespondFriendRequest(false)}
         />
       )}
     </div>
