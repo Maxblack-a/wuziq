@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { BOARD_SIZE } from "../game/logic";
 import { hapticImpact } from "../lib/telegram";
 
@@ -16,6 +16,37 @@ export default function Board({ board, onCellClick, lastMove, winLine, disabled,
     // 避免残留一个不该出现的预览棋子
     if (disabled) setPending(null);
   }, [disabled]);
+
+  // 棋盘必须是正方形,之前用 CSS 的 aspect-ratio / padding-top 百分比技巧来撑出
+  // 正方形,但这类"自动高度"的解析在不同 WebView 内核里(尤其是桌面版 Telegram
+  // 内置的浏览器内核,跟手机端、跟普通 Chrome 都不是同一套渲染实现)表现不一致,
+  // 会导致网格线定位用到的百分比算错基准,出现棋盘偏向一角、周围留白不均的问题。
+  // 这里改成用 JS 直接量出容器实际渲染宽度,显式写死成一个像素高度——
+  // 不再依赖任何引擎对"这个高度算不算确定尺寸"的判断,量出来是多少就是多少,
+  // 换哪个 WebView 内核结果都一样。
+  const wrapRef = useRef(null);
+  const [squarePx, setSquarePx] = useState(null);
+
+  useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    function measure() {
+      const w = el.clientWidth;
+      if (w > 0) setSquarePx(w);
+    }
+    measure();
+    // ResizeObserver 覆盖:窗口缩放、Telegram 桌面端可调整窗口大小、
+    // 移动端横竖屏切换、字体大小系统设置变化等一切会改变宽度的情况
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(measure) : null;
+    ro?.observe(el);
+    window.addEventListener("orientationchange", measure);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro?.disconnect();
+      window.removeEventListener("orientationchange", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
 
   const winSet = new Set((winLine || []).map(([x, y]) => `${x},${y}`));
 
@@ -46,7 +77,11 @@ export default function Board({ board, onCellClick, lastMove, winLine, disabled,
 
   return (
     <div>
-      <div className={`board-wrap${disabled ? " board-disabled" : ""}`}>
+      <div
+        ref={wrapRef}
+        className={`board-wrap${disabled ? " board-disabled" : ""}`}
+        style={squarePx ? { height: `${squarePx}px` } : undefined}
+      >
         <div className="board-inner">
           <div className="board-grid">
             {board.map((row, y) =>

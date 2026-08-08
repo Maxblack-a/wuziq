@@ -8,20 +8,18 @@
   max-width: min(560px, 92vh, 98vw);
   margin: 0 auto;
   position: relative;
-  /* 原来用 aspect-ratio:1/1 撑出正方形。问题是 .board-grid::before 网格线
-     是靠 position:absolute + inset:calc(100%/30) 定位的,而"绝对定位子元素
-     的百分比 inset 相对父元素的百分比高度"这条链路,依赖父元素(.board-wrap)
-     的高度被解析成"确定尺寸(definite size)"——aspect-ratio 撑出来的高度在
-     部分安卓系统 WebView(Telegram 内置浏览器常见)里并不总是被当成确定尺寸,
-     于是子元素的百分比高度/inset 解析基准就变得不稳定,实测表现正是棋盘
-     网格线整体偏向左下,右侧和顶部多出一截空白——不是设计需要,是这个
-     WebView 兼容性问题导致的渲染 bug。
-     改用"padding-top:100%撑出等高" 这个更老、兼容性覆盖面更广的经典做法:
-     .board-wrap 自己不再放内容,只负责用 padding-top 撑出一个确定的正方形
-     高度;真正的背景/内边距/网格全部挪到内部绝对定位铺满的 .board-inner 里,
-     它的 inset:0 直接是 0 这个具体数值,不再依赖任何"自动高度"百分比换算,
-     彻底绕开这个问题。 */
-  padding-top: 100%;
+  /* 正方形高度由 Board.jsx 里量出容器实际宽度后,通过内联 style 显式写死成
+     像素值(height: Npx)。这里不再用 aspect-ratio / padding-top 百分比这类
+     "自动高度"技巧——它们撑出来的高度在不同 WebView 内核(尤其桌面版 Telegram
+     内置浏览器跟手机端、跟普通 Chrome 不是同一套渲染实现)里,对"这个高度算不算
+     确定尺寸"的判断并不总是一致,会导致 .board-grid::before 网格线用到的百分比
+     inset 解析基准跟着跑偏,表现为棋盘整体偏向左下角、右侧和顶部空出一截。
+     JS 量出来的是浏览器渲染后的真实像素宽度,写成显式 height,不管哪个引擎
+     结果都一样,不存在"要不要算作确定尺寸"这层歧义。
+     下面这行 aspect-ratio 只是给 JS 还没跑完那一瞬间(或者极端情况下 JS 被
+     禁用)当兜底,一旦 JS 测量结果写进内联 style,内联 style 优先级更高,
+     会覆盖掉它。 */
+  aspect-ratio: 1 / 1;
 }
 
 .board-inner {
@@ -105,7 +103,11 @@
 
 .stone {
   width: 82%;
-  height: 82%;
+  aspect-ratio: 1 / 1; /* 双重保险:棋子自身强制1:1,即使将来格子本身
+    因为其他改动不再是正方形,棋子也不会被拉成椭圆 —— 这里用 aspect-ratio
+    没问题,跟之前棋盘外层的坑不是一回事:.stone 的宽度基准(82%)是相对
+    一个"确定尺寸"的 flex 格子算出来的,不存在百分比高度找不到解析基准
+    的问题 */
   border-radius: 50%;
   animation: drop 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
