@@ -3,9 +3,11 @@
   /* 之前 max-width 只给到 85vw/85vh,15列一分,单格触摸目标在常见手机
      宽度下只有约20px,远低于44px的可用性建议下限,很容易点错相邻格。
      现在尽量把棋盘撑到接近整屏宽度(配合 .game-board-col 的出血负边距
-     抵消掉外层 app-shell 的左右留白)。去掉了棋盘自己的 padding——那只是
-     一圈纯装饰的木框留白,跟"格子越大越好点"的目标是反着来的,现在格子
-     直接铺满整张卡片。 */
+     抵消掉外层 app-shell 的左右留白)。
+
+     四周留白现在统一由 Board.jsx 里的 MARGIN 常量控制(画线、点击热区、
+     星位点用的是同一套坐标),不再靠这里的 border/padding 硬凑,所以
+     board-wrap 本身不需要再留任何 padding 或 border。 */
   max-width: min(560px, 92vh, 98vw);
   margin: 0 auto;
   aspect-ratio: 1 / 1;
@@ -15,7 +17,6 @@
     linear-gradient(160deg, var(--board-wood-1), var(--board-wood-2));
   box-shadow: inset 0 2px 12px rgba(0,0,0,0.45), var(--shadow-modal);
   position: relative;
-  overflow: hidden;
 }
 
 /* 不是自己回合时,只压暗棋盘格子这一层(0.75→0.55），角标文字作为同级
@@ -46,24 +47,35 @@
   position: relative;
   width: 100%;
   height: 100%;
-  display: grid;
-  grid-template-columns: repeat(15, 1fr);
-  grid-template-rows: repeat(15, 1fr);
   transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
-/* 网格线用背景绘制,而不是每个格子加边框,避免线条粗细不均 */
-.board-grid::before {
-  content: "";
+/* 网格线直接由 Board.jsx 里的 <svg className="board-lines-svg"> 画出来,
+   15 条横线 + 15 条竖线首尾相连,天然围成一个完整的矩形边框——不再靠
+   CSS 背景渐变取整拼线,最外层不会再出现"线被裁掉一截"的情况 */
+.board-lines-svg {
   position: absolute;
-  inset: calc(100% / 30);
-  background-image:
-    repeating-linear-gradient(0deg, rgba(237,230,214,0.35) 0, rgba(237,230,214,0.35) 1px, transparent 1px, transparent calc(100% / 14)),
-    repeating-linear-gradient(90deg, rgba(237,230,214,0.35) 0, rgba(237,230,214,0.35) 1px, transparent 1px, transparent calc(100% / 14));
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.board-line {
+  stroke: rgba(237, 230, 214, 0.35);
+  stroke-width: 0.35;
+}
+
+/* 最外圈单独再描一圈稍粗、稍亮的线,让边框看起来是"故意做的",
+   而不是跟内部网格线一样粗细、容易被忽略 */
+.board-frame {
+  fill: none;
+  stroke: rgba(237, 230, 214, 0.55);
+  stroke-width: 0.6;
 }
 
 .board-cell {
-  position: relative;
+  position: absolute;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -79,6 +91,8 @@
 .star-point::after {
   content: "";
   position: absolute;
+  inset: 0;
+  margin: auto;
   width: 6px;
   height: 6px;
   border-radius: 50%;

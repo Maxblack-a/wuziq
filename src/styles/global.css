@@ -90,6 +90,7 @@ body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
