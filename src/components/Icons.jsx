@@ -204,3 +204,14 @@ export function IconClose({ size = 16 }) {
     </svg>
   );
 }
+
+// 人机对战 · 悔棋(逆时针回退箭头,跟"返回"的 chevron 区分开,
+// 一眼能看出这是"撤销上一步"而不是"离开页面")
+export function IconUndo({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 10H15.5C18 10 20 12 20 14.5C20 17 18 19 15.5 19H10" />
+      <path d="M10 6.5L6 10L10 13.5" />
+    </svg>
+  );
+}

@@ -479,14 +479,16 @@
   flex: 1;
   padding: var(--space-2);
   border-radius: var(--radius-sm);
-  background: var(--wood-soft);
+  background: var(--surface);
+  border: 1px solid var(--border-token);
   color: var(--text-secondary);
   font-size: 14px;
   font-weight: 600;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .diff-btn.active {
   background: var(--wood);
+  border-color: var(--wood);
   color: var(--accent-fg);
 }
 

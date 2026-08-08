@@ -47,39 +47,42 @@ export default function Board({ board, onCellClick, lastMove, winLine, disabled,
   return (
     <div>
       <div className={`board-wrap${disabled ? " board-disabled" : ""}`}>
-        <div className="board-grid">
-          {board.map((row, y) =>
-            row.map((cell, x) => {
-              const isStar = STAR_POINTS.has(`${x},${y}`);
-              const isLast = lastMove && lastMove[0] === x && lastMove[1] === y;
-              const isPending = pending && pending.x === x && pending.y === y;
-              return (
-                <div
-                  key={`${x}-${y}`}
-                  className={`board-cell${isStar && cell === 0 ? " star-point" : ""}`}
-                  onClick={() => handleCellTap(x, y, cell)}
-                >
-                  {cell !== 0 && (
-                    <div className={`stone ${cell === 1 ? "black" : "white"}${isLast ? " last-move" : ""}${winSet.has(`${x},${y}`) ? " winning" : ""}`} />
-                  )}
-                  {cell === 0 && isPending && (
-                    <div className={`stone preview ${previewColor === 1 ? "black" : "white"}`} />
-                  )}
-                </div>
-              );
-            })
-          )}
-          {winLine && winLine.length === 5 && (
-            <svg className="win-line-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <line
-                className="win-line-path"
-                x1={(winLine[0][0] + 0.5) * (100 / BOARD_SIZE)}
-                y1={(winLine[0][1] + 0.5) * (100 / BOARD_SIZE)}
-                x2={(winLine[4][0] + 0.5) * (100 / BOARD_SIZE)}
-                y2={(winLine[4][1] + 0.5) * (100 / BOARD_SIZE)}
-              />
-            </svg>
-          )}
+        <div className="board-inner">
+          <div className="board-grid">
+            {board.map((row, y) =>
+              row.map((cell, x) => {
+                const isStar = STAR_POINTS.has(`${x},${y}`);
+                const isLast = lastMove && lastMove[0] === x && lastMove[1] === y;
+                const isPending = pending && pending.x === x && pending.y === y;
+                return (
+                  <div
+                    key={`${x}-${y}`}
+                    className={`board-cell${isStar && cell === 0 ? " star-point" : ""}`}
+                    onClick={() => handleCellTap(x, y, cell)}
+                  >
+                    {cell !== 0 && (
+                      <div className={`stone ${cell === 1 ? "black" : "white"}${isLast ? " last-move" : ""}${winSet.has(`${x},${y}`) ? " winning" : ""}`} />
+                    )}
+                    {cell === 0 && isPending && (
+                      <div className={`stone preview ${previewColor === 1 ? "black" : "white"}`} />
+                    )}
+                  </div>
+                );
+              })
+            )}
+            {winLine && winLine.length === 5 && (
+              <svg className="win-line-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <line
+                  className="win-line-path"
+                  x1={(winLine[0][0] + 0.5) * (100 / BOARD_SIZE)}
+                  y1={(winLine[0][1] + 0.5) * (100 / BOARD_SIZE)}
+                  x2={(winLine[4][0] + 0.5) * (100 / BOARD_SIZE)}
+                  y2={(winLine[4][1] + 0.5) * (100 / BOARD_SIZE)}
+                />
+              </svg>
+            )}
+          </div>
+          {disabled && <div className="board-disabled-badge">对方回合</div>}
         </div>
       </div>
 
