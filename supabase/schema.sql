@@ -193,6 +193,68 @@ $$;
 alter publication supabase_realtime add table rooms;
 
 -- ============================================================
+-- 退出房间(仅限对局开始前,status 还是 waiting/lobby 的时候):
+-- - 我是对手(player2)退出:房主还在,房间保留,对手位清空、状态退回 waiting
+-- - 我是房主(player1)退出,但对手已经在房里:房主之位自动转给对手,
+--   房间保留、状态退回 waiting(对手那边靠已有的 rooms UPDATE 订阅就能
+--   实时收到自己被扶正,不用另外建通知表)
+-- - 我是房主退出,房里就我自己(对手位是空的):房间没有存在意义了,直接删,
+--   不用等 30 分钟跑一次的 cleanup_stale_rooms 兜底
+-- 对局已经开始(status='playing')不允许走这条路径退出——那属于中途认输,
+-- 走的是另一套 finish_game / end_reason='forfeit' 逻辑。
+-- 用 security definer + for update 行锁保证原子性,避免两个人同时点退出
+-- 时互相踩踏(比如对手退出的同时房主也点了退出)。
+-- ============================================================
+create or replace function leave_room(p_room_id uuid)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+begin
+  if me is null then
+    raise exception '未登录';
+  end if;
+
+  select * into r from rooms where id = p_room_id for update;
+  if not found then
+    -- 房间已经不在了(可能已经被清理或对方也刚好退出触发了删除),
+    -- 前端直接当作"退出成功"处理就好,不用报错打断用户
+    return jsonb_build_object('action', 'not_found');
+  end if;
+
+  if r.status not in ('waiting', 'lobby') then
+    raise exception '对局已经开始,不能用这个接口退出房间';
+  end if;
+
+  if me = r.player1_id then
+    if r.player2_id is not null then
+      update rooms
+      set player1_id = r.player2_id, player2_id = null,
+          status = 'waiting', updated_at = now()
+      where id = p_room_id;
+      return jsonb_build_object('action', 'transferred', 'new_host', r.player2_id);
+    else
+      delete from game_invites where room_id = p_room_id;
+      delete from rooms where id = p_room_id;
+      return jsonb_build_object('action', 'deleted');
+    end if;
+  elsif me = r.player2_id then
+    update rooms
+    set player2_id = null, status = 'waiting', updated_at = now()
+    where id = p_room_id;
+    return jsonb_build_object('action', 'left');
+  else
+    raise exception '你不是这个房间的参与者';
+  end if;
+end;
+$$;
+
+grant execute on function leave_room(uuid) to authenticated;
+
+-- ============================================================
 -- 再来一局:用唯一索引在数据库层面杜绝竞态——如果双方同时点"再来一局",
 -- 只会有一间新房间真正建成,另一次尝试会撞上唯一约束,查回已建好的那间即可,
 -- 不会出现"各自建了一间、互相进错房间干等"的情况

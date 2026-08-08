@@ -41,8 +41,6 @@ const APP_SHORT_NAME = import.meta.env.VITE_TELEGRAM_APP_NAME || "gomoku";
 // 六边形等级徽章、"好友在线"胶囊条、墨色主 CTA、描边邀请按钮,以及
 // 底部的房间自动解散提示。
 export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, avatarUrl, rating, onMatched, onExit, onRandomMatch }) {
-  useTelegramBackButton(onExit);
-
   const [roomId, setRoomId] = useState(incomingRoomId || null);
   const [room, setRoom] = useState(null);
   const [opponent, setOpponent] = useState(null);
@@ -51,9 +49,11 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   const [friends, setFriends] = useState([]);
   const [invitedIds, setInvitedIds] = useState(new Set());
   const [copiedFlash, setCopiedFlash] = useState(false);
+  const [promotedFlash, setPromotedFlash] = useState(false); // 对方退出、我被自动扶正当房主的提示
   const [starting, setStarting] = useState(false);
   const onlineIds = useOnlineUserIds();
   const createdRef = useRef(false); // 防止重复建房间(比如 React 开发模式的双调用)
+  const exitRequestedRef = useRef(false); // 建房请求还飞在路上时用户就点了退出,先记一笔
   const onMatchedRef = useRef(onMatched);
   onMatchedRef.current = onMatched;
 
@@ -79,6 +79,18 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
       // 毕竟这是跑在 Telegram WebView 里,用户手机上大概率够不着控制台。
       console.error("创建房间失败", error);
       setErrorMsg(`创建房间失败:${error.message || error.code || "请重试"}`);
+      return;
+    }
+    // 这一步 insert 已经在数据库里真实落地了,不是"还没发生"。如果这个
+    // 请求飞在路上的时候用户已经点了返回(那时候 roomId 还是 null,
+    // handleExit 里没法带上 id 去调 leave_room,只能先在 exitRequestedRef
+    // 上做个标记),现在拿到了它的 id,就该我们自己把这个刚生出来的
+    // 孤儿房间清掉——不然它会一直挂在数据库里等 cleanup_stale_rooms
+    // 一小时后才收拾,而且用户也早就已经在首页了,不用再 setRoom 展示出来
+    if (exitRequestedRef.current) {
+      supabase.rpc("leave_room", { p_room_id: data.id }).then(({ error }) => {
+        if (error) console.error("清理来不及退出的房间失败", error);
+      });
       return;
     }
     setRoomId(data.id);
@@ -125,6 +137,43 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   useEffect(() => {
     if (room?.status === "playing") onMatchedRef.current(roomId);
   }, [room?.status, roomId]);
+
+  // 检测"我被动成为房主"——原房主退出时,leave_room 会把 player1_id 改成我,
+  // 这条 UPDATE 会通过上面已有的房间订阅自然推过来,这里只是拿一个 ref 存
+  // 上一次的 player1_id,一旦发现"以前不是我、现在变成我了"就弹一下提示
+  const prevHostIdRef = useRef(null);
+  useEffect(() => {
+    if (!room) return;
+    const prevHostId = prevHostIdRef.current;
+    if (prevHostId && prevHostId !== myId && room.player1_id === myId) {
+      setPromotedFlash(true);
+      const t = setTimeout(() => setPromotedFlash(false), 2600);
+      return () => clearTimeout(t);
+    }
+    prevHostIdRef.current = room.player1_id;
+  }, [room?.player1_id, myId]);
+
+  // 退出房间(仅在对局开始前的这个页面才会调用得到——一旦 status 变成
+  // playing,上面那个 effect 已经把人带去真实对局页面了,不会再走到这里):
+  // 调 leave_room 这个原子 RPC,让服务端决定是"转让房主"还是"直接删房"。
+  // 不 await 它——反正接下来就是导航回首页,成功或失败都不影响这一步,
+  // 失败了(比如网络抖了一下)还有 cleanup_stale_rooms 定时任务兜底,
+  // 不用为了保证退出请求送达而让用户在这多等一次网络往返。
+  function handleExit() {
+    if (roomId) {
+      supabase.rpc("leave_room", { p_room_id: roomId }).then(({ error }) => {
+        if (error) console.error("退出房间失败(不影响返回首页)", error);
+      });
+    } else {
+      // 房间可能正在建的路上——insert 请求已经发出去了,只是响应还没
+      // 回来,roomId 还没赋值到 state。这里没法直接带 id 去删,标记一下,
+      // 等 createRoom 那边真的拿到新房间 id 时会检查这个标记并自己清理
+      exitRequestedRef.current = true;
+    }
+    onExit();
+  }
+
+  useTelegramBackButton(handleExit);
 
   // 拉一次好友列表,给"邀请好友"面板和"好友在线"这行胶囊条用
   useEffect(() => {
@@ -176,7 +225,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
       {/* 顶栏:左返回 / 右更多——Telegram 原生的 Close/标题栏在这一层之外,
           这里只是页面自己的内容,严格对应设计图里"< ... "那一行 */}
       <div className="room-topbar fade-in-up">
-        <button className="room-icon-btn" onClick={onExit} aria-label="返回">
+        <button className="room-icon-btn" onClick={handleExit} aria-label="返回">
           <IconChevronLeft />
         </button>
         <button className="room-icon-btn" onClick={handleShare} disabled={!room?.code} aria-label="更多操作">
@@ -184,6 +233,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
         </button>
       </div>
       {copiedFlash && <div className="room-toast fade-in-up">邀请链接已复制</div>}
+      {promotedFlash && <div className="room-toast fade-in-up">对方已离开,你已成为房主</div>}
 
       {/* 标题区:两侧小菱形装饰章 + 印章感标题,下方一条分隔线(中间嵌一个
           鎏金小点)再接一行"五子棋 · 标准模式"的模式说明 */}
