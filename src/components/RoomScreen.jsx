@@ -310,19 +310,9 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
 
       {!hasOpponent && !inviting && (
         <>
-          <button className="friends-bar fade-in-up" style={{ animationDelay: "120ms" }} onClick={() => setInviting(true)}>
-            <span className="friends-bar-icon"><IconFriends size={18} /></span>
-            <span className="friends-bar-text">
-              好友在线 <span className="friends-bar-count">{onlineFriendsCount}</span> 人
-            </span>
-            <span className="friends-bar-link">
-              查看全部 <IconChevronRight size={13} />
-            </span>
-          </button>
-
           <button
             className="room-action-primary fade-in-up"
-            style={{ animationDelay: "160ms" }}
+            style={{ animationDelay: "120ms" }}
             disabled={!roomId}
             onClick={onRandomMatch}
           >
@@ -339,13 +329,31 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
           </button>
 
           <button
-            className="btn-outline-pill fade-in-up"
-            style={{ animationDelay: "200ms" }}
+            className="room-action-invite fade-in-up"
+            style={{ animationDelay: "160ms" }}
             disabled={!roomId}
             onClick={() => setInviting(true)}
           >
-            <IconPersonPlus size={18} />
-            邀请好友一起对局
+            <span className="cta-primary-lead">
+              <span className="cta-primary-icon"><IconPersonPlus size={17} /></span>
+              <span className="cta-primary-text">
+                <span className="cta-primary-title">邀请好友</span>
+                <span className="cta-primary-sub">INVITE FRIENDS</span>
+              </span>
+            </span>
+            <span className="cta-primary-arrow">
+              <IconArrowRight />
+            </span>
+          </button>
+
+          <button className="friends-bar fade-in-up" style={{ animationDelay: "200ms" }} onClick={() => setInviting(true)}>
+            <span className="friends-bar-icon"><IconFriends size={18} /></span>
+            <span className="friends-bar-text">
+              好友在线 <span className="friends-bar-count">{onlineFriendsCount}</span> 人
+            </span>
+            <span className="friends-bar-link">
+              查看全部 <IconChevronRight size={13} />
+            </span>
           </button>
 
           <div className="room-footnote fade-in-up" style={{ animationDelay: "240ms" }}>

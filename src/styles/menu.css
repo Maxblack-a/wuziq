@@ -758,6 +758,7 @@
   align-items: center;
   gap: var(--space-3);
   width: 100%;
+  margin-top: var(--space-2);
   background: var(--wood-soft);
   border-radius: 999px;
   padding: 10px var(--space-4);
@@ -810,16 +811,40 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  margin-top: var(--space-2);
-  background: var(--ink-token);
+  /* 整块"开始匹配"起的按钮区跟着标题/VS 区一起往上收一截,而不是
+     沿用原来 +space-2 的正向间距,让底部内容不显得空落落 */
+  margin-top: -14px;
+  background: #5C564D;
   color: #FBF6EC;
   border-radius: var(--radius-lg);
   padding: var(--space-2) var(--space-4);
+  border: 1.4px solid rgba(198, 161, 91, 0.6);
   box-shadow: var(--shadow-modal);
   transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
 }
 .room-action-primary:active { transform: scale(0.98); box-shadow: var(--shadow-card); }
 .room-action-primary:disabled { opacity: 0.5; box-shadow: none; }
+
+/* ---- 邀请好友按钮:跟上面"开始匹配"同一套设计语言(同样的
+   cta-primary-lead/-icon/-text/-title/-sub/-arrow 结构、同样的圆角、
+   同样的金色描边),只是底色反过来用浅米色,两者视觉分量完全对等,
+   不做主次区分 ---- */
+.room-action-invite {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: var(--space-2);
+  background: #F7F1E6;
+  color: #6B5542;
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-4);
+  border: 1.4px solid rgba(198, 161, 91, 0.6);
+  box-shadow: var(--shadow-modal);
+  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+}
+.room-action-invite:active { transform: scale(0.98); box-shadow: var(--shadow-card); }
+.room-action-invite:disabled { opacity: 0.5; box-shadow: none; }
 
 .cta-primary-lead {
   display: flex;
@@ -840,29 +865,6 @@
   align-items: center;
   justify-content: center;
 }
-
-/* ---- 描边邀请按钮 ----
-   跟上面主 CTA 对齐高度:主 CTA 是"图标+两行文字"天然更高,这里内边距
-   比主 CTA 大一截(18px vs 主 CTA 的 8px)来补齐总高度,而不是让主 CTA
-   显得比这个按钮明显更"胖" */
-.btn-outline-pill {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  width: 100%;
-  margin-top: var(--space-2);
-  padding: 18px var(--space-6);
-  border-radius: 999px;
-  border: 1.4px solid var(--border-token);
-  background: transparent;
-  color: var(--ink-token);
-  font-size: 15px;
-  font-weight: 600;
-  transition: background 0.15s ease, transform 0.15s ease;
-}
-.btn-outline-pill:active { background: var(--wood-soft); transform: scale(0.98); }
-.btn-outline-pill:disabled { opacity: 0.4; }
 
 /* ---- 底部的房间自动解散提示 ---- */
 .room-footnote {
