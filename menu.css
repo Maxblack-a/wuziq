@@ -1,0 +1,897 @@
+/* ============================================================
+   品牌区全出血:背景图是真正的背景,横向撑满整个屏幕宽度(打破
+   app-shell 左右 16px 的内边距),不是一张贴在页面中间、四周露出
+   底色边框的"照片卡片"。内部再用 padding 把顶栏和标题文字拉回
+   跟页面其它内容一致的左右边距。
+   容器高度按图片原始比例(1024:1535)撑开,object-fit: cover 在这
+   个比例下等于完整显示、不裁切。底部叠一层遮罩渐隐,让它跟下面
+   app-shell 自身的暖褐色渐变背景之间没有生硬的分界线。
+   ============================================================ */
+.hero-full-bleed {
+  position: relative;
+  width: calc(100% + var(--space-4) * 2);
+  margin-left: calc(-1 * var(--space-4));
+  margin-right: calc(-1 * var(--space-4));
+  aspect-ratio: 1024 / 1535;
+  overflow: hidden;
+}
+
+.hero-scene-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+  /* 素材本身偏亮、偏灰,跟设计图里那种更深、更暖的暖褐调有肉眼可见的
+     色差——不改图片文件,用滤镜在渲染层把它压暗、提饱和度、加暖,
+     对齐设计图的整体基调(参数是拿设计图实测的色值反推出来的,不是
+     拍脑袋)。不裁剪、不改源图,只是显示时的颜色矫正。 */
+  filter: brightness(0.8) contrast(1.15) saturate(1.15);
+  /* 底部 10% 渐隐透明,融入下方 app-shell 的暖褐渐变,避免硬边——
+     只淡出图片本身最后一截,在线状态行叠在它上面的稳定色区,不受影响 */
+  mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
+}
+
+.hero-full-bleed-inner {
+  position: relative;
+  z-index: 1;
+  padding: 0 var(--space-4);
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+}
+
+.identity-badge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0; /* 允许内部文字截断,不撑破布局 */
+}
+
+.identity-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--wood-soft);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border-token);
+}
+.identity-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.identity-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.identity-level {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-token);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.identity-progress-track {
+  display: block;
+  width: 84px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--wood-soft);
+  overflow: hidden;
+}
+.identity-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--gold);
+}
+
+.top-nav-light {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-shrink: 0;
+}
+
+.nav-icon-btn {
+  background: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: var(--text-secondary);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.nav-icon-btn:active {
+  color: var(--ink-token);
+  transform: scale(0.94);
+}
+
+.brand-hero {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: var(--space-6) 0 var(--space-4);
+}
+
+.brand-name {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wood);
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+}
+
+.brand-title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+
+.brand-hero h1 {
+  font-size: var(--text-title);
+}
+
+/* 印章按钮:装饰性的鉴赏章,同时承担"规则"入口的点击功能 */
+.brand-seal {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease;
+}
+.brand-seal:active { transform: scale(0.88); }
+
+.brand-slogan {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--text-secondary);
+  letter-spacing: 0.12em;
+  margin-top: var(--space-1);
+}
+
+/* 保留旧类名,兼容可能还在别处引用的地方 */
+.menu-header {
+  text-align: center;
+  padding: var(--space-12) 0 var(--space-8);
+}
+.menu-header .eyebrow {
+  font-family: var(--font-mono);
+  font-size: var(--text-caption);
+  color: var(--wood);
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+}
+
+/* ============================================================
+   在线状态行:重新对照设计图放大看了这一小块——之前想错了方向,
+   design 里这行字根本不是"深色字压浅色底",而是白色/暖白字直接压在
+   棋盘投影那圈还没完全褪干净的深色暖褐区域上,圆点也是纯白发光,不是
+   绿色。hero-scene.png 棋盘投影下方 66%-70% 那一段刚好也是这种深色
+   过渡调,天然适合放白字——不用再纠结"往下挪到浅色区才能看清"这种
+   顾虑了,直接搬 design 的配色方案。
+   ============================================================ */
+.online-status {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 68%;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+  padding: 0 var(--space-4);
+}
+
+.online-status-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  /* 暖白/米白,不是纯 #FFFFFF——量出来设计图这里的字色偏米黄,
+     直接复用 --wood-soft 这个已有的暖白 token,不用再造一个新色 */
+  color: var(--wood-soft);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+
+.online-dot-glow {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #FBF6EC;
+  box-shadow: 0 0 0 4px rgba(251, 246, 236, 0.22), 0 0 10px rgba(251, 246, 236, 0.55);
+}
+
+.online-status-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: rgba(241, 231, 216, 0.78);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+
+/* 副标题两侧的短横线,呼应设计图里"已连接到棋局世界"左右那两条
+   装饰虚线——纯 CSS 画,不额外切图 */
+.online-status-sub::before,
+.online-status-sub::after {
+  content: "";
+  width: 20px;
+  height: 1px;
+  background: rgba(241, 231, 216, 0.45);
+}
+
+/* ============================================================
+   主 CTA:全页面视觉最重的交互元素,墨色实心、精致边缘。
+   文字靠左,右侧一个圆环箭头,呼应参考图的按钮结构
+   ============================================================ */
+.cta-primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  /* online-status 这次从 top:72% 又往上挪到 68%(离棋盘更近,贴 design
+     的位置),下面留给按钮的尾巴相应变长了,负 margin 要跟着加大,
+     不然又会变回"在线状态离棋盘近了,但离按钮远了"的跷跷板问题 */
+  margin-top: -100px;
+  background: var(--ink-token);
+  color: #FBF6EC;
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-4) var(--space-4) var(--space-6);
+  box-shadow: var(--shadow-modal);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.cta-primary:active {
+  transform: scale(0.98);
+  box-shadow: var(--shadow-card);
+}
+
+.cta-primary-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.cta-primary-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.cta-primary-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.24em;
+  color: rgba(198, 161, 91, 0.85);
+}
+
+.cta-primary-arrow {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.4px solid rgba(198, 161, 91, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  box-shadow: 0 0 12px rgba(198, 161, 91, 0.35);
+}
+
+/* ============================================================
+   次级入口:人机挑战 + 邀请好友,并排展示,视觉分量明显低于主CTA
+   ============================================================ */
+.secondary-row {
+  display: flex;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.secondary-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-1);
+  /* 设计图里这两张卡片跟背景几乎是同一个色系,只是比背景稍微提亮一点
+     (实测卡片内部色值只比卡片外的背景亮 15-20,不是纯白卡片硬贴在暖色
+     背景上那种强对比),所以这里改成半透明暖白,而不是纯 #FFFFFF */
+  background: rgba(255, 252, 245, 0.6);
+  border: 1px solid rgba(222, 211, 194, 0.7);
+  border-radius: var(--radius-md);
+  padding: var(--space-4) var(--space-2);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+/* "邀请好友"并入主 CTA 之后,次级入口只剩"人机挑战"一张卡片——
+   不再让它跟之前两张并排时一样撑满整行,收窄居中,避免看起来
+   像一个被拉伸变形的异常宽按钮 */
+.secondary-row:has(.secondary-card:only-child) {
+  justify-content: center;
+}
+.secondary-row .secondary-card:only-child {
+  flex: 0 1 200px;
+}
+.secondary-card:active {
+  transform: scale(0.97);
+  box-shadow: none;
+}
+
+.secondary-card-icon {
+  width: 28px;
+  height: 28px;
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: var(--space-1);
+}
+
+.secondary-card-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--fg);
+}
+
+.secondary-card-sub {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--text-secondary);
+}
+
+.secondary-card-desc {
+  font-size: var(--text-caption);
+  color: var(--fg-muted);
+  margin-top: 2px;
+}
+
+/* ============================================================
+   底部标语:两侧配细线,做收尾的"棋院牌匾感"
+   ============================================================ */
+.bottom-tagline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-6);
+  padding-bottom: var(--space-4);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: var(--text-secondary);
+}
+
+.tagline-line {
+  width: 22px;
+  height: 1px;
+  background: var(--border-token);
+}
+
+/* ============================================================
+   进入动效:淡入 + 轻微上移,按顺序错开(靠 style 里的 animation-delay)
+   ============================================================ */
+.fade-in-up {
+  animation: fade-in-up 420ms ease both;
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================
+   以下是原有的一些通用组件样式,保留(邀请码、难度选择、加载动画等
+   页面仍在使用,不属于这次首页改造范围)
+   ============================================================ */
+.mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-3);
+}
+
+.mode-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  text-align: left;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  box-shadow: var(--shadow-card);
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.mode-card:active { transform: scale(0.98); box-shadow: none; }
+
+.mode-card .icon {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  flex-shrink: 0;
+  background: var(--wood-soft);
+}
+
+.mode-card .title { font-weight: 600; font-size: var(--text-body); color: var(--fg); }
+.mode-card .desc { font-size: var(--text-caption); color: var(--fg-muted); margin-top: var(--space-1); }
+
+/* 好友在线状态圆点:离线是空心灰边框,在线是实心绿点 */
+.online-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-token);
+  flex-shrink: 0;
+  margin-right: var(--space-1);
+}
+.online-dot.online {
+  background: #4C8C5A;
+  border-color: #4C8C5A;
+  box-shadow: 0 0 0 3px rgba(76, 140, 90, 0.18);
+}
+
+.diff-row {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.diff-btn {
+  flex: 1;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--wood-soft);
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.diff-btn.active {
+  background: var(--wood);
+  color: var(--accent-fg);
+}
+
+.room-code-display {
+  font-size: 32px;
+  text-align: center;
+  padding: var(--space-4);
+  background: var(--ink);
+  border-radius: var(--radius-md);
+  margin: var(--space-4) 0;
+  color: var(--gold);
+  letter-spacing: 0.12em;
+}
+
+.spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 3px solid var(--border-token);
+  border-top-color: var(--wood);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in-up { animation: none; }
+}
+
+/* ============================================================
+   对局房间(RoomScreen):按新设计图重做——顶部图标栏 + 印章式标题区 +
+   放大的 VS 头像位(六边形等级徽章)+ 好友在线胶囊条 + 墨色主 CTA +
+   描边邀请按钮 + 底部解散提示。Telegram 原生的 Close/标题栏不在这
+   一层里,这里从图标栏开始才是页面自己的内容。
+   ============================================================ */
+
+/* ---- 顶部图标栏:左返回 / 右更多 ---- */
+.room-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0;
+}
+
+.room-icon-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink-token);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.room-icon-btn:active { background: var(--wood-soft); transform: scale(0.92); }
+.room-icon-btn:disabled { opacity: 0.35; }
+
+/* "更多"点击复制邀请链接后的小提示条,轻量、不打断布局太多 */
+.room-toast {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wood);
+  background: var(--wood-soft);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  margin-top: var(--space-2);
+}
+
+/* ---- 标题区:菱形装饰章 + 印章感标题 + 分隔线(嵌鎏金小点)+ 模式说明 ---- */
+.room-title-wrap {
+  text-align: center;
+  padding: 0 0 var(--space-3);
+}
+
+.room-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--gold);
+}
+
+.room-title-text {
+  font-size: 21px;
+}
+
+.room-title-divider {
+  position: relative;
+  width: 58%;
+  max-width: 200px;
+  height: 1px;
+  background: var(--border-token);
+  margin: 6px auto 0;
+}
+.room-title-divider::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  background: var(--gold);
+  transform: translate(-50%, -50%) rotate(45deg);
+}
+
+.room-subtitle {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  letter-spacing: 0.05em;
+}
+
+/* ---- VS 对阵区 ---- */
+.vs-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: 0 0 var(--space-3);
+}
+
+.vs-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 108px;
+}
+
+.vs-avatar {
+  position: relative;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  overflow: visible;
+  background: var(--wood-soft);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid var(--surface);
+  box-shadow: var(--shadow-card);
+}
+.vs-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+/* 还没人加入时的空位:灰调实底,跟已经有人的暖色头像区分开,
+   一眼就能看出"这个位置还空着" */
+.vs-avatar-empty {
+  background: #C7BBA4;
+  border-color: var(--surface);
+  color: #8A7F6C;
+}
+
+/* 头像右下角的六边形等级徽章,墨色底、鎏金数字("?" 表示对方未知) */
+.vs-avatar-badge {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  width: 28px;
+  height: 24px;
+  background: var(--ink-token);
+  color: var(--gold);
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  clip-path: polygon(25% 4%, 75% 4%, 100% 50%, 75% 96%, 25% 96%, 0% 50%);
+  border: 2px solid var(--surface);
+}
+
+.vs-name {
+  margin-top: 2px;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--fg);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 段位胶囊:"LV.10 棋士" */
+.vs-level-tag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--wood);
+  background: var(--wood-soft);
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.vs-status-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.vs-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #4C8C5A;
+  box-shadow: 0 0 0 3px rgba(76, 140, 90, 0.18);
+  flex-shrink: 0;
+}
+.vs-status-dot.offline {
+  background: var(--border-token);
+  box-shadow: none;
+}
+
+/* 真的发出邀请、有人在等待确认时才用这组"跳动小圆点",呼应设计图里
+   那一排搜索指示点——但不在房间刚建好、什么都还没做的默认状态出现,
+   不然会给人一种"系统在自动帮你找人"的错觉,其实什么都还没发生 */
+.vs-search-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--seal-red);
+}
+
+.vs-search-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.vs-search-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border-token);
+  animation: vs-dot-pulse 1.2s ease-in-out infinite;
+}
+.vs-search-dot:nth-child(1) { animation-delay: 0s; }
+.vs-search-dot:nth-child(2) { animation-delay: 0.2s; }
+.vs-search-dot:nth-child(3) { animation-delay: 0.4s; }
+@keyframes vs-dot-pulse {
+  0%, 80%, 100% { background: var(--border-token); transform: scale(1); }
+  40% { background: var(--gold); transform: scale(1.3); }
+}
+
+/* 中间就是一个纯文字 "VS",不加圆圈/边框/底纹——跟头像列垂直居中对齐 */
+.vs-center {
+  flex-shrink: 0;
+  padding-top: 20px;
+}
+
+.vs-plain-text {
+  font-family: Georgia, var(--font-display), serif;
+  font-style: italic;
+  font-weight: 800;
+  font-size: 26px;
+  letter-spacing: 0.02em;
+  color: var(--wood);
+}
+
+/* ---- 好友在线胶囊条 ---- */
+.friends-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  background: var(--wood-soft);
+  border-radius: 999px;
+  padding: 10px var(--space-4);
+  text-align: left;
+  transition: transform 0.15s ease;
+}
+.friends-bar:active { transform: scale(0.98); }
+
+.friends-bar-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.friends-bar-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg);
+}
+
+.friends-bar-count {
+  color: var(--seal-red);
+  font-weight: 700;
+  margin: 0 1px;
+}
+
+.friends-bar-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+/* ---- 房间内的墨色主 CTA(开始匹配 / 开始游戏)----
+   视觉上跟首页的 .cta-primary 是同一套语言(复用 .cta-primary-lead/
+   -icon/-text/-title/-sub/-arrow 这几个内部元素类),但首页那个自带
+   margin-top: -100px 是专门用来叠在英雄图底部的,房间页没有那张图,
+   不能直接复用 .cta-primary 本身,所以单独起一个类装同样的视觉。 */
+.room-action-primary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: var(--space-2);
+  background: var(--ink-token);
+  color: #FBF6EC;
+  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-4);
+  box-shadow: var(--shadow-modal);
+  transition: transform 0.15s ease, filter 0.15s ease, box-shadow 0.15s ease;
+}
+.room-action-primary:active { transform: scale(0.98); box-shadow: var(--shadow-card); }
+.room-action-primary:disabled { opacity: 0.5; box-shadow: none; }
+
+.cta-primary-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.cta-primary-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: rgba(198, 161, 91, 0.15);
+  border: 1.4px solid rgba(198, 161, 91, 0.5);
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ---- 描边邀请按钮 ----
+   跟上面主 CTA 对齐高度:主 CTA 是"图标+两行文字"天然更高,这里内边距
+   比主 CTA 大一截(18px vs 主 CTA 的 8px)来补齐总高度,而不是让主 CTA
+   显得比这个按钮明显更"胖" */
+.btn-outline-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  margin-top: var(--space-2);
+  padding: 18px var(--space-6);
+  border-radius: 999px;
+  border: 1.4px solid var(--border-token);
+  background: transparent;
+  color: var(--ink-token);
+  font-size: 15px;
+  font-weight: 600;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+.btn-outline-pill:active { background: var(--wood-soft); transform: scale(0.98); }
+.btn-outline-pill:disabled { opacity: 0.4; }
+
+/* ---- 底部的房间自动解散提示 ---- */
+.room-footnote {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: var(--space-3);
+  padding-bottom: var(--space-2);
+  font-size: 12px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* "邀请好友"子面板顶部的返回链接,替换掉原来纯文本的 "← 返回匹配方式" */
+.room-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  color: var(--wood);
+  font-size: 14px;
+  font-weight: 600;
+  padding: var(--space-2) 0;
+  margin-bottom: var(--space-3);
+}
+.room-back-link:active { opacity: 0.7; }

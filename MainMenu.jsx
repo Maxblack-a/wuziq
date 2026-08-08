@@ -1,0 +1,113 @@
+import { useState } from "react";
+import RulesModal from "./RulesModal";
+import { IconFriends, IconTrophy, IconProfile, IconRobot, IconArrowRight, IconSeal, IconAvatarFallback } from "./Icons";
+import { titleForRating, levelForRating } from "../lib/rank";
+
+export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
+  const [showRules, setShowRules] = useState(false);
+  const level = levelForRating(rating);
+  const title = titleForRating(rating ?? 1200);
+  const progressPct = Math.min(95, Math.max(8, ((rating ?? 1200) - 800) % 40 * 2.5));
+
+  return (
+    <div>
+      {/* 品牌区整体全出血(横向撑满屏幕,不受 app-shell 左右内边距限制):
+          图片是真正的背景,不是一张"贴上去"的卡片——顶栏和标题文字都
+          浮在这张背景之上,内部再用 hero-full-bleed-inner 把内容拉回
+          和页面其他内容对齐的左右边距,这样文字/图标位置不变,只有
+          背景图本身是通到屏幕两侧的。 */}
+      <div className="hero-full-bleed">
+        <img className="hero-scene-bg" src="/hero-scene.png" alt="" aria-hidden="true" />
+
+        <div className="hero-full-bleed-inner">
+          {/* 顶栏:左边身份牌(头像+等级),右边三个轻量图标入口。"规则"不再
+              单独占一个导航位,挪去品牌区的印章上触发,顶栏严格保持三图标 */}
+          <div className="top-bar fade-in-up" style={{ animationDelay: "0ms" }}>
+            <div className="identity-badge" onClick={() => onSelect("profile")}>
+              <div className="identity-avatar">
+                {avatarUrl ? <img src={avatarUrl} alt="" /> : <IconAvatarFallback size={20} />}
+              </div>
+              <div className="identity-meta">
+                <span className="identity-level">LV.{level} {title}</span>
+                <span className="identity-progress-track">
+                  <span className="identity-progress-fill" style={{ width: `${progressPct}%` }} />
+                </span>
+              </div>
+            </div>
+
+            <nav className="top-nav-light">
+              <button className="nav-icon-btn" onClick={() => onSelect("friends")}>
+                <IconFriends />
+                <span>好友</span>
+              </button>
+              <button className="nav-icon-btn" onClick={() => onSelect("leaderboard")}>
+                <IconTrophy />
+                <span>排行榜</span>
+              </button>
+              <button className="nav-icon-btn" onClick={() => onSelect("profile")}>
+                <IconProfile />
+                <span>我的</span>
+              </button>
+            </nav>
+          </div>
+
+          <div className="brand-hero fade-in-up" style={{ animationDelay: "40ms" }}>
+            <div className="brand-name">WUZIGIX</div>
+            <div className="brand-title-row">
+              <h1>五子棋</h1>
+              <button className="brand-seal" onClick={() => setShowRules(true)} aria-label="玩法规则">
+                <IconSeal />
+              </button>
+            </div>
+            <p className="brand-slogan">黑白之间 · 一念胜负</p>
+          </div>
+        </div>
+
+        {/* 在线状态行:图片下方留白本来就是设计图预留给这行字的位置,
+            不是"棋盘结束后的空白",所以直接叠在图片这块暖色留白区里,
+            而不是另起一段、在图片外面再加一份间距——那样两份空白会
+            叠加,显得空得不正常。菜单页只有在 App.jsx 里 boot() 成功、
+            拿到 myId 之后才会渲染,所以到这一步一定已经连上了 */}
+        <div className="online-status fade-in-up" style={{ animationDelay: "100ms" }}>
+          <span className="online-status-line">
+            <span className="online-dot-glow" />
+            ONLINE
+          </span>
+          <span className="online-status-sub">
+            {playerName ? `已连接到棋局世界 · ${playerName}` : "已连接到棋局世界"}
+          </span>
+        </div>
+      </div>
+
+      {showRules && <RulesModal onClose={() => setShowRules(false)} />}
+
+      {/* 主 CTA:开始对局。之前这里直接进随机匹配、"邀请好友"是另一个单独
+          入口——现在合并成一个:点进去先进"对局房间",在那边再选"匹配"
+          还是"邀请好友",两条路都从同一个房间出发 */}
+      <button className="cta-primary fade-in-up" style={{ animationDelay: "140ms" }} onClick={() => onSelect("room")}>
+        <span className="cta-primary-text">
+          <span className="cta-primary-title">开始对局</span>
+          <span className="cta-primary-sub">START MATCH</span>
+        </span>
+        <span className="cta-primary-arrow"><IconArrowRight /></span>
+      </button>
+
+      {/* 次级入口:人机挑战。"邀请好友"已经并入上面的主 CTA 流程,
+          这里不再重复放一个入口 */}
+      <div className="secondary-row fade-in-up" style={{ animationDelay: "200ms" }}>
+        <button className="secondary-card" onClick={() => onSelect("pve")}>
+          <div className="secondary-card-icon"><IconRobot /></div>
+          <div className="secondary-card-title">人机挑战</div>
+          <div className="secondary-card-sub">AI MATCH</div>
+        </button>
+      </div>
+
+      {/* 底部标语,两侧配细线,呼应参考图收尾的"棋院牌匾感" */}
+      <div className="bottom-tagline fade-in-up" style={{ animationDelay: "240ms" }}>
+        <span className="tagline-line" />
+        <span>执黑驭白 · 棋道无尽</span>
+        <span className="tagline-line" />
+      </div>
+    </div>
+  );
+}
