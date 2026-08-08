@@ -3,35 +3,19 @@
   /* 之前 max-width 只给到 85vw/85vh,15列一分,单格触摸目标在常见手机
      宽度下只有约20px,远低于44px的可用性建议下限,很容易点错相邻格。
      现在尽量把棋盘撑到接近整屏宽度(配合 .game-board-col 的出血负边距
-     抵消掉外层 app-shell 的左右留白),并把棋盘自身的内边距从16px收窄到
-     8px,把这部分空间也让给格子本身。 */
+     抵消掉外层 app-shell 的左右留白)。去掉了棋盘自己的 padding——那只是
+     一圈纯装饰的木框留白,跟"格子越大越好点"的目标是反着来的,现在格子
+     直接铺满整张卡片。 */
   max-width: min(560px, 92vh, 98vw);
   margin: 0 auto;
-  position: relative;
-  /* 正方形高度由 Board.jsx 里量出容器实际宽度后,通过内联 style 显式写死成
-     像素值(height: Npx)。这里不再用 aspect-ratio / padding-top 百分比这类
-     "自动高度"技巧——它们撑出来的高度在不同 WebView 内核(尤其桌面版 Telegram
-     内置浏览器跟手机端、跟普通 Chrome 不是同一套渲染实现)里,对"这个高度算不算
-     确定尺寸"的判断并不总是一致,会导致 .board-grid::before 网格线用到的百分比
-     inset 解析基准跟着跑偏,表现为棋盘整体偏向左下角、右侧和顶部空出一截。
-     JS 量出来的是浏览器渲染后的真实像素宽度,写成显式 height,不管哪个引擎
-     结果都一样,不存在"要不要算作确定尺寸"这层歧义。
-     下面这行 aspect-ratio 只是给 JS 还没跑完那一瞬间(或者极端情况下 JS 被
-     禁用)当兜底,一旦 JS 测量结果写进内联 style,内联 style 优先级更高,
-     会覆盖掉它。 */
   aspect-ratio: 1 / 1;
-}
-
-.board-inner {
-  position: absolute;
-  inset: 0;
   border-radius: var(--radius-md);
-  padding: var(--board-padding);
   background:
     repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 40px),
     linear-gradient(160deg, var(--board-wood-1), var(--board-wood-2));
   box-shadow: inset 0 2px 12px rgba(0,0,0,0.45), var(--shadow-modal);
-  --board-padding: var(--space-2);
+  position: relative;
+  overflow: hidden;
 }
 
 /* 不是自己回合时,只压暗棋盘格子这一层(0.75→0.55），角标文字作为同级
@@ -103,11 +87,7 @@
 
 .stone {
   width: 82%;
-  aspect-ratio: 1 / 1; /* 双重保险:棋子自身强制1:1,即使将来格子本身
-    因为其他改动不再是正方形,棋子也不会被拉成椭圆 —— 这里用 aspect-ratio
-    没问题,跟之前棋盘外层的坑不是一回事:.stone 的宽度基准(82%)是相对
-    一个"确定尺寸"的 flex 格子算出来的,不存在百分比高度找不到解析基准
-    的问题 */
+  height: 82%;
   border-radius: 50%;
   animation: drop 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
   position: relative;
