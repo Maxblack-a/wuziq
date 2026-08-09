@@ -1,15 +1,20 @@
 .board-wrap {
-  width: 100%;
-  /* 之前 max-width 只给到 85vw/85vh,15列一分,单格触摸目标在常见手机
-     宽度下只有约20px,远低于44px的可用性建议下限,很容易点错相邻格。
-     现在尽量把棋盘撑到接近整屏宽度(配合 .game-board-col 的出血负边距
-     抵消掉外层 app-shell 的左右留白)。
+  /* 之前是 width:100% + max-width: min(560px, 92vh, 98vw),用 margin:0 auto
+     居中。问题在于 98vw 是相对"整个视口"算的,而 board-wrap 真正的父容器
+     (.game-board-col)又通过负外边距单独"出血"到贴边——这两套坐标系
+     只要差一点(安全区、滚动条、四舍五入都会导致这种误差),margin:auto
+     居中的参照宽度就和实际可用宽度对不上,棋盘就会整体偏向一侧,跟
+     反馈里看到的"贴左边、右边留白"完全吻合。
 
-     四周留白现在统一由 Board.jsx 里的 MARGIN 常量控制(画线、点击热区、
+     现在改成一次性用 min() 直接对齐父容器的真实宽度(100%,而不是 98vw),
+     并且交给 .game-board-col 的 flex 布局做居中(见下方),不再依赖
+     margin:auto 在 width/max-width 组合下的居中计算,从根上消掉这个漂移。
+
+     四周留白统一由 Board.jsx 里的 MARGIN 常量控制(画线、点击热区、
      星位点用的是同一套坐标),不再靠这里的 border/padding 硬凑,所以
      board-wrap 本身不需要再留任何 padding 或 border。 */
-  max-width: min(560px, 92vh, 98vw);
-  margin: 0 auto;
+  width: min(560px, 92vh, 100%);
+  flex-shrink: 0; /* 防止在 .game-board-col 的 flex 容器里被意外压缩 */
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-md);
   background:
@@ -192,12 +197,23 @@
 }
 
 .game-board-col {
-  width: 100%;
   /* 抵消 app-shell 左右各 --space-4 的留白,让棋盘尽量撑满屏幕宽度——
      这样 15×15 格子实际分到的触摸面积才能明显变大,而不是被外层padding
-     限制住(board-wrap 的 max-width 放大了也没用,父容器窄它照样窄) */
+     限制住(board-wrap 的 max-width 放大了也没用,父容器窄它照样窄)。
+
+     留白从原来的 --space-2(8px)收窄到 --space-1(4px):这部分是纯粹的
+     "指尖安全边距",没必要占太多——省下来的宽度直接让给棋盘,在手机上
+     大约能让棋盘再多出接近1个格子的可视/点击面积。
+
+     用 flex + justify-content:center 居中 board-wrap,而不是让 board-wrap
+     自己用 margin:auto——这样棋盘永远是相对这个容器"实际渲染出来的宽度"
+     精确居中,不会再因为跟 98vw 这类视口相对单位的取整误差而跑偏。 */
+  width: 100%;
+  display: flex;
+  justify-content: center;
   margin: 0 calc(var(--space-4) * -1);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-1);
+  box-sizing: border-box;
 }
 
 .game-info-col {
