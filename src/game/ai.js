@@ -157,6 +157,17 @@ function bestScoreFor(board, player, opponent) {
   return move ? Math.max(move.attack, move.defend) : 0;
 }
 
+// 双威胁预警:数一数在 board 这个局面下,forPlayer 有几个"独立的点"
+// 能达到活三级别(也就是能凭一步棋新建一条活三,不是去延长已经存在的
+// 那条)。如果这个数字 >= 2,说明棋盘上同时埋了两条快成型的线——这正是
+// "悄悄布两条线、一步同时引爆成双活三"这种打法的前兆,而普通的
+// 1层/2层预判只会看"对手能拿到的最高分是多少",完全捕捉不到
+// "有没有两个地方同时逼近临界点"这件事,是之前留的一个真实漏洞
+function countLiveThreeThreats(board, forPlayer, against) {
+  const scored = scoreCandidates(board, forPlayer, against);
+  return scored.filter(c => c.attack >= SCORE.LIVE_THREE).length;
+}
+
 // 简单:纯静态评估,不看"我下完对手会怎么回应",从候选池里加权随机选
 function pickEasy(pool) {
   return weightedRandomPick(pool, c => Math.max(c.attack, c.defend));
@@ -172,7 +183,16 @@ function pickMedium(board, pool, aiPlayer, humanPlayer) {
     const trial = cloneBoard(board);
     trial[c.y][c.x] = aiPlayer;
     const oppBest = bestScoreFor(trial, humanPlayer, aiPlayer);
-    return { x: c.x, y: c.y, finalScore: Math.max(c.attack, c.defend) - oppBest * 0.9 };
+    let finalScore = Math.max(c.attack, c.defend) - oppBest * 0.9;
+
+    // 双威胁预警(中等力度):明显减分,但不是直接踢出候选池——
+    // 中等档最终还是加权随机选,减分之后这一步被选中的概率会大幅降低,
+    // 但不是每次都能躲开,留一点"研究一下能钻的空子"
+    if (countLiveThreeThreats(trial, humanPlayer, aiPlayer) >= 2) {
+      finalScore -= SCORE.LIVE_THREE * 3;
+    }
+
+    return { x: c.x, y: c.y, finalScore };
   });
   return weightedRandomPick(withLookahead, c => c.finalScore);
 }
@@ -202,6 +222,13 @@ function pickHard(board, pool, aiPlayer, humanPlayer) {
       // 对手这步回应要倒扣,但自己后续还能反击回来多少要加回去——
       // 不然会过度悲观地回避一些"暂时让一步、但马上能反打回去"的好棋
       finalScore = finalScore - oppScore * 0.9 + aiFollowUp * 0.5;
+    }
+
+    // 双威胁预警(重力度):困难档是零随机、直接选算出来分数最高的那个点,
+    // 所以只有让这个选项的分数远低于其他候选,才能保证"只要看见了就一定
+    // 会避开",不能像中等档那样只是"降低被随机选中的概率"
+    if (countLiveThreeThreats(board1, humanPlayer, aiPlayer) >= 2) {
+      finalScore -= SCORE.LIVE_THREE * 8;
     }
 
     if (!best || finalScore > best.finalScore) {

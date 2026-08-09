@@ -146,13 +146,21 @@
 }
 
 .stone.winning {
-  box-shadow: 0 0 0 3px var(--gold), 0 0 14px rgba(198, 161, 91, 0.65);
+  /* 之前这里给每颗获胜的棋子单独套一圈实色圆环 + 大范围模糊(3px环 + 最高
+     18px 模糊),五颗棋子紧挨着排列,间距本来就只有几像素,每颗自己的光晕
+     一大就直接跟邻居的光晕糊在一起,连成一整块发光的"药丸"——这正是
+     之前效果图被吐槽"看不清是几颗棋子"的主要原因,比连线本身的问题还大。
+     现在把棋子自身的高亮压得很轻(1.5px 环 + 最多 5px 模糊),真正的暖色
+     视觉重量交给下面 .win-line-glow/.win-line-path 那条贯穿棋子的线来
+     承担——参考的目标效果里,棋子本身干净的圆形轮廓没有被自己的光晕
+     吃掉,暖色主要是"线"在发光,不是每颗子各自发光。 */
+  box-shadow: 0 0 0 1.5px var(--gold), 0 0 3px rgba(198, 161, 91, 0.4);
   animation: drop 220ms cubic-bezier(0.34, 1.56, 0.64, 1), winning-glow 1.2s ease-in-out 220ms infinite alternate;
 }
 
 @keyframes winning-glow {
-  from { box-shadow: 0 0 0 3px var(--gold), 0 0 8px rgba(198, 161, 91, 0.45); }
-  to { box-shadow: 0 0 0 3px var(--gold), 0 0 18px rgba(198, 161, 91, 0.85); }
+  from { box-shadow: 0 0 0 1.5px var(--gold), 0 0 2px rgba(198, 161, 91, 0.3); }
+  to { box-shadow: 0 0 0 1.5px var(--gold), 0 0 5px rgba(198, 161, 91, 0.6); }
 }
 
 /* 待确认的预览棋子:半透明 + 呼吸脉动,跟已经真正落下的棋子明确区分开,
@@ -185,22 +193,52 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 3;
+  /* 之前这里是 z-index:3,压在棋子(z-index:2)上面,连线的粗线+柔光晕会
+     整段盖在棋子表面,把棋子自己的圆形边界都糊掉。现在改成 z-index:1,
+     跟网格线同一层但画在网格线之后(所以还是盖在网格线上面),但压在
+     棋子下面——效果是连线只在棋子之间的缝隙里露出来,棋子本身完整、
+     干净地叠在最上层,不会被线的柔光晕吃掉边界,这正是参考图里"棋子
+     清清楚楚、暖色主要来自贯穿的线"这种效果的关键。 */
+  z-index: 1;
+}
+
+/* 连线视觉效果分两层:一层稍宽的柔光晕垫底,一层细的实色核心线在上面,
+   叠出"发光笔触"的效果。之前这两层都做得偏粗偏虚(16px+3px模糊),
+   五颗棋子紧挨着、缝隙本来就没多宽,粗光晕会直接糊成一整块看不清棋子
+   的"药丸"。现在两层都收窄了不少,线主要在棋子间的缝隙里透出暖光,
+   不会盖过棋子本身的轮廓。画线动画保留 650ms,配合 PveScreen 里"结果
+   延迟切出来"的节奏,能让人看清线是怎么画出来的。 */
+.win-line-glow {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 9;
+  stroke-linecap: round;
+  opacity: 0.5;
+  filter: blur(2px);
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: draw-line 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .win-line-path {
   fill: none;
   stroke: var(--gold);
-  stroke-width: 6;
+  stroke-width: 3.5;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 6px rgba(198,161,91,0.65));
+  filter: drop-shadow(0 0 5px rgba(198,161,91,0.8));
   stroke-dasharray: 400;
   stroke-dashoffset: 400;
-  animation: draw-line 450ms ease forwards;
+  animation: draw-line 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
+    win-line-pulse 1s ease-in-out 650ms infinite alternate;
 }
 
 @keyframes draw-line {
   to { stroke-dashoffset: 0; }
+}
+
+@keyframes win-line-pulse {
+  from { filter: drop-shadow(0 0 4px rgba(198,161,91,0.65)); }
+  to { filter: drop-shadow(0 0 9px rgba(198,161,91,0.95)); }
 }
 
 .game-layout {
@@ -266,6 +304,17 @@
   margin-bottom: var(--space-2);
 }
 
+/* 悔棋从棋盘下方挪到顶栏、放在"轮到你"右侧之后,用这一个 flex 容器把
+   [状态胶囊 + 悔棋按钮] 打包成一组,让它们整体贴着 .room-topbar 右边——
+   不然 room-topbar 本身是 justify-content:space-between,3 个元素平铺
+   会把状态胶囊挤到正中间,跟返回按钮、悔棋按钮之间留出两块不对称的
+   大空档,难看。 */
+.pve-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .pve-turn-pill {
   display: flex;
   align-items: center;
@@ -298,9 +347,31 @@
   box-shadow: 0 0 0 3px rgba(91, 56, 35, 0.35);
 }
 
-.pve-disclaimer {
-  font-size: 12px;
+/* 棋盘上方的结果展示区,替代原来盖住棋盘的弹窗。固定 min-height——不管
+   对局是不是已经结束、这块地方有没有内容,高度都不变,棋盘的位置就不会
+   跟着结果文字的出现/消失而跳动。数值是按"标题一行 + 说明一行"外加
+   上下一点呼吸空间量出来的,两种状态之间差不了几个像素,肉眼看不出来。 */
+.pve-result-panel {
+  min-height: 74px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   text-align: center;
+  gap: 2px;
+  margin-bottom: var(--space-3);
+}
+
+.pve-result-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pve-result-desc {
+  margin: 0;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -322,3 +393,59 @@
 }
 .btn-undo:active { background: var(--wood-soft); transform: scale(0.97); }
 .btn-undo:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---- PVE 选边界面:进对局前先选执黑(先手)还是执白(后手) ----
+   两张大卡片,左边一颗对应颜色的棋子(复用棋盘本身的 .stone 渐变样式,
+   保证跟棋盘上的真棋子看起来是同一种材质),右边文字说明这个选择意味着
+   "先手/后手"——避免玩家选完之后才发现"原来我一直是后手"这种误解 */
+.side-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-2) var(--space-4);
+}
+.side-select-title {
+  font-family: var(--font-display), serif;
+  font-size: 20px;
+  text-align: center;
+  color: var(--ink-token);
+  margin-bottom: 2px;
+}
+.side-select-subtitle {
+  text-align: center;
+  font-size: 13px;
+  margin-bottom: var(--space-2);
+}
+.side-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.side-btn:active {
+  background: var(--wood-soft);
+  transform: scale(0.98);
+}
+.side-btn-stone {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  animation: none; /* 这里是静态展示，不需要棋盘落子那个弹入动画 */
+}
+.side-btn-text {
+  text-align: left;
+}
+.side-btn-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-token);
+}
+.side-btn-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}

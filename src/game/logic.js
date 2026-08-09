@@ -22,7 +22,7 @@ const DIRECTIONS = [
   [1, 0], [0, 1], [1, 1], [1, -1],
 ];
 
-// 返回 { winner, line } , line 是获胜的五个坐标,方便画连线动画
+// 返回 { winner, line } , line 是构成胜利的完整一串坐标(方便画连线动画)
 export function checkWin(board, lastX, lastY) {
   const player = board[lastY][lastX];
   if (!player) return null;
@@ -42,12 +42,11 @@ export function checkWin(board, lastX, lastY) {
     }
 
     if (line.length >= 5) {
-      // 长连(6子以上)的情况下,不能简单取数组最前面5个——那样不保证包含
-      // 刚刚下的这颗子。以刚落子的位置为中心尽量居中取一段5连,越界就贴边。
-      const originalIdx = line.findIndex(([x, y]) => x === lastX && y === lastY);
-      let start = Math.max(0, originalIdx - 2);
-      start = Math.min(start, line.length - 5);
-      return { winner: player, line: line.slice(start, start + 5) };
+      // 之前这里会把长连(6子以上)截断成只取中间5颗——这是视觉效果不好的
+      // 一部分原因:长连获胜时,连线动画只画出中间那一小段,两头多出来的
+      // 棋子看着像是"没算进胜利"一样,容易让人纳闷。现在直接返回完整的
+      // 连续一串(哪怕超过5颗),连线和发光效果覆盖真正获胜的全部棋子。
+      return { winner: player, line };
     }
   }
   return null;

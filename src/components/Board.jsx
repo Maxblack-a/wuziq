@@ -12,23 +12,28 @@ const STEP = (100 - MARGIN * 2) / (BOARD_SIZE - 1);
 const pos = (i) => MARGIN + i * STEP;
 
 // previewColor: 1=黑 2=白,决定"待确认"的预览棋子显示成什么颜色(当前该谁落子)
-export default function Board({ board, onCellClick, lastMove, winLine, disabled, onIllegalTap, previewColor }) {
+// disabled: 真正意义上的"轮到对方/对方思考中",会压暗棋盘 + 显示"对方回合"角标
+// locked: 单纯地暂时不让点(比如胜负已经判定、正在展示连线动画那几百毫秒),
+//   但不压暗、不显示角标——这段时间棋盘应该看起来清清楚楚,而不是被"对方回合"
+//   的蒙层糊住,不然辛辛苦苦拉长的连线动画等于白做
+export default function Board({ board, onCellClick, lastMove, winLine, disabled, locked, onIllegalTap, previewColor }) {
   // 点击先只是"选中"一个格子(pending),显示一个半透明预览棋子;
   // 真正调用 onCellClick(落子、同步给对手)要等用户点了"确认落子"才会发生。
   // 这样用户可以先看一眼选的位置对不对,改主意了也能改选别的格子或者取消。
   const [pending, setPending] = useState(null); // { x, y } | null
+  const interactionBlocked = disabled || locked;
 
   useEffect(() => {
     // 轮到对方了(或者棋局状态变化导致这个棋盘被禁用),清掉还没确认的选择,
     // 避免残留一个不该出现的预览棋子
-    if (disabled) setPending(null);
-  }, [disabled]);
+    if (interactionBlocked) setPending(null);
+  }, [interactionBlocked]);
 
   const winSet = new Set((winLine || []).map(([x, y]) => `${x},${y}`));
   const lines = Array.from({ length: BOARD_SIZE }, (_, i) => i);
 
   function handleCellTap(x, y, cell) {
-    if (disabled || cell !== 0) {
+    if (interactionBlocked || cell !== 0) {
       onIllegalTap?.();
       return;
     }
@@ -42,7 +47,7 @@ export default function Board({ board, onCellClick, lastMove, winLine, disabled,
   }
 
   function handleConfirm() {
-    if (!pending || disabled) return;
+    if (!pending || interactionBlocked) return;
     onCellClick(pending.x, pending.y);
     setPending(null);
     hapticImpact("medium");
@@ -90,14 +95,26 @@ export default function Board({ board, onCellClick, lastMove, winLine, disabled,
               );
             })
           )}
-          {winLine && winLine.length === 5 && (
+          {winLine && winLine.length >= 5 && (
+            // 连线现在按"实际获胜的完整一串"来画(长连时可能超过5颗),
+            // 首尾坐标取数组第一个和最后一个即可,因为这一串本来就是同一
+            // 方向上等间距排列的直线。用两条叠在一起的 line 做出"发光核心
+            // + 外层柔光晕"的效果,比单条纯色线更显眼,不容易被棋盘细节
+            // 或后面弹出的结算框盖过去而看不清。
             <svg className="win-line-svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <line
+                className="win-line-glow"
+                x1={pos(winLine[0][0])}
+                y1={pos(winLine[0][1])}
+                x2={pos(winLine[winLine.length - 1][0])}
+                y2={pos(winLine[winLine.length - 1][1])}
+              />
               <line
                 className="win-line-path"
                 x1={pos(winLine[0][0])}
                 y1={pos(winLine[0][1])}
-                x2={pos(winLine[4][0])}
-                y2={pos(winLine[4][1])}
+                x2={pos(winLine[winLine.length - 1][0])}
+                y2={pos(winLine[winLine.length - 1][1])}
               />
             </svg>
           )}

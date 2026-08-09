@@ -491,6 +491,10 @@
   border-color: var(--wood);
   color: var(--accent-fg);
 }
+.diff-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 .room-code-display {
   font-size: 32px;
