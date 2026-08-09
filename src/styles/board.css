@@ -1,20 +1,33 @@
 .board-wrap {
-  /* 之前是 width:100% + max-width: min(560px, 92vh, 98vw),用 margin:0 auto
-     居中。问题在于 98vw 是相对"整个视口"算的,而 board-wrap 真正的父容器
-     (.game-board-col)又通过负外边距单独"出血"到贴边——这两套坐标系
-     只要差一点(安全区、滚动条、四舍五入都会导致这种误差),margin:auto
-     居中的参照宽度就和实际可用宽度对不上,棋盘就会整体偏向一侧,跟
-     反馈里看到的"贴左边、右边留白"完全吻合。
+  /* 【踩坑记录,别再这么改】
+     曾经改成过 .game-board-col{display:flex} + board-wrap 用 flex 居中,
+     结果棋盘直接从页面上消失。原因:Board.jsx 组件最外层还包了一层没有
+     class 的 <div>(为了在棋盘下面放"确认落子"按钮),这层 div 变成 flex
+     item 之后,默认按"内容撑开尺寸"来算宽度——但它唯一的内容
+     (board-wrap)自己又是 width:100% 这种百分比宽度,百分比在计算父级
+     "内容尺寸"时不算数,于是这层 div 被量出 0 宽度,board-wrap 的 100%
+     自然也是 0。这是本次真正被实测复现、也被实测修好的 bug,别再改回
+     display:flex 那套。
 
-     现在改成一次性用 min() 直接对齐父容器的真实宽度(100%,而不是 98vw),
-     并且交给 .game-board-col 的 flex 布局做居中(见下方),不再依赖
-     margin:auto 在 width/max-width 组合下的居中计算,从根上消掉这个漂移。
+     真正导致"棋盘贴左边、右边留白"的原因,其实是 .game-board-col 那边:
+     它同时写了 width:100% 和负外边距(margin:0 -16px)想让棋盘出血到
+     贴边——但 width:100% 是相对父容器算出的固定值,并不会因为负外边距
+     自动变宽,结果就是整个容器只是被"推"向左边,右边space没被填满,
+     实测量出来正好缺了 32px,跟反馈里"贴左边、右边一大截留白"完全对得
+     上。修法在下面 .game-board-col 里:把 width:100% 去掉,让它保持
+     默认的 width:auto,这样负外边距才会按预期把容器两侧都撑开、居中
+     不偏。
+
+     这里(board-wrap)维持原来"width:100% + max-width 封顶 + margin:auto
+     居中"的写法不变——这套写法本身没问题,已经用无头浏览器实测确认过,
+     真正的坑在父容器,不在这。
 
      四周留白统一由 Board.jsx 里的 MARGIN 常量控制(画线、点击热区、
      星位点用的是同一套坐标),不再靠这里的 border/padding 硬凑,所以
      board-wrap 本身不需要再留任何 padding 或 border。 */
-  width: min(560px, 92vh, 100%);
-  flex-shrink: 0; /* 防止在 .game-board-col 的 flex 容器里被意外压缩 */
+  width: 100%;
+  max-width: min(560px, 92vh, 98vw);
+  margin: 0 auto;
   aspect-ratio: 1 / 1;
   border-radius: var(--radius-md);
   background:
@@ -201,19 +214,21 @@
      这样 15×15 格子实际分到的触摸面积才能明显变大,而不是被外层padding
      限制住(board-wrap 的 max-width 放大了也没用,父容器窄它照样窄)。
 
+     关键点:这里不能再写 width:100%。width:100% 是相对父容器
+     (.game-layout)算出来的一个固定值,不会因为下面的负外边距自动变宽——
+     负外边距只会把整个盒子往左"推",右边空出来的宽度并不会被自动填满。
+     实测(无头浏览器量出来的)结果是右边正好缺 32px,棋盘因此贴左边、
+     右边留一大块白,这正是最早反馈里"棋盘不居中"的真实原因。
+
+     去掉 width 声明、让它保持默认的 width:auto 之后,浏览器会自动把
+     "负边距占掉的宽度"补回到盒子本身的宽度上,两侧就能均匀撑开、贴边
+     且对称——这是 CSS 里让负外边距"出血"生效的标准写法。
+
      留白从原来的 --space-2(8px)收窄到 --space-1(4px):这部分是纯粹的
      "指尖安全边距",没必要占太多——省下来的宽度直接让给棋盘,在手机上
-     大约能让棋盘再多出接近1个格子的可视/点击面积。
-
-     用 flex + justify-content:center 居中 board-wrap,而不是让 board-wrap
-     自己用 margin:auto——这样棋盘永远是相对这个容器"实际渲染出来的宽度"
-     精确居中,不会再因为跟 98vw 这类视口相对单位的取整误差而跑偏。 */
-  width: 100%;
-  display: flex;
-  justify-content: center;
+     大约能让棋盘再多出接近1个格子的可视/点击面积。 */
   margin: 0 calc(var(--space-4) * -1);
   padding: 0 var(--space-1);
-  box-sizing: border-box;
 }
 
 .game-info-col {

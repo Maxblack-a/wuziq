@@ -65,6 +65,152 @@ function candidateMoves(board) {
   return Array.from(moves).map(s => s.split(",").map(Number));
 }
 
+// 给某一方(player)在当前棋盘上算出所有候选点的进攻分(自己下会形成什么棋型)
+// 和防守分(对手下会形成什么棋型),这一份数据是后面所有决策的基础
+function scoreCandidates(board, player, opponent) {
+  return candidateMoves(board).map(([x, y]) => ({
+    x, y,
+    attack: evaluatePoint(board, x, y, player),
+    defend: evaluatePoint(board, x, y, opponent),
+  }));
+}
+
+// ---- 三档共用的底线 ----
+// 出现成五(直接赢)、冲四、活四这个级别的棋型时——不管是自己能形成还是
+// 对手能形成——不允许任何随机流程插手,必须直接走最合理的那一步。
+// 这条线以前只写在困难档里,现在三档统一遵守:哪怕是最低难度,也不能出现
+// "对手都快连成五了它还在随机" 这种会被一眼看穿"AI在放水/AI没脑子"的情况。
+function findForcedMove(scored) {
+  // 能直接赢就直接赢,不用再权衡任何别的因素
+  const ownWin = scored.find(c => c.attack >= SCORE.FIVE);
+  if (ownWin) return ownWin;
+
+  // 冲四/活四级别:自己被逼到必须防,或者自己能形成冲四/活四抢到主动权,
+  // 都属于"再不处理这盘棋的走向就定了"的量级
+  const critical = scored.filter(c => c.attack >= SCORE.FOUR || c.defend >= SCORE.FOUR);
+  if (!critical.length) return null;
+
+  critical.sort((a, b) => {
+    const av = Math.max(a.attack, a.defend);
+    const bv = Math.max(b.attack, b.defend);
+    if (bv !== av) return bv - av;
+    return b.defend - a.defend; // 分数打平时优先选防守,更稳妥,不冒险抢攻
+  });
+  return critical[0];
+}
+
+// ---- 活三预警层 ----
+// 活三级别的威胁一旦出现(自己能做出活三,或者对手能做出活三),就是
+// "正常人看到三个子连起来就会开始防范" 的那条心理线——虽然还没到
+// "必须立刻处理不然就输" 的强制程度,但候选范围要收窄到真正跟这个
+// 威胁相关的几个点,不能再跟棋盘上其他无关的点混在一起随机选。
+//
+// defend 乘了 1.1 的权重:避免重演之前"进攻分天然多加 5% 奖励"导致
+// AI 明知对手在结三线却跑去下自己棋的那个漏洞——同等量级下,略微
+// 倾向选择更保守的防守方向。
+function findThreatPool(scored) {
+  const triggered = scored.some(c => c.attack >= SCORE.LIVE_THREE || c.defend >= SCORE.LIVE_THREE);
+  if (!triggered) return null;
+  const threshold = SCORE.LIVE_THREE * 0.6;
+  return scored.filter(c => Math.max(c.attack, c.defend * 1.1) >= threshold);
+}
+
+// ---- 平静局面下的候选池 ----
+// 不再是"排名前 N 个候选随机选"(名次固定,容易随出一个分数烂到不成话、
+// 一眼假的点),改成"分数达到最高分某个比例以上的都进池子",保证不管
+// 随到哪一个,复盘时都能看出这一步是有道理的、只是不是最优解而已。
+// ratio 越低,候选池越宽、随机性越大;三档的差异主要就体现在这个比例上。
+function generalPool(scored, ratio) {
+  const maxScore = Math.max(...scored.map(c => Math.max(c.attack, c.defend)), 1);
+  const pool = scored.filter(c => Math.max(c.attack, c.defend) >= maxScore * ratio);
+  return pool.length ? pool : scored;
+}
+
+// 按分数做线性加权随机(分越高被选中概率越大,但不是排名硬卡),
+// 比"前 N 名等概率"更平滑,也更不容易被玩家摸出"AI只会在这几个选项里选"的规律
+function weightedRandomPick(candidates, scoreFn) {
+  const weights = candidates.map(c => Math.max(scoreFn(c), 1));
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < candidates.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return candidates[i];
+  }
+  return candidates[candidates.length - 1];
+}
+
+// 给 player 在 board 上找一步"最优解"(不带随机,不带随机池收窄逻辑),
+// 用于模拟"对手/自己接下来会怎么回应"这种前瞻计算,而不是最终真正落子的决策
+function bestMoveFor(board, player, opponent) {
+  const scored = scoreCandidates(board, player, opponent);
+  if (!scored.length) return null;
+  const forced = findForcedMove(scored);
+  if (forced) return forced;
+  return scored.reduce(
+    (best, c) => (!best || Math.max(c.attack, c.defend) > Math.max(best.attack, best.defend) ? c : best),
+    null
+  );
+}
+
+function bestScoreFor(board, player, opponent) {
+  const move = bestMoveFor(board, player, opponent);
+  return move ? Math.max(move.attack, move.defend) : 0;
+}
+
+// 简单:纯静态评估,不看"我下完对手会怎么回应",从候选池里加权随机选
+function pickEasy(pool) {
+  return weightedRandomPick(pool, c => Math.max(c.attack, c.defend));
+}
+
+// 中等:1 层预判——模拟落子后,对手能拿到的最高分是多少,倒扣回去,
+// 尽量不留"看起来分高、实际上给对手送出更大威胁"的点;
+// 算完之后依然是加权随机选,不是死盯着"倒扣后最优解"那一个点不放,
+// 这样打法有章法(能防住需要往前想一步才能看出来的坑),但长期打
+// 依然能摸出规律、找到能赢的缝
+function pickMedium(board, pool, aiPlayer, humanPlayer) {
+  const withLookahead = pool.map(c => {
+    const trial = cloneBoard(board);
+    trial[c.y][c.x] = aiPlayer;
+    const oppBest = bestScoreFor(trial, humanPlayer, aiPlayer);
+    return { x: c.x, y: c.y, finalScore: Math.max(c.attack, c.defend) - oppBest * 0.9 };
+  });
+  return weightedRandomPick(withLookahead, c => c.finalScore);
+}
+
+// 困难:2 层预判——我下这步 -> 对手最优回应 -> 我对这个回应的最优反击,
+// 三步都算完再综合打分,零随机,直接选算出来最优的一手。
+// 候选范围收窄到分数最高的前 8 个再往下算,不然模拟对手+反击这两层
+// 的计算量在手机端会明显卡顿
+function pickHard(board, pool, aiPlayer, humanPlayer) {
+  const topCandidates = [...pool]
+    .sort((a, b) => Math.max(b.attack, b.defend) - Math.max(a.attack, a.defend))
+    .slice(0, 8);
+
+  let best = null;
+  for (const c of topCandidates) {
+    const board1 = cloneBoard(board);
+    board1[c.y][c.x] = aiPlayer;
+
+    const oppMove = bestMoveFor(board1, humanPlayer, aiPlayer);
+    let finalScore = Math.max(c.attack, c.defend);
+
+    if (oppMove) {
+      const oppScore = Math.max(oppMove.attack, oppMove.defend);
+      const board2 = cloneBoard(board1);
+      board2[oppMove.y][oppMove.x] = humanPlayer;
+      const aiFollowUp = bestScoreFor(board2, aiPlayer, humanPlayer);
+      // 对手这步回应要倒扣,但自己后续还能反击回来多少要加回去——
+      // 不然会过度悲观地回避一些"暂时让一步、但马上能反打回去"的好棋
+      finalScore = finalScore - oppScore * 0.9 + aiFollowUp * 0.5;
+    }
+
+    if (!best || finalScore > best.finalScore) {
+      best = { x: c.x, y: c.y, finalScore };
+    }
+  }
+  return best;
+}
+
 /**
  * 计算 AI 的落子
  * @param board 二维数组
@@ -73,46 +219,28 @@ function candidateMoves(board) {
  * @param difficulty 'easy' | 'medium' | 'hard'
  */
 export function getAiMove(board, aiPlayer, humanPlayer, difficulty = "medium") {
-  const moves = candidateMoves(board);
+  const scored = scoreCandidates(board, aiPlayer, humanPlayer);
+  if (!scored.length) return null;
 
-  const scored = moves.map(([x, y]) => {
-    const attack = evaluatePoint(board, x, y, aiPlayer);
-    const defend = evaluatePoint(board, x, y, humanPlayer);
-    // 进攻优先,但如果对手威胁更大就必须防守
-    const score = Math.max(attack, defend * 0.95) + attack * 0.05;
-    return { x, y, score };
-  });
+  // 底线:必杀/必防级别的威胁,三档统一强制处理,不参与随机
+  const forced = findForcedMove(scored);
+  if (forced) return forced;
 
-  scored.sort((a, b) => b.score - a.score);
+  // 活三级别的威胁:收窄到真正相关的候选点
+  const threatPool = findThreatPool(scored);
 
+  if (threatPool) {
+    if (difficulty === "hard") return pickHard(board, threatPool, aiPlayer, humanPlayer);
+    if (difficulty === "medium") return pickMedium(board, threatPool, aiPlayer, humanPlayer);
+    return pickEasy(threatPool);
+  }
+
+  // 平静局面:按难度采用不同宽窄的候选池
   if (difficulty === "hard") {
-    // 之前这里直接返回第一层评分最高的点,等于完全不看"我下完这步,对手怎么回应"——
-    // 说是困难难度,其实还是纯贪心。现在给最优的几个候选点多看一层:
-    // 模拟落子后,对手能拿到的最高分是多少,倒扣回去,尽量不留"看起来分高、
-    // 实际上给对手送出更大威胁"的点。
-    // 但如果第一层已经是必胜/必须防守的分数(活四、冲四这个级别),没必要
-    // 再多算一层浪费时间,直接走。
-    if (scored[0].score >= SCORE.FOUR) return scored[0];
-
-    const topN = scored.slice(0, Math.min(6, scored.length));
-    const lookahead = topN.map(({ x, y, score }) => {
-      const trial = cloneBoard(board);
-      trial[y][x] = aiPlayer;
-      const opponentReplies = candidateMoves(trial).map(([ox, oy]) => evaluatePoint(trial, ox, oy, humanPlayer));
-      const opponentBest = opponentReplies.length ? Math.max(...opponentReplies) : 0;
-      return { x, y, finalScore: score - opponentBest * 0.9 };
-    });
-    lookahead.sort((a, b) => b.finalScore - a.finalScore);
-    return lookahead[0];
+    return pickHard(board, generalPool(scored, 0.75), aiPlayer, humanPlayer);
   }
-
   if (difficulty === "medium") {
-    // 从前 3 个较优解里带一点随机性,不至于每次都是"最优解"那么难打
-    const pool = scored.slice(0, Math.min(3, scored.length));
-    return pool[Math.floor(Math.random() * pool.length)];
+    return pickMedium(board, generalPool(scored, 0.7), aiPlayer, humanPlayer);
   }
-
-  // easy: 从前 6 个里随机选,并且不主动做最强攻击判断,给新手留出机会
-  const pool = scored.slice(0, Math.min(6, scored.length));
-  return pool[Math.floor(Math.random() * pool.length)];
+  return pickEasy(generalPool(scored, 0.55));
 }
