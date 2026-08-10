@@ -52,7 +52,7 @@ export default function NicknameSetupScreen({ initialName, avatarUrl, onConfirm 
         maxLength={20}
         style={{
           width: "100%", padding: 16, fontSize: 18, textAlign: "center",
-          background: "var(--ink)", color: "var(--fg)", border: "1px solid var(--ink-line)",
+          background: "var(--wood-soft)", color: "var(--fg)", border: "1px solid var(--ink-line)",
           borderRadius: "var(--radius-md)", marginBottom: 8,
         }}
       />

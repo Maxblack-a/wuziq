@@ -75,7 +75,7 @@ export default function ProfileScreen({ myId, onExit }) {
               disabled={saving}
               style={{
                 fontSize: 20, fontWeight: 700, textAlign: "center", padding: "6px 10px",
-                background: "var(--ink)", color: "var(--fg)", border: "1px solid var(--ink-line)",
+                background: "var(--wood-soft)", color: "var(--fg)", border: "1px solid var(--ink-line)",
                 borderRadius: "var(--radius-sm)", width: 160,
               }}
             />
