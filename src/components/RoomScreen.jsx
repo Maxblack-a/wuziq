@@ -6,7 +6,6 @@ import { titleForRating, levelForRating } from "../lib/rank";
 import {
   IconAvatarFallback,
   IconArrowRight,
-  IconChevronLeft,
   IconChevronRight,
   IconMoreHorizontal,
   IconCoinStack,
@@ -280,12 +279,12 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
 
   return (
     <div>
-      {/* 顶栏:左返回 / 右更多——Telegram 原生的 Close/标题栏在这一层之外,
-          这里只是页面自己的内容,严格对应设计图里"< ... "那一行 */}
-      <div className="room-topbar fade-in-up">
-        <button className="room-icon-btn" onClick={handleTopBack} aria-label={inviting ? "返回匹配方式" : "退出房间"}>
-          <IconChevronLeft />
-        </button>
+      {/* 顶栏:右边"更多"——Telegram 原生的 Close/标题栏在这一层之外,
+          这里只是页面自己的内容。原来左边还有一个独立的"‹"返回图标,
+          现在去掉了:退出房间/收起邀请面板这个动作已经绑在 Telegram
+          自带的返回键上(见下面 useTelegramBackButton(handleTopBack)),
+          UI 上没必要再重复画一份,整条栏目改成靠右对齐。 */}
+      <div className="room-topbar fade-in-up" style={{ justifyContent: "flex-end" }}>
         <button className="room-icon-btn" onClick={handleShare} disabled={!room?.code} aria-label="更多操作">
           <IconMoreHorizontal />
         </button>

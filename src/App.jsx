@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import MainMenu from "./components/MainMenu";
 import PveScreen from "./components/PveScreen";
 import MatchmakingScreen from "./components/MatchmakingScreen";
@@ -10,6 +10,7 @@ import OnlineGame from "./components/OnlineGame";
 import FriendsScreen from "./components/FriendsScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
 import ProfileScreen from "./components/ProfileScreen";
+import NicknameSetupScreen from "./components/NicknameSetupScreen";
 import { supabase, loginWithTelegram, loginAnonymously, getExistingUserId } from "./lib/supabase";
 import { initTelegram, isInTelegram, getInitData, getStartParam, getTelegramUserId } from "./lib/telegram";
 import { initPresence } from "./lib/presence";
@@ -17,7 +18,7 @@ import { initPresence } from "./lib/presence";
 export default function App() {
   const [myId, setMyId] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [screen, setScreen] = useState("loading"); // loading | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile
+  const [screen, setScreen] = useState("loading"); // loading | nickname | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile
   const [roomId, setRoomId] = useState(null);
   const [prefillRoomCode, setPrefillRoomCode] = useState(null);
   // 对战邀请、好友申请统一进这一个队列,一个个强制弹窗处理——两种通知
@@ -27,6 +28,33 @@ export default function App() {
   const [notifQueue, setNotifQueue] = useState([]);
   const [notifBusy, setNotifBusy] = useState(false);
 
+  // 导航历史栈:每次从一个页面"跳去"另一个页面(navigate/handleMatched),
+  // 把跳转前那一刻的 { screen, roomId } 压进来。Telegram 原生返回键 /
+  // 页面自己的返回逻辑统一走 goBack() 弹出最近这一条,回到"真正带你
+  // 进入当前页面的那个页面",而不是不管三七二十一直接回首页。
+  // 用 ref 不用 state——这东西不需要参与渲染,只是记录轨迹供 goBack 读取。
+  const historyRef = useRef([]);
+
+  // routeAfterLogin 定义在下面的 useEffect 里(跟 boot 共享一份逻辑),
+  // 用 ref 存一份引用,好在"确认昵称"完成之后从组件方法里调用它。
+  const routeAfterLoginRef = useRef(null);
+
+  // "确认昵称"页点了确认之后:写库,顺手把本地 profile 缓存也更新一下
+  // (不然接下来菜单页头像旁边的名字要等下一次 refreshProfile 才会变),
+  // 再接上原来登录成功后该走的路由(深链接/断线续局/回首页)。
+  async function handleNicknameConfirmed(name) {
+    const { error } = await supabase
+      .from("profiles")
+      .update({ display_name: name, nickname_confirmed: true })
+      .eq("id", myId);
+    if (error) throw error;
+    setProfile((prev) => (prev ? { ...prev, display_name: name, nickname_confirmed: true } : prev));
+    if (routeAfterLoginRef.current) {
+      await routeAfterLoginRef.current(myId);
+    } else {
+      setScreen("menu");
+    }
+  }
 
   async function refreshProfile(uid) {
     const { data } = await supabase.from("profiles").select("*").eq("id", uid).single();
@@ -85,71 +113,120 @@ export default function App() {
           } else {
             uid = await loginAnonymously("模拟玩家");
           }
-          await refreshProfile(uid);
+          cachedProfile = await refreshProfile(uid);
         }
         setMyId(uid);
         initPresence(uid); // 往"在线用户"这个全局频道报到,好友列表能看到谁在线
         loadPendingNotifications(uid); // 补一次:上次关闭 App 期间收到的邀请/申请,实时订阅是抓不到的,得主动查一遍
 
-        // 深链接参数:room_邀请码,用于加入对局。这个必须放在"自动续局"检查
-        // 之前——用户点了一条明确的邀请链接进来,这是当下最强的意图,不能被
-        // "你还有一局没下完"这种被动逻辑悄悄吞掉、带去了别的地方,那样点链接
-        // 等于白点。
-        // (原来这里还有一个 friend_好友码 分支,好友码那套设计已经去掉了,
-        // 加好友改成了在"好友"页/房间邀请面板里搜索昵称、发申请)
-        const param = getStartParam();
-        if (param?.startsWith("room_")) {
-          setPrefillRoomCode(param.slice(5));
-          setScreen("invite");
+        // 第一次进这个游戏(或者昵称还没走过确认这一步的老账号):停在
+        // "确认昵称"页,不往下走深链接/断线续局那套路由逻辑——用户点了
+        // 确认之后,handleNicknameConfirmed 会接着把 routeAfterLogin 补上。
+        if (!cachedProfile?.nickname_confirmed) {
+          setScreen("nickname");
           return;
         }
 
-        // 没有明确的深链接意图时,才去查一下是不是有一局还没下完的对局,或者
-        // 一个自己创建、还在等好友加入的邀请房间——有的话直接带回去,而不是丢在大厅。
-        // 房间号本来就只活在内存里,刷新/重开就丢了,得靠这个查询找回来。
-        //
-        // 用单次 .or() 把整个嵌套条件写清楚,而不是链式调用两次 .or()——
-        // 后者依赖的是"多次 .or() 之间用 AND 拼起来"这种没有正式文档保证的行为,
-        // 不如显式嵌套可靠。
-        const { data: activeRoom } = await supabase
-          .from("rooms")
-          .select("id, status")
-          .or(
-            `and(status.in.(lobby,playing),or(player1_id.eq.${uid},player2_id.eq.${uid})),` +
-            `and(status.eq.waiting,player1_id.eq.${uid})`
-          )
-          .order("updated_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (activeRoom) {
-          setRoomId(activeRoom.id);
-          // playing 才是真正在下棋,直接进对局页;waiting/lobby 都还没正式
-          // 开局(可能还在等对手、也可能双方都到齐了但没人点开始),回房间页
-          setScreen(activeRoom.status === "playing" ? "game" : "room");
-        } else {
-          setScreen("menu");
-        }
+        await routeAfterLogin(uid);
       } catch (e) {
         console.error("登录失败", e);
         setScreen("menu");
       }
     }
+
+    // 深链接参数、断线续局这些"登录成功之后该去哪个页面"的判断逻辑,
+    // 单独拆出来——昵称确认完之后也要跑一遍同样的路由,不想复制一份。
+    async function routeAfterLogin(uid) {
+      // 深链接参数:room_邀请码,用于加入对局。这个必须放在"自动续局"检查
+      // 之前——用户点了一条明确的邀请链接进来,这是当下最强的意图,不能被
+      // "你还有一局没下完"这种被动逻辑悄悄吞掉、带去了别的地方,那样点链接
+      // 等于白点。
+      // (原来这里还有一个 friend_好友码 分支,好友码那套设计已经去掉了,
+      // 加好友改成了在"好友"页/房间邀请面板里搜索昵称、发申请)
+      const param = getStartParam();
+      if (param?.startsWith("room_")) {
+        setPrefillRoomCode(param.slice(5));
+        setScreen("invite");
+        return;
+      }
+
+      // 没有明确的深链接意图时,才去查一下是不是有一局还没下完的对局,或者
+      // 一个自己创建、还在等好友加入的邀请房间——有的话直接带回去,而不是丢在大厅。
+      // 房间号本来就只活在内存里,刷新/重开就丢了,得靠这个查询找回来。
+      //
+      // 用单次 .or() 把整个嵌套条件写清楚,而不是链式调用两次 .or()——
+      // 后者依赖的是"多次 .or() 之间用 AND 拼起来"这种没有正式文档保证的行为,
+      // 不如显式嵌套可靠。
+      const { data: activeRoom } = await supabase
+        .from("rooms")
+        .select("id, status")
+        .or(
+          `and(status.in.(lobby,playing),or(player1_id.eq.${uid},player2_id.eq.${uid})),` +
+          `and(status.eq.waiting,player1_id.eq.${uid})`
+        )
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (activeRoom) {
+        setRoomId(activeRoom.id);
+        // playing 才是真正在下棋,直接进对局页;waiting/lobby 都还没正式
+        // 开局(可能还在等对手、也可能双方都到齐了但没人点开始),回房间页
+        setScreen(activeRoom.status === "playing" ? "game" : "room");
+      } else {
+        setScreen("menu");
+      }
+    }
+
     boot();
+    // routeAfterLogin 挂到 ref 上,confirm 昵称之后要复用同一份路由逻辑
+    routeAfterLoginRef.current = routeAfterLogin;
   }, []);
 
+  // 真正回首页:清空整个导航历史栈,不管之前跳了多少层,这是唯一
+  // "确定要回到最外层"的出口(比如深链接场景下历史栈本来就是空的、
+  // 或者一局棋刚打完/中途认输离开——这两种都没有一个"回去还有意义"
+  // 的上一页,回首页才是正确的落点)。
   function goMenu() {
+    historyRef.current = [];
     setScreen("menu");
     setRoomId(null);
     setPrefillRoomCode(null);
     if (myId) refreshProfile(myId);
   }
 
+  // 从一个页面主动跳去另一个页面时调这个,而不是直接 setScreen——
+  // 会先把"跳转前我在哪"记一笔到历史栈里,goBack 才有地方可退。
+  function navigate(nextScreen) {
+    historyRef.current.push({ screen, roomId });
+    setScreen(nextScreen);
+  }
+
+  // 返回上一页:弹出历史栈最近的一条,回到"进入当前页面之前所在的
+  // 那个页面",而不是当前页面自己内部的某个中间状态。栈空了(比如
+  // 深链接直接进来、历史已经在 goMenu 里被清空过)就落回首页兜底。
+  function goBack() {
+    const last = historyRef.current.pop();
+    if (!last) {
+      goMenu();
+      return;
+    }
+    setScreen(last.screen);
+    setRoomId(last.roomId ?? null);
+    if (last.screen === "menu" && myId) refreshProfile(myId);
+  }
+
   // 之前这里不管三七二十一都直接进 "game"(真实对局页)。现在一个房间
   // 号背后可能是两种情况:随机匹配直接配对成功的(状态已经是 playing,
   // 双方都准备好了,直接开打)、或者好友邀请接受/扫码加入的(状态是
   // lobby,人到齐了但还没人点开始)——查一下状态,分别送去对应的页面。
+  //
+  // 这个跳转也可能是从别的页面被动触发的(比如收到好友对战邀请、点了
+  // 接受),所以同样先把"跳转前在哪"记进历史栈——房间/对局页面自己
+  // 退出时会走 goBack 或 goMenu,不会真的依赖这条记录时才需要小心处理,
+  // 记了也无害。
   async function handleMatched(id) {
+    historyRef.current.push({ screen, roomId });
     setRoomId(id);
     const { data } = await supabase.from("rooms").select("status").eq("id", id).single();
     setScreen(data?.status === "playing" ? "game" : "room");
@@ -242,22 +319,34 @@ export default function App() {
     );
   }
 
+  if (screen === "nickname") {
+    return (
+      <div className="app-shell">
+        <NicknameSetupScreen
+          initialName={profile?.display_name || ""}
+          avatarUrl={profile?.avatar_url}
+          onConfirm={handleNicknameConfirmed}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className={`app-shell${screen === "menu" ? " app-shell-menu" : ""}`}>
       {screen === "menu" && (
-        <MainMenu onSelect={setScreen} playerName={profile?.display_name} rating={profile?.rating} avatarUrl={profile?.avatar_url} />
+        <MainMenu onSelect={navigate} playerName={profile?.display_name} rating={profile?.rating} avatarUrl={profile?.avatar_url} />
       )}
-      {screen === "pve" && <PveScreen onExit={goMenu} />}
+      {screen === "pve" && <PveScreen onExit={goBack} onExitHome={goMenu} />}
       {screen === "matchmaking" && (
         <MatchmakingScreen
           myId={myId}
           onMatched={handleMatched}
-          onExit={goMenu}
-          onFallbackToPve={() => setScreen("pve")}
+          onExit={goBack}
+          onFallbackToPve={() => navigate("pve")}
         />
       )}
       {screen === "invite" && (
-        <InviteScreen myId={myId} prefillCode={prefillRoomCode} onMatched={handleMatched} onExit={goMenu} />
+        <InviteScreen myId={myId} prefillCode={prefillRoomCode} onMatched={handleMatched} onExit={goBack} />
       )}
       {screen === "room" && (
         <RoomScreen
@@ -267,15 +356,15 @@ export default function App() {
           avatarUrl={profile?.avatar_url}
           rating={profile?.rating}
           onMatched={handleMatched}
-          onExit={goMenu}
-          onRandomMatch={() => setScreen("matchmaking")}
+          onExit={goBack}
+          onRandomMatch={() => navigate("matchmaking")}
         />
       )}
       {screen === "friends" && (
-        <FriendsScreen myId={myId} onMatched={handleMatched} onExit={goMenu} />
+        <FriendsScreen myId={myId} onMatched={handleMatched} onExit={goBack} />
       )}
-      {screen === "leaderboard" && <LeaderboardScreen myId={myId} onExit={goMenu} />}
-      {screen === "profile" && <ProfileScreen myId={myId} onExit={goMenu} />}
+      {screen === "leaderboard" && <LeaderboardScreen myId={myId} onExit={goBack} />}
+      {screen === "profile" && <ProfileScreen myId={myId} onExit={goBack} />}
       {screen === "game" && <OnlineGame roomId={roomId} myId={myId} onExit={goMenu} onMatched={handleMatched} />}
 
       {notifQueue[0]?.kind === "invite" && (

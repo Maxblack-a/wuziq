@@ -136,13 +136,26 @@
   box-shadow: 0 2px 4px rgba(0,0,0,0.35);
 }
 
-.stone.last-move::after {
+/* 最后一手标记:颜色换成印章朱红(--seal-red),不用 --jade——那个变量
+   现在实际等于 --wood(深胡桃木棕),跟黑子几乎同色系,黑子上标记基本看
+   不清。朱红本身跟黑子白子的明度都拉得开,但光换色还不够稳,再叠一圈
+   很细的米白色(--paper)描边光晕,让标记靠"自带描边"跟底色区分开,
+   不完全依赖标记色和棋子颜色之间的对比度——跟获胜连线"光晕+实色核心"
+   叠两层的思路是一致的 */
+/* 最后一手标记:改成贴着棋子外沿的一圈细光环,不再往棋子表面盖东西——
+   棋子本身的渐变/光泽保持原样。用 inset:0 让伪元素的包围盒跟棋子本身
+   完全重合,默认 content-box 盒模型下 border 会画在这个盒子的外侧,
+   于是这圈金色边框正好贴着棋子边缘,中间不会留缝隙。颜色用 --gold,
+   面对的是固定的深棕色棋盘背景而不是棋子本身,黑子白子上对比度都稳定,
+   不用再分黑白棋子单独处理。Board.jsx 是联机对战和人机对战共用的
+   组件,这里改一处,两边的最后一手标记会同步生效 */
+.stone.last-move::before {
   content: "";
   position: absolute;
-  inset: 38%;
+  inset: 0;
   border-radius: 50%;
-  background: var(--jade);
-  opacity: 0.85;
+  border: 1.5px solid var(--gold);
+  pointer-events: none;
 }
 
 .stone.winning {
@@ -206,8 +219,9 @@
    叠出"发光笔触"的效果。之前这两层都做得偏粗偏虚(16px+3px模糊),
    五颗棋子紧挨着、缝隙本来就没多宽,粗光晕会直接糊成一整块看不清棋子
    的"药丸"。现在两层都收窄了不少,线主要在棋子间的缝隙里透出暖光,
-   不会盖过棋子本身的轮廓。画线动画保留 650ms,配合 PveScreen 里"结果
-   延迟切出来"的节奏,能让人看清线是怎么画出来的。 */
+   不会盖过棋子本身的轮廓。画线动画时长 1000ms——结果面板会在画完的
+   同一刻切出来(见 WIN_REVEAL_DELAY),线本身画完之后不会消失,所以
+   没有再另外留停顿的必要。 */
 .win-line-glow {
   fill: none;
   stroke: var(--gold);
@@ -217,7 +231,7 @@
   filter: blur(2px);
   stroke-dasharray: 400;
   stroke-dashoffset: 400;
-  animation: draw-line 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: draw-line 1000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .win-line-path {
@@ -228,8 +242,8 @@
   filter: drop-shadow(0 0 5px rgba(198,161,91,0.8));
   stroke-dasharray: 400;
   stroke-dashoffset: 400;
-  animation: draw-line 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
-    win-line-pulse 1s ease-in-out 650ms infinite alternate;
+  animation: draw-line 1000ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
+    win-line-pulse 1s ease-in-out 1000ms infinite alternate;
 }
 
 @keyframes draw-line {
@@ -393,6 +407,63 @@
 }
 .btn-undo:active { background: var(--wood-soft); transform: scale(0.97); }
 .btn-undo:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 联机对战专用:认输入口做成低存在感的文字按钮,跟"返回"这种导航类
+   图标按钮明确区分开——不该让人一眼看着像能随便点的返回键,得看起来
+   是一个需要想一下才会点的操作,点了之后还有确认弹窗兜底防误触 */
+.resign-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+}
+.resign-btn:active { background: var(--wood-soft); }
+.resign-btn:disabled { opacity: 0.4; }
+
+/* 回合倒计时:复用 .pve-result-panel 同一块预留区域(对局中这里本来是空的,
+   只有结算之后才会被结果面板占用,两者不会同时出现),不额外占用新高度,
+   棋盘的位置不会因为倒计时的出现/消失而跳动 */
+.turn-timer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 2px;
+}
+.turn-timer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.turn-timer-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+.turn-timer-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--wood);
+  transition: color 0.2s ease;
+}
+.turn-timer-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-token);
+  overflow: hidden;
+}
+.turn-timer-fill {
+  height: 100%;
+  background: var(--gold);
+  transition: width 1s linear, background 0.2s ease;
+}
+/* 最后10秒:数字和进度条一起变成印章朱红色,数字带一点透明度脉动提醒,
+   但不做太剧烈的动画,避免在棋盘旁边太抢眼、干扰正常落子判断 */
+.turn-timer.urgent .turn-timer-count { color: var(--seal-red); animation: timer-pulse 0.8s ease-in-out infinite; }
+.turn-timer.urgent .turn-timer-fill { background: var(--seal-red); }
+@keyframes timer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
 
 /* ---- PVE 选边界面:进对局前先选执黑(先手)还是执白(后手) ----
    两张大卡片,左边一颗对应颜色的棋子(复用棋盘本身的 .stone 渐变样式,

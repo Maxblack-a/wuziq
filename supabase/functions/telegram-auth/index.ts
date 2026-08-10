@@ -107,13 +107,23 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { error: upsertErr } = await admin.from("profiles").upsert({
+    // display_name 只在"这个 profile 行第一次被创建"时候带一份 Telegram
+    // 昵称过来当默认值——之后不管这个函数被调用多少次(每次重新打开
+    // App 都会走一遍登录),都不能再碰 display_name。不然用户在"我的"
+    // 页面改过的昵称,下次重开 App 就被 Telegram 原名悄悄冲掉了。
+    // 昵称是否已经过用户本人确认,交给客户端那边"确认昵称"页处理
+    // (更新 nickname_confirmed),这里完全不碰这个字段。
+    const upsertPayload: Record<string, unknown> = {
       id: userId,
       telegram_id: tgUser.id,
       username: tgUser.username ?? null,
-      display_name: [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" "),
       avatar_url: tgUser.photo_url ?? null,
-    });
+    };
+    if (!existing) {
+      upsertPayload.display_name = [tgUser.first_name, tgUser.last_name].filter(Boolean).join(" ");
+    }
+
+    const { error: upsertErr } = await admin.from("profiles").upsert(upsertPayload);
 
     if (upsertErr) {
       // 之前这里完全不检查结果——写失败也会假装登录成功,返回一个能拿到 session

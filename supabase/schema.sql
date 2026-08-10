@@ -15,11 +15,14 @@ create table if not exists profiles (
   losses int not null default 0,
   draws int not null default 0,
   is_guest boolean not null default false, -- 浏览器调试用的匿名账号,不是真实Telegram用户
+  nickname_confirmed boolean not null default false, -- 首次进入时是否已经过"确认昵称"这一步;
+                                                       -- 没确认之前 display_name 只是从 Telegram 自动带过来的默认值
   created_at timestamptz not null default now()
 );
 
 -- 兼容已经建过表的老项目
 alter table profiles add column if not exists is_guest boolean not null default false;
+alter table profiles add column if not exists nickname_confirmed boolean not null default false;
 
 -- 对局房间表
 create table if not exists rooms (
@@ -58,6 +61,18 @@ create table if not exists matchmaking_queue (
 
 -- 兼容已经建过表的老项目:补上 end_reason 字段
 alter table rooms add column if not exists end_reason text default 'normal';
+
+-- 悔棋:undo_requested_by 记录当前是谁发起的悔棋请求(null=没有待处理的请求);
+-- board_before_last_move 是"最近一步落子之前"的棋盘快照,只保留一步,同意悔棋
+-- 就直接回退到这个快照——不做多步撤销历史栈,保持简单。
+alter table rooms add column if not exists undo_requested_by uuid references profiles(id);
+alter table rooms add column if not exists board_before_last_move jsonb;
+
+-- "返回房间"重开:结算之后,双方各自点"返回房间"会各自置位;两个都置位了
+-- 才把房间重置回 lobby 状态,复用原来"大厅"那套等待开始对局的界面,不用
+-- 另外再建一套"重开确认"的流程。
+alter table rooms add column if not exists player1_rematch_ready boolean not null default false;
+alter table rooms add column if not exists player2_rematch_ready boolean not null default false;
 
 -- updated_at 自动刷新
 create or replace function set_updated_at()
@@ -684,6 +699,117 @@ end;
 $$;
 
 -- ============================================================
+-- 悔棋:请求 + 回应两步,不能单方面直接改棋盘——跟落子/判负一样,
+-- 这里同样没有去校验 board_before_last_move 是否真的对应"上一步",
+-- 客户端写进去什么就是什么,属于跟其余落子逻辑一致的既有信任模型,
+-- 不是这里新引入的问题,后续要收紧建议跟落子合法性一起做。
+-- ============================================================
+create or replace function request_undo(p_room_id uuid)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+begin
+  if me is null then raise exception '未登录'; end if;
+
+  select * into r from rooms where id = p_room_id for update;
+  if r.id is null then return jsonb_build_object('error', '房间不存在'); end if;
+  if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
+  if r.status <> 'playing' then return jsonb_build_object('error', '对局不在进行中'); end if;
+  if r.board_before_last_move is null then return jsonb_build_object('error', '还没有可以悔的棋'); end if;
+  if r.undo_requested_by is not null then return jsonb_build_object('error', '已经有一个悔棋请求在等待处理'); end if;
+
+  update rooms set undo_requested_by = me where id = p_room_id;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+grant execute on function request_undo(uuid) to authenticated;
+
+create or replace function respond_undo(p_room_id uuid, p_accept boolean)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+begin
+  if me is null then raise exception '未登录'; end if;
+
+  select * into r from rooms where id = p_room_id for update;
+  if r.id is null then return jsonb_build_object('error', '房间不存在'); end if;
+  if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
+  if r.undo_requested_by is null then return jsonb_build_object('error', '没有待处理的悔棋请求'); end if;
+  if me = r.undo_requested_by then return jsonb_build_object('error', '不能回应自己发起的请求'); end if;
+
+  if p_accept then
+    update rooms set
+      board = r.board_before_last_move,
+      current_turn = case when current_turn = 1 then 2 else 1 end,
+      move_count = greatest(move_count - 1, 0),
+      board_before_last_move = null,
+      undo_requested_by = null
+    where id = p_room_id;
+    return jsonb_build_object('accepted', true);
+  else
+    update rooms set undo_requested_by = null where id = p_room_id;
+    return jsonb_build_object('accepted', false);
+  end if;
+end;
+$$;
+
+grant execute on function respond_undo(uuid, boolean) to authenticated;
+
+-- ============================================================
+-- 结算后"返回房间":双方各自调用一次,都调用过了才把房间重置回
+-- lobby,复用大厅界面重新开始;只有一方调用,则该方留在"等待对方"
+-- 的状态里,可以另外去重新邀请好友或者进匹配(前端处理,不在这里)。
+-- ============================================================
+create or replace function return_to_room(p_room_id uuid)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+begin
+  if me is null then raise exception '未登录'; end if;
+
+  select * into r from rooms where id = p_room_id for update;
+  if r.id is null then return jsonb_build_object('error', '房间不存在'); end if;
+  if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
+  if r.status <> 'finished' then return jsonb_build_object('error', '对局尚未结束'); end if;
+
+  if me = r.player1_id then
+    update rooms set player1_rematch_ready = true where id = p_room_id;
+  else
+    update rooms set player2_rematch_ready = true where id = p_room_id;
+  end if;
+
+  select * into r from rooms where id = p_room_id;
+
+  if r.player1_rematch_ready and r.player2_rematch_ready then
+    update rooms set
+      status = 'lobby', board = '[]'::jsonb, current_turn = 1, winner = null,
+      end_reason = 'normal', move_count = 0,
+      undo_requested_by = null, board_before_last_move = null,
+      player1_rematch_ready = false, player2_rematch_ready = false
+    where id = p_room_id;
+    return jsonb_build_object('status', 'restarted');
+  end if;
+
+  return jsonb_build_object('status', 'waiting_for_opponent');
+end;
+$$;
+
+grant execute on function return_to_room(uuid) to authenticated;
+
+-- ============================================================
 -- 孤儿房间清理:邀请对局如果创建后一直没人加入(朋友没点、或者
 -- 邀请码分享出去但没人理),会一直停在 status='waiting',没有 TTL
 -- 的话会在 rooms 表里无限堆积。用 pg_cron 定时清掉超过1小时的这类房间。
@@ -704,6 +830,13 @@ begin
     select id from rooms where status in ('waiting', 'lobby') and created_at < now() - interval '1 hour'
   );
   delete from rooms where status in ('waiting', 'lobby') and created_at < now() - interval '1 hour';
+
+  -- 结算之后只有一方点了"返回房间"、另一方一直没回来的房间,同样不该无限
+  -- 堆在表里——战绩已经写进 match_history 了,删掉房间本身不影响战绩记录
+  delete from rooms
+  where status = 'finished'
+    and (player1_rematch_ready or player2_rematch_ready)
+    and updated_at < now() - interval '2 hours';
 end;
 $$;
 

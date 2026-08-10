@@ -158,7 +158,9 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
 
   return (
     <div>
-      <button className="btn-ghost" onClick={onExit}>← 返回</button>
+      {/* 原来这里有一个"← 返回"按钮,现在去掉了——Telegram 自带的返回键
+          已经接了同一个 onExit(见上面 useTelegramBackButton),UI 上
+          没必要再重复一份 */}
       <div className="menu-header"><h2>好友</h2></div>
 
       {/* 搜索昵称加好友——取代原来的好友码 */}

@@ -1,15 +1,15 @@
 import { useState, useRef, useEffect } from "react";
 import Board from "./Board";
-import { IconChevronLeft, IconUndo } from "./Icons";
+import { IconUndo } from "./Icons";
 import { createEmptyBoard, checkWin, isBoardFull, cloneBoard, BLACK, WHITE } from "../game/logic";
 import { getAiMove } from "../game/ai";
 import { useTelegramBackButton, hapticNotify, confirmDialog } from "../lib/telegram";
 
-// 五连线画完(见 board.css 里 .win-line-path 的 650ms 动画)之后,再留一点点
-// 停顿再把"结束状态"的 UI(棋盘上方的结果文字 + 下方的操作按钮)切换出来,
-// 观感上不会显得连子刚落地这些东西就哗一下全冒出来。结果不是浮层弹窗、
-// 不会挡住棋盘,所以这个延迟纯粹是为了节奏好看。
-const WIN_REVEAL_DELAY = 650;
+// 五连线画完(见 board.css 里 .win-line-path 的 1000ms 动画)之后,再把
+// "结束状态"的 UI(棋盘上方的结果文字 + 下方的操作按钮)切换出来——
+// 时长直接等于动画时长本身,不额外加停顿,因为连线画完之后线本身不会
+// 消失,不需要多留一段"缓冲"时间。结果不是浮层弹窗、不会挡住棋盘。
+const WIN_REVEAL_DELAY = 1000;
 const DRAW_REVEAL_DELAY = 400;
 
 const RESULT_COPY = {
@@ -22,7 +22,12 @@ const RESULT_COPY = {
 // 难度暗示,比三档统一用同一个延迟更能强化"困难档在认真算"这个观感
 const THINKING_DELAY = { easy: 250, medium: 450, hard: 700 };
 
-export default function PveScreen({ onExit }) {
+// onExit: 返回上一页(绑定 Telegram 原生返回键,UI 上不再重复画一个返回
+// 图标——那是系统层已经有的东西)。onExitHome: "返回首页"这颗按钮专用,
+// 字面意思就是回首页,跟"返回上一页"是两件不同的事,不能共用 onExit,
+// 不然从"匹配失败→先玩人机"这条路径进来时,点"返回首页"会被错误地
+// 带回匹配页而不是真的首页。
+export default function PveScreen({ onExit, onExitHome }) {
   useTelegramBackButton(onExit);
   const [difficulty, setDifficulty] = useState("medium");
   // 玩家执子颜色:null 表示还没选,先显示选边界面。之前默认写死玩家执黑,
@@ -202,15 +207,12 @@ export default function PveScreen({ onExit }) {
   }
 
   // 还没选边:显示选边界面,不进入棋盘
+  // 顶部原来这里有一个独立的"‹"返回图标栏,现在去掉了——Telegram 自带
+  // 的返回键已经接了同一个 onExit(见下面的 useTelegramBackButton),
+  // UI 上再画一个纯属重复。
   if (!playerColor) {
     return (
       <div>
-        <div className="room-topbar pve-topbar">
-          <button className="room-icon-btn" onClick={onExit} aria-label="返回">
-            <IconChevronLeft />
-          </button>
-        </div>
-
         <div className="side-select fade-in-up">
           <h2 className="side-select-title">选择你执子的颜色</h2>
           <p className="muted side-select-subtitle">黑棋永远先手,执黑就是主动开局</p>
@@ -238,14 +240,11 @@ export default function PveScreen({ onExit }) {
   return (
     <div>
       <div className="game-layout">
-        {/* 顶部状态栏:返回 + 回合状态 + 悔棋,三个一组靠右。复用 RoomScreen
-            里已经在用的 room-topbar / room-icon-btn 样式,跟全局设计系统
-            保持一致。悔棋放在这里,腾出来的位置给难度选择和结束后的操作
-            按钮用 */}
-        <div className="room-topbar pve-topbar">
-          <button className="room-icon-btn" onClick={onExit} aria-label="返回">
-            <IconChevronLeft />
-          </button>
+        {/* 顶部状态栏:回合状态 + 悔棋,靠右放。原来这里左边还有一个独立的
+            "‹"返回图标,现在去掉了——Telegram 自带的返回键已经接了同一个
+            onExit,UI 上没必要再重复一份;整条栏目改成靠右对齐,腾出来的
+            位置给难度选择和结束后的操作按钮用 */}
+        <div className="room-topbar pve-topbar" style={{ justifyContent: "flex-end" }}>
           <div className="pve-topbar-right">
             <div className="pve-turn-pill">
               {thinking ? (
@@ -288,7 +287,7 @@ export default function PveScreen({ onExit }) {
               这时候 result 必然是空的),视觉上正好是同一个位置被复用 */}
           {result && (
             <div className="confirm-bar">
-              <button className="btn-ghost" style={{ flex: 1 }} onClick={onExit}>返回首页</button>
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={onExitHome}>返回首页</button>
               <button className="btn-primary" style={{ flex: 1 }} onClick={() => reset()}>再来一局</button>
             </div>
           )}
