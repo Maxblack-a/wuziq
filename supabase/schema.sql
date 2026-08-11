@@ -24,6 +24,19 @@ create table if not exists profiles (
 alter table profiles add column if not exists is_guest boolean not null default false;
 alter table profiles add column if not exists nickname_confirmed boolean not null default false;
 
+-- 网页版用户名密码账号:username 唯一性本来就已经靠 auth.users.email 的
+-- 唯一约束间接保证了(注册时用用户名拼邮箱),这里加一道不区分大小写的
+-- 唯一索引纯粹是双保险 + 方便以后按用户名查询。
+--
+-- 注意条件里专门加了 telegram_id is null——这一列 Telegram 用户也会用
+-- (存的是 Telegram 的 @handle),如果不排除掉,网页注册用户万一跟某个
+-- Telegram 用户的 @handle 撞名,会导致 telegram-auth 那边 upsert profiles
+-- 时触发唯一约束冲突而登录失败,网页版这边的改动就反过来把 Telegram
+-- 登录搞坏了。加上这个条件,这道索引只管网页账号自己的命名空间。
+create unique index if not exists profiles_username_unique
+  on profiles (lower(username))
+  where username is not null and telegram_id is null;
+
 -- 对局房间表
 create table if not exists rooms (
   id uuid primary key default gen_random_uuid(),

@@ -11,6 +11,7 @@ import FriendsScreen from "./components/FriendsScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import NicknameSetupScreen from "./components/NicknameSetupScreen";
+import WebAuthScreen from "./components/WebAuthScreen";
 import { supabase, loginWithTelegram, loginAnonymously, getExistingUserId } from "./lib/supabase";
 import { initTelegram, isInTelegram, getInitData, getStartParam, getTelegramUserId } from "./lib/telegram";
 import { initPresence } from "./lib/presence";
@@ -38,6 +39,15 @@ export default function App() {
   // routeAfterLogin 定义在下面的 useEffect 里(跟 boot 共享一份逻辑),
   // 用 ref 存一份引用,好在"确认昵称"完成之后从组件方法里调用它。
   const routeAfterLoginRef = useRef(null);
+
+  // afterLogin 同样定义在下面的 useEffect 里,用 ref 存一份,好在
+  // WebAuthScreen(登录/注册页)登录成功的回调里调用——那个回调是从
+  // JSX 里传下去的普通组件方法,不在 useEffect 的闭包里,拿不到里面
+  // 定义的函数,只能通过 ref 中转。
+  const afterLoginRef = useRef(null);
+  async function handleWebAuthSuccess(uid) {
+    if (afterLoginRef.current) await afterLoginRef.current(uid);
+  }
 
   // "确认昵称"页点了确认之后:写库,顺手把本地 profile 缓存也更新一下
   // (不然接下来菜单页头像旁边的名字要等下一次 refreshProfile 才会变),
@@ -91,43 +101,53 @@ export default function App() {
   useEffect(() => {
     initTelegram();
 
+    // 登录成功(不管是 Telegram 免密登录、网页版账号密码登录/注册、还是
+    // 访客登录)之后共用的收尾逻辑:写 myId、上线报到、补历史通知、
+    // 按昵称确认状态决定去"确认昵称"页还是直接往下路由。单独拆出来,
+    // 好在 WebAuthScreen 登录成功的回调里复用同一份,不用抄一遍。
+    async function afterLogin(uid) {
+      const cachedProfile = await refreshProfile(uid);
+      setMyId(uid);
+      initPresence(uid); // 往"在线用户"这个全局频道报到,好友列表能看到谁在线
+      loadPendingNotifications(uid); // 补一次:上次关闭 App 期间收到的邀请/申请,实时订阅是抓不到的,得主动查一遍
+
+      // 第一次进这个游戏(或者昵称还没走过确认这一步的老账号):停在
+      // "确认昵称"页,不往下走深链接/断线续局那套路由逻辑——用户点了
+      // 确认之后,handleNicknameConfirmed 会接着把 routeAfterLogin 补上。
+      // (网页版用户名密码注册的账号,注册那一步已经手动填过昵称,
+      // nickname_confirmed 直接是 true,不会停在这一页。)
+      if (!cachedProfile?.nickname_confirmed) {
+        setScreen("nickname");
+        return;
+      }
+      await routeAfterLogin(uid);
+    }
+
     async function boot() {
       try {
         // 先看有没有现成的登录态,有就直接用,不用每次重开都重新走一遍完整流程。
         // 但要核对一下:这个缓存的账号,是不是真的对应当前打开 App 的这个 Telegram 用户——
         // 同一设备如果切换过 Telegram 账号,不能盲目沿用上一个人的登录态。
         let uid = await getExistingUserId();
-        let cachedProfile = null;
-        if (uid) {
-          cachedProfile = await refreshProfile(uid);
-          if (isInTelegram) {
-            const currentTgId = getTelegramUserId();
-            if (currentTgId && cachedProfile?.telegram_id && String(cachedProfile.telegram_id) !== String(currentTgId)) {
-              uid = null; // 对不上,丢弃缓存,走下面的完整登录
-            }
+        if (uid && isInTelegram) {
+          const cachedProfile = await refreshProfile(uid);
+          const currentTgId = getTelegramUserId();
+          if (currentTgId && cachedProfile?.telegram_id && String(cachedProfile.telegram_id) !== String(currentTgId)) {
+            uid = null; // 对不上,丢弃缓存,走下面的完整登录
           }
         }
         if (!uid) {
           if (isInTelegram) {
             uid = await loginWithTelegram(getInitData());
           } else {
-            uid = await loginAnonymously("模拟玩家");
+            // 网页版且这台设备没有任何登录态:停在登录/注册页,等用户
+            // 输入用户名密码,或者选择访客体验——不再像以前那样不问
+            // 青红皂白直接自动建一个匿名账号。
+            setScreen("auth");
+            return;
           }
-          cachedProfile = await refreshProfile(uid);
         }
-        setMyId(uid);
-        initPresence(uid); // 往"在线用户"这个全局频道报到,好友列表能看到谁在线
-        loadPendingNotifications(uid); // 补一次:上次关闭 App 期间收到的邀请/申请,实时订阅是抓不到的,得主动查一遍
-
-        // 第一次进这个游戏(或者昵称还没走过确认这一步的老账号):停在
-        // "确认昵称"页,不往下走深链接/断线续局那套路由逻辑——用户点了
-        // 确认之后,handleNicknameConfirmed 会接着把 routeAfterLogin 补上。
-        if (!cachedProfile?.nickname_confirmed) {
-          setScreen("nickname");
-          return;
-        }
-
-        await routeAfterLogin(uid);
+        await afterLogin(uid);
       } catch (e) {
         console.error("登录失败", e);
         setScreen("menu");
@@ -179,8 +199,10 @@ export default function App() {
     }
 
     boot();
-    // routeAfterLogin 挂到 ref 上,confirm 昵称之后要复用同一份路由逻辑
+    // routeAfterLogin / afterLogin 挂到 ref 上,分别给"确认昵称"完成之后、
+    // 网页版登录注册成功之后复用同一份逻辑。
     routeAfterLoginRef.current = routeAfterLogin;
+    afterLoginRef.current = afterLogin;
   }, []);
 
   // 真正回首页:清空整个导航历史栈,不管之前跳了多少层,这是唯一
@@ -315,6 +337,14 @@ export default function App() {
     return (
       <div className="app-shell" style={{ alignItems: "center", justifyContent: "center" }}>
         <div className="spinner" />
+      </div>
+    );
+  }
+
+  if (screen === "auth") {
+    return (
+      <div className="app-shell">
+        <WebAuthScreen onSuccess={handleWebAuthSuccess} />
       </div>
     );
   }

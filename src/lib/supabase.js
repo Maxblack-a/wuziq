@@ -42,6 +42,46 @@ export async function loginWithTelegram(initData) {
   return data.user_id;
 }
 
+// 网页版用户名密码登录:跟 telegram-auth 的假邮箱思路一样,用用户名拼一个
+// 固定格式的邮箱地址当 Supabase Auth 的登录凭证,这样"用户名"这个我们
+// 自己业务上的概念,不需要额外建一张表去维护唯一性——Supabase 已经替
+// 我们保证了 auth.users.email 唯一,拼邮箱这一步复用了这个保证。
+function usernameToEmail(username) {
+  return `user_${username.trim().toLowerCase()}@webuser.local`;
+}
+
+// 注册必须经过 password-auth 这个 Edge Function(需要 service role 权限
+// 手动把邮箱标记为已验证,原因见该函数顶部注释)。这里注册成功后紧接着
+// 用同一份用户名密码走一次真正的 signInWithPassword,拿到本地 session——
+// 干净地把"建号"和"登录换 session"分成两步,而不是让 Edge Function 越权
+// 帮用户签发 session。
+export async function registerWithPassword(username, password) {
+  const res = await fetch(
+    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/password-auth`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ username, password }),
+    }
+  );
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+
+  return loginWithPassword(username, password);
+}
+
+// 登录不需要走 Edge Function——账号在注册时已经被标记为邮箱已验证,
+// 前端直接用 Supabase 官方的用户名密码校验就行,少一次网络往返。
+export async function loginWithPassword(username, password) {
+  const email = usernameToEmail(username);
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error("用户名或密码不正确");
+  return data.user.id;
+}
+
 // 本地浏览器调试时(不在 Telegram 里)用匿名登录代替,方便直接体验。
 // 标记 is_guest,这样排行榜之类的公开列表可以把调试账号过滤掉,不跟真实用户混在一起
 export async function loginAnonymously(displayName = "访客") {
