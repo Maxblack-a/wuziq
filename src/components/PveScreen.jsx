@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from "react";
 import Board from "./Board";
-import { IconUndo } from "./Icons";
+import { IconUndo, IconChevronLeft } from "./Icons";
 import { createEmptyBoard, checkWin, isBoardFull, cloneBoard, BLACK, WHITE } from "../game/logic";
 import { getAiMove } from "../game/ai";
-import { useTelegramBackButton, hapticNotify, confirmDialog } from "../lib/telegram";
+import { isInTelegram, useTelegramBackButton, hapticNotify, confirmDialog } from "../lib/telegram";
 
 // 五连线画完(见 board.css 里 .win-line-path 的 1000ms 动画)之后,再把
 // "结束状态"的 UI(棋盘上方的结果文字 + 下方的操作按钮)切换出来——
@@ -207,12 +207,19 @@ export default function PveScreen({ onExit, onExitHome }) {
   }
 
   // 还没选边:显示选边界面,不进入棋盘
-  // 顶部原来这里有一个独立的"‹"返回图标栏,现在去掉了——Telegram 自带
-  // 的返回键已经接了同一个 onExit(见下面的 useTelegramBackButton),
-  // UI 上再画一个纯属重复。
+  // Telegram 自带的返回键已经接了同一个 onExit(见下面的
+  // useTelegramBackButton),但普通浏览器里没有这颗原生按键,所以非
+  // Telegram 环境下还是要补一个"‹"回去,不然选边界面就成了死胡同。
   if (!playerColor) {
     return (
       <div>
+        {!isInTelegram && (
+          <div className="room-topbar" style={{ marginBottom: 4 }}>
+            <button className="room-icon-btn" onClick={onExit} aria-label="返回">
+              <IconChevronLeft />
+            </button>
+          </div>
+        )}
         <div className="side-select fade-in-up">
           <h2 className="side-select-title">选择你执子的颜色</h2>
           <p className="muted side-select-subtitle">黑棋永远先手,执黑就是主动开局</p>
@@ -240,11 +247,16 @@ export default function PveScreen({ onExit, onExitHome }) {
   return (
     <div>
       <div className="game-layout">
-        {/* 顶部状态栏:回合状态 + 悔棋,靠右放。原来这里左边还有一个独立的
-            "‹"返回图标,现在去掉了——Telegram 自带的返回键已经接了同一个
-            onExit,UI 上没必要再重复一份;整条栏目改成靠右对齐,腾出来的
-            位置给难度选择和结束后的操作按钮用 */}
-        <div className="room-topbar pve-topbar" style={{ justifyContent: "flex-end" }}>
+        {/* 顶部状态栏:回合状态 + 悔棋。Telegram 自带的返回键已经接了同一个
+            onExit,所以 Telegram 环境下整条栏目靠右对齐,把左边腾给难度
+            选择和结束后的操作按钮;但普通浏览器没有原生返回键,这时候要
+            把左边的"‹"画回来,不然对局进行到一半想退出就没有入口了。 */}
+        <div className="room-topbar pve-topbar" style={isInTelegram ? { justifyContent: "flex-end" } : undefined}>
+          {!isInTelegram && (
+            <button className="room-icon-btn" onClick={onExit} aria-label="返回">
+              <IconChevronLeft />
+            </button>
+          )}
           <div className="pve-topbar-right">
             <div className="pve-turn-pill">
               {thinking ? (

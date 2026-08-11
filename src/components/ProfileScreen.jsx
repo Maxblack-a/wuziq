@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { useTelegramBackButton } from "../lib/telegram";
-import { IconPencil, IconCheck, IconClose } from "./Icons";
+import { isInTelegram, useTelegramBackButton } from "../lib/telegram";
+import { IconPencil, IconCheck, IconClose, IconChevronLeft } from "./Icons";
 
 export default function ProfileScreen({ myId, onExit }) {
   useTelegramBackButton(onExit);
@@ -61,9 +61,16 @@ export default function ProfileScreen({ myId, onExit }) {
 
   return (
     <div>
-      {/* 原来这里有一个"← 返回"按钮,现在去掉了——Telegram 自带的返回键
-          已经接了同一个 onExit(见上面 useTelegramBackButton),UI 上
-          没必要再重复一份 */}
+      {/* Telegram 自带的返回键已经接了同一个 onExit(见上面
+          useTelegramBackButton),UI 上不用再重复画一份;但普通浏览器里
+          没有 Telegram 原生返回键,这里必须补一个,否则用户没法退出。 */}
+      {!isInTelegram && (
+        <div className="room-topbar" style={{ marginBottom: 4 }}>
+          <button className="room-icon-btn" onClick={onExit} aria-label="返回">
+            <IconChevronLeft />
+          </button>
+        </div>
+      )}
       <div className="menu-header">
         {editing ? (
           <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>

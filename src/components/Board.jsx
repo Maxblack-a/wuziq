@@ -12,10 +12,14 @@ const STEP = (100 - MARGIN * 2) / (BOARD_SIZE - 1);
 const pos = (i) => MARGIN + i * STEP;
 
 // previewColor: 1=黑 2=白,决定"待确认"的预览棋子显示成什么颜色(当前该谁落子)
-// disabled: 真正意义上的"轮到对方/对方思考中",会压暗棋盘 + 显示"对方回合"角标
+// disabled: 真正意义上的"轮到对方/对方思考中",会压暗棋盘(轻微,不遮挡棋子细节),
+//   提示"暂时不能点"——回合信息本身(轮到谁、对方是否在想)已经在棋盘上方的
+//   状态栏里显示,这里不重复画一个盖在棋盘中间的文字角标,一来联机对局里
+//   对方一步经常要想几十秒,这块文字会长时间糊在棋盘正中央挡视线;二来
+//   跟顶部状态栏的信息完全重复,没必要同一件事显示两遍。
 // locked: 单纯地暂时不让点(比如胜负已经判定、正在展示连线动画那几百毫秒),
-//   但不压暗、不显示角标——这段时间棋盘应该看起来清清楚楚,而不是被"对方回合"
-//   的蒙层糊住,不然辛辛苦苦拉长的连线动画等于白做
+//   但不压暗——这段时间棋盘应该看起来清清楚楚,而不是被蒙层糊住,不然
+//   辛辛苦苦拉长的连线动画等于白做
 export default function Board({ board, onCellClick, lastMove, winLine, disabled, locked, onIllegalTap, previewColor }) {
   // 点击先只是"选中"一个格子(pending),显示一个半透明预览棋子;
   // 真正调用 onCellClick(落子、同步给对手)要等用户点了"确认落子"才会发生。
@@ -119,7 +123,6 @@ export default function Board({ board, onCellClick, lastMove, winLine, disabled,
             </svg>
           )}
         </div>
-        {disabled && <div className="board-disabled-badge">对方回合</div>}
       </div>
 
       {pending && (

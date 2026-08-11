@@ -46,6 +46,9 @@
 }
 
 .board-disabled-badge {
+  /* 保留这份规则,以防以后又需要在棋盘上叠一个短暂的角标提示——
+     只是现在没有任何地方渲染 .board-disabled-badge 这个元素了,
+     该"对方回合"角标已经去掉,回合信息统一由棋盘上方的状态栏显示。 */
   position: absolute;
   top: 50%;
   left: 50%;

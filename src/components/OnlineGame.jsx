@@ -204,6 +204,21 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
 
   useTelegramBackButton(handleBackAction);
 
+  // 对方断线超过宽限期后,不再需要还留在对局里的玩家手动点"判定我获胜"——
+  // 宽限倒计时一归零就自动帮他结算。用 ref 防止在服务器状态还没通过
+  // 订阅追上来的这几百毫秒里,effect 因为 now 每秒都在变而被重复触发、
+  // 打出好几次重复的 finish_match 请求(RPC 本身虽然幂等,但没必要多打)。
+  const autoForfeitTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (!disconnectSince) { autoForfeitTriggeredRef.current = false; return; }
+    if (!room || room.status !== "playing") return;
+    if (autoForfeitTriggeredRef.current) return;
+    const remaining = DISCONNECT_GRACE_MS - (now - disconnectSince);
+    if (remaining > 0) return;
+    autoForfeitTriggeredRef.current = true;
+    claimForfeitWin();
+  }, [room, disconnectSince, now]);
+
   // 对局进行中拦截 Telegram 的关闭手势,防止一划就把整个小程序关掉、棋局晾在那回不去
   useEffect(() => {
     setClosingConfirmation(room?.status === "playing");
@@ -272,8 +287,6 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   const effectiveTurn = pendingMove ? pendingMove.turnAfter : room.current_turn;
   const isMyTurn = effectiveTurn === mySlot && room.status === "playing" && !pendingMove;
 
-  const canClaimForfeit = room.status === "playing" && disconnectSince && graceRemaining === 0;
-
   // 悔棋请求:对方发起的、需要我回应的那一个
   const incomingUndo = room.status === "playing" && room.undo_requested_by && room.undo_requested_by !== myId;
   const myUndoPending = room.undo_requested_by === myId;
@@ -340,7 +353,8 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     }
   }
 
-  // 对方断线超过宽限期,由还在线的一方主动判负结算
+  // 对方断线超过宽限期:不再需要玩家手动点按钮判负,宽限倒计时一到就由
+  // 上面那个 effect 自动调用这里,直接把还在线的这一方判赢
   async function claimForfeitWin() {
     const { data } = await supabase.rpc("finish_match", { p_room_id: roomId, p_winner: mySlot, p_reason: "disconnect" });
     if (data && !data.already_finished) {
@@ -501,17 +515,18 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
           你执{mySlot === 1 ? "黑" : "白"} · {opponentName}执{mySlot === 1 ? "白" : "黑"}
         </p>
 
+        {/* 断线提示:宽限期内只是提醒,倒计时一到就交给上面那个 effect
+            自动判负结算,这里只是展示状态,不需要玩家点任何按钮——
+            结算完成后 room.status 会变成 finished,这块提示自然跟着消失 */}
         {disconnectSince && room.status === "playing" && (
           <div className="panel" style={{ textAlign: "center" }}>
             {graceRemaining > 0 ? (
-              <p className="muted">对方似乎断线了,{Math.ceil(graceRemaining / 1000)} 秒后可判负</p>
+              <p className="muted">对方似乎断线了,{Math.ceil(graceRemaining / 1000)} 秒后自动判负</p>
             ) : (
-              <>
-                <p className="muted" style={{ marginBottom: 8 }}>对方长时间未响应</p>
-                <button className="btn-primary" style={{ width: "100%" }} onClick={claimForfeitWin} disabled={!canClaimForfeit}>
-                  判定我获胜
-                </button>
-              </>
+              <p className="muted" style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                <span className="spinner" style={{ width: 14, height: 14, borderWidth: 2 }} />
+                对方长时间未响应,正在为你判定获胜…
+              </p>
             )}
           </div>
         )}

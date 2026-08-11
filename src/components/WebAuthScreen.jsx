@@ -88,9 +88,15 @@ export default function WebAuthScreen({ onSuccess }) {
         style={{
           width: "100%", padding: 16, fontSize: 16, textAlign: "center",
           background: "var(--wood-soft)", color: "var(--fg)", border: "1px solid var(--ink-line)",
-          borderRadius: "var(--radius-md)", marginBottom: 10,
+          borderRadius: "var(--radius-md)", marginBottom: 4,
         }}
       />
+      {username && !usernameValid && (
+        <p style={{ fontSize: 12, color: "var(--amber)", marginBottom: 6, textAlign: "center" }}>
+          用户名需为 3-20 位英文字母、数字或下划线,当前 {username.length} 位
+        </p>
+      )}
+
       <input
         type="password"
         value={password}
@@ -101,9 +107,15 @@ export default function WebAuthScreen({ onSuccess }) {
         style={{
           width: "100%", padding: 16, fontSize: 16, textAlign: "center",
           background: "var(--wood-soft)", color: "var(--fg)", border: "1px solid var(--ink-line)",
-          borderRadius: "var(--radius-md)", marginBottom: 8,
+          borderRadius: "var(--radius-md)", marginBottom: 4,
         }}
       />
+      {password && !passwordValid && (
+        <p style={{ fontSize: 12, color: "var(--amber)", marginBottom: 6, textAlign: "center" }}>
+          密码至少需要 6 位,当前 {password.length} 位
+        </p>
+      )}
+      <div style={{ marginBottom: 4 }} />
 
       {errorMsg && (
         <div style={{
