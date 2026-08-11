@@ -261,8 +261,11 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
 
   async function handleStartGame() {
     setStarting(true);
-    const { error } = await supabase.from("rooms").update({ status: "playing" }).eq("id", roomId);
-    if (error) { setStarting(false); setErrorMsg("开始失败,请重试"); return; }
+    // 改走 start_match RPC(原来是前端直接 update status)——RPC 里顺带把
+    // 回合截止时间/双方初始心跳都种好了,配合服务端判负兜底机制用,
+    // 见 schema.sql 里 start_match 的注释。
+    const { data, error } = await supabase.rpc("start_match", { p_room_id: roomId });
+    if (error || data?.error) { setStarting(false); setErrorMsg("开始失败,请重试"); return; }
     // 不需要在这里手动 setScreen——上面那个订阅 room.status 变化的 effect
     // 会自己触发 onMatched,房主自己这边和订阅是同一条路径,不用写两遍
   }
@@ -298,9 +301,9 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   }
 
   const myLevel = levelForRating(rating);
-  const myTitle = titleForRating(rating ?? 1200);
+  const myTitle = titleForRating(rating ?? 0);
   const oppLevel = opponent ? levelForRating(opponent.rating) : null;
-  const oppTitle = opponent ? titleForRating(opponent.rating ?? 1200) : null;
+  const oppTitle = opponent ? titleForRating(opponent.rating ?? 0) : null;
   const opponentOnline = room?.player2_id ? onlineIds.has(room.player2_id) : false;
   const onlineFriendsCount = friends.filter((f) => onlineIds.has(f.id)).length;
 

@@ -6,7 +6,7 @@
 - 🎲 匹配对战(随机匹配陌生玩家)
 - 🔗 邀请对战(生成房间号 / Telegram 深链接邀请好友)
 - 👥 好友系统(好友码添加好友、邀请好友对战、接收对战邀请)
-- 🏆 积分制(ELO 算法,带胜/负/平战绩与历史记录、排行榜)
+- 🏆 积分制(赢+10/输-5固定加减分,6 段位 x 5 阶,带胜/负/平战绩与历史记录、排行榜)
 - ⚡ 实时同步落子(Supabase Realtime)
 - 🎨 自适应 Telegram 明暗主题
 
@@ -25,11 +25,11 @@
 ### 2. 建表
 
 进入 Supabase 控制台 → SQL Editor,新建查询,粘贴 `supabase/schema.sql` 的全部内容并运行。
-这会创建:`profiles`(玩家资料)、`rooms`(对局房间)、`matchmaking_queue`(匹配队列)、`friendships`(好友关系)、`game_invites`(对战邀请通知)、`match_history`(战绩记录),以及必要的行级安全策略(RLS)和几个原子函数(`match_players` 匹配、`join_room` 加入房间、`add_friend_by_code` 加好友、`finish_match` 结算并计算 ELO 积分)。
+这会创建:`profiles`(玩家资料)、`rooms`(对局房间)、`matchmaking_queue`(匹配队列)、`friendships`(好友关系)、`game_invites`(对战邀请通知)、`match_history`(战绩记录),以及必要的行级安全策略(RLS)和几个原子函数(`match_players` 匹配、`join_room` 加入房间、`add_friend_by_code` 加好友、`finish_match` 结算并计算积分)。
 
-> 如果你是在已经跑过一次旧版 schema.sql 之后又拉取了新代码:直接把整份新的 `schema.sql` 再跑一遍就行,里面全部用了 `if not exists` / `create or replace` / `drop policy if exists`,重复执行是安全的。
+> 如果你是在已经跑过一次旧版 schema.sql 之后又拉取了新代码:直接把整份新的 `schema.sql` 再跑一遍就行,里面全部用了 `if not exists` / `create or replace` / `drop policy if exists`,重复执行是安全的。积分改版(初始分 1200→0、ELO→固定加减分)那部分也带了 `alter column ... set default` 语句,对已有项目同样安全。
 
-**关于积分**:用标准 ELO 算法(K=32),每局结束后由数据库里的 `finish_match` 函数统一计算,前端不参与计算,避免有人从客户端伪造分数。
+**关于积分**:新玩家初始积分为 0,每局结束后赢 +10、输 -5、平局不加不减,允许积分为负,由数据库里的 `finish_match` 函数统一计算,前端不参与计算,避免有人从客户端伪造分数。段位分 6 档(棋童/棋士/高手/大师/宗师/棋圣),每档下再分 5 阶,每阶横跨 100 分,展示层算法在 `src/lib/rank.js` 里。
 
 **关于两种深链接**:邀请对局用 `?startapp=room_房间号`,加好友用 `?startapp=friend_好友码`,App 里会自动识别前缀分别处理,代码已经写好,不需要额外配置。
 

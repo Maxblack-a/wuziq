@@ -10,7 +10,7 @@ create table if not exists profiles (
   username text,
   display_name text,
   avatar_url text,
-  rating int not null default 1200,
+  rating int not null default 0,
   wins int not null default 0,
   losses int not null default 0,
   draws int not null default 0,
@@ -21,8 +21,17 @@ create table if not exists profiles (
 );
 
 -- 兼容已经建过表的老项目
+-- 兼容已经建过表的老项目:积分改版(初始分从 1200 改为 0,ELO 改为固定加减分),
+-- 这里只改 profiles 列默认值,给"以后新注册的玩家"用;已存在玩家的历史 rating 不做
+-- 回滚重置。matchmaking_queue 那张表这时候还没建出来,对应的 alter 挪到它建表之后。
+alter table profiles alter column rating set default 0;
+
 alter table profiles add column if not exists is_guest boolean not null default false;
 alter table profiles add column if not exists nickname_confirmed boolean not null default false;
+-- 单设备登录:每次真正登录成功(不是同一设备缓存态重开 App)就生成一个
+-- 新的 active_session_id,写进这一行。别的设备(如果还留着旧的 session_id)
+-- 靠订阅这一行的 realtime UPDATE 几乎实时发现自己"过期"了,自动登出。
+alter table profiles add column if not exists active_session_id uuid;
 
 -- 网页版用户名密码账号:username 唯一性本来就已经靠 auth.users.email 的
 -- 唯一约束间接保证了(注册时用用户名拼邮箱),这里加一道不区分大小写的
@@ -68,12 +77,22 @@ end $$;
 create table if not exists matchmaking_queue (
   id uuid primary key default gen_random_uuid(),
   player_id uuid unique references profiles(id) on delete cascade,
-  rating int not null default 1200,
+  rating int not null default 0,
   created_at timestamptz not null default now()
 );
 
+-- 兼容已经建过表的老项目:matchmaking_queue.rating 列默认值同步改成 0
+alter table matchmaking_queue alter column rating set default 0;
+
 -- 兼容已经建过表的老项目:补上 end_reason 字段
 alter table rooms add column if not exists end_reason text default 'normal';
+
+-- 判负兜底用:回合截止时间 + 双方最后心跳时间,服务端定时任务靠这三个
+-- 字段权威判定超时/掉线,不再依赖某一台设备的浏览器是否还醒着(详见
+-- 文件后面 check_timeouts 那一段的说明)
+alter table rooms add column if not exists turn_deadline timestamptz;
+alter table rooms add column if not exists player1_last_seen timestamptz;
+alter table rooms add column if not exists player2_last_seen timestamptz;
 
 -- 悔棋:undo_requested_by 记录当前是谁发起的悔棋请求(null=没有待处理的请求);
 -- board_before_last_move 是"最近一步落子之前"的棋盘快照,只保留一步,同意悔棋
@@ -145,7 +164,7 @@ create policy "queue_delete" on matchmaking_queue for delete using (auth.uid() =
 -- 原子匹配函数:把队列里等待时间最长、且不是自己的一个人拉出来配对
 -- 用 FOR UPDATE SKIP LOCKED 避免两个客户端同时抢到同一个对手
 -- ============================================================
-create or replace function match_players(me uuid, my_rating int default 1200)
+create or replace function match_players(me uuid, my_rating int default 0)
 returns uuid
 language plpgsql
 security definer
@@ -177,8 +196,10 @@ begin
 
   if opponent.player_id is not null then
     -- 找到对手,直接建房间,双方各占一个 player 位
-    insert into rooms (mode, status, player1_id, player2_id, board, current_turn)
-    values ('matchmaking', 'playing', opponent.player_id, me, '[]'::jsonb, 1)
+    insert into rooms (mode, status, player1_id, player2_id, board, current_turn, turn_deadline, player1_last_seen, player2_last_seen)
+    values ('matchmaking', 'playing', opponent.player_id, me,
+      (select jsonb_agg(0) from generate_series(1, 225)), 1,
+      now() + interval '30 seconds', now(), now())
     returning id into new_room_id;
 
     delete from matchmaking_queue where player_id = opponent.player_id;
@@ -218,7 +239,17 @@ end;
 $$;
 
 -- 把 rooms 加入 Realtime 发布,前端才能订阅到落子更新
-alter publication supabase_realtime add table rooms;
+-- 用 pg_publication_tables 先查一下有没有加过,避免整段 schema.sql 重跑时
+-- 在这一行直接报错中断(alter publication add table 对已经加过的表会报错,
+-- 不像 create table 那样有 if not exists 可用)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'rooms'
+  ) then
+    alter publication supabase_realtime add table rooms;
+  end if;
+end $$;
 
 -- ============================================================
 -- 退出房间(仅限对局开始前,status 还是 waiting/lobby 的时候):
@@ -326,8 +357,10 @@ begin
 
   begin
     -- 双方轮流当先手,公平一点:这局谁是 player2 谁在下一局先走
-    insert into rooms (mode, status, player1_id, player2_id, board, current_turn, rematch_of)
-    values (old_room.mode, 'playing', old_room.player2_id, old_room.player1_id, '[]'::jsonb, 1, p_old_room_id)
+    insert into rooms (mode, status, player1_id, player2_id, board, current_turn, rematch_of, turn_deadline, player1_last_seen, player2_last_seen)
+    values (old_room.mode, 'playing', old_room.player2_id, old_room.player1_id,
+      (select jsonb_agg(0) from generate_series(1, 225)), 1, p_old_room_id,
+      now() + interval '30 seconds', now(), now())
     returning id into new_id;
     return new_id;
   exception when unique_violation then
@@ -456,7 +489,14 @@ create policy "friend_requests_select" on friend_requests for select using (
   auth.uid() = from_id or auth.uid() = to_id
 );
 
-alter publication supabase_realtime add table friend_requests;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'friend_requests'
+  ) then
+    alter publication supabase_realtime add table friend_requests;
+  end if;
+end $$;
 
 -- 发送好友申请。如果对方之前已经先申请过我(双方都待处理、谁也没点同意),
 -- 这里直接判定为互相同意、当场加好友,不用再走一遍"对方同意"的流程——
@@ -569,7 +609,14 @@ create policy "invites_insert" on game_invites for insert with check (auth.uid()
 drop policy if exists "invites_update" on game_invites;
 create policy "invites_update" on game_invites for update using (auth.uid() = to_id);
 
-alter publication supabase_realtime add table game_invites;
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'game_invites'
+  ) then
+    alter publication supabase_realtime add table game_invites;
+  end if;
+end $$;
 
 -- 接受好友对战邀请:接受的人在这一刻还不是房间的参与者,普通的 rooms_update RLS
 -- 策略("必须已经是参与者才能改这行")会直接拒绝这次更新——这是个鸡生蛋问题,
@@ -609,7 +656,7 @@ end;
 $$;
 
 -- ============================================================
--- 战绩记录 + 积分(ELO)系统
+-- 战绩记录 + 积分(固定加减分)系统
 -- ============================================================
 create table if not exists match_history (
   id uuid primary key default gen_random_uuid(),
@@ -634,9 +681,10 @@ create policy "history_select" on match_history for select using (
   auth.uid() = player1_id or auth.uid() = player2_id
 );
 
--- 结束一局对战:计算 ELO、更新双方 profiles、写历史、关闭房间
+-- 结束一局对战:计算积分(固定分制)、更新双方 profiles、写历史、关闭房间
 -- 用 security definer 是因为普通玩家的 RLS 权限改不了对方的 rating
 -- p_reason: normal(五连/平局) | forfeit(主动认输离开) | disconnect(对方掉线超时,由在线一方判负)
+-- 积分规则:赢一局 +10,输一局 -5,平局不加不减;允许积分为负,不设下限
 create or replace function finish_match(p_room_id uuid, p_winner int, p_reason text default 'normal')
 returns jsonb
 language plpgsql
@@ -646,9 +694,9 @@ declare
   r rooms%rowtype;
   p1 profiles%rowtype;
   p2 profiles%rowtype;
-  exp1 float; exp2 float;
-  score1 float; score2 float;
-  k int := 32;
+  win_points int := 10;
+  lose_points int := -5;
+  delta1 int; delta2 int;
   new1 int; new2 int;
 begin
   select * into r from rooms where id = p_room_id for update;
@@ -670,16 +718,13 @@ begin
   select * into p1 from profiles where id = r.player1_id;
   select * into p2 from profiles where id = r.player2_id;
 
-  exp1 := 1.0 / (1 + power(10, (p2.rating - p1.rating) / 400.0));
-  exp2 := 1.0 - exp1;
-
-  if p_winner = 1 then score1 := 1; score2 := 0;
-  elsif p_winner = 2 then score1 := 0; score2 := 1;
-  else score1 := 0.5; score2 := 0.5;
+  if p_winner = 1 then delta1 := win_points; delta2 := lose_points;
+  elsif p_winner = 2 then delta1 := lose_points; delta2 := win_points;
+  else delta1 := 0; delta2 := 0;
   end if;
 
-  new1 := round(p1.rating + k * (score1 - exp1));
-  new2 := round(p2.rating + k * (score2 - exp2));
+  new1 := p1.rating + delta1;
+  new2 := p2.rating + delta2;
 
   update profiles set
     rating = new1,
@@ -808,7 +853,7 @@ begin
 
   if r.player1_rematch_ready and r.player2_rematch_ready then
     update rooms set
-      status = 'lobby', board = '[]'::jsonb, current_turn = 1, winner = null,
+      status = 'lobby', board = (select jsonb_agg(0) from generate_series(1, 225)), current_turn = 1, winner = null,
       end_reason = 'normal', move_count = 0,
       undo_requested_by = null, board_before_last_move = null,
       player1_rematch_ready = false, player2_rematch_ready = false
@@ -862,3 +907,398 @@ exception when others then
 end $$;
 
 select cron.schedule('cleanup-stale-rooms', '*/30 * * * *', $$select cleanup_stale_rooms();$$);
+
+-- ============================================================
+-- 判负兜底(服务端权威) + 单设备登录会话控制
+-- ============================================================
+-- 背景:之前"回合超时判负"根本没实现(计时器纯展示),"掉线判负"则完全
+-- 靠还在线那一方的浏览器自己跑定时器、自己调 RPC——一旦双方都不在前台
+-- (比如 Telegram Mini App 被切到后台,JS 定时器被系统挂起),没有任何
+-- 一端在执行判负逻辑,对局会永久卡死在 playing。
+--
+-- 现在把"回合截止时间"和"最后心跳时间"都落到 rooms 表里,由服务端
+-- pg_cron 定时扫描、权威判定,不再依赖某一台设备的浏览器是否醒着。
+-- 客户端原有的即时提示(断线倒计时展示、回合倒计时展示)保留,作为
+-- "体验更快的快速路径";这里加的是"就算没人盯着也一定会兜底"的保证。
+
+-- 关键写操作(落子、认输)额外校验一下调用方带的 session_id 是否还是
+-- 最新的,双保险——万一旧设备的 realtime 订阅因为网络问题没收到通知,
+-- 落子/认输这类核心请求也会在服务端被拒绝,而不是"客户端没收到通知就
+-- 一直能用"。p_session_id 允许传 null(向后兼容旧客户端/内部调用),
+-- 只有真正传了值又对不上时才拦。
+create or replace function _validate_session(p_session_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  current_sid uuid;
+begin
+  if p_session_id is null then return; end if;
+  select active_session_id into current_sid from profiles where id = me;
+  if current_sid is not null and current_sid <> p_session_id then
+    raise exception 'SESSION_SUPERSEDED' using errcode = 'P0001';
+  end if;
+end;
+$$;
+
+-- 把 finish_match 原本的核心逻辑抽出来,去掉"必须是参与者本人在调用"
+-- 这条校验——这条校验对玩家主动触发(认输/五连获胜上报)是必须的,
+-- 但对 check_timeouts 这种系统级定时任务(没有 auth.uid() 上下文)和
+-- claim_session 这种"新设备登录顶替旧设备正在进行的对局"的场景不适用。
+-- finish_match 本身改成一层薄薄的权限校验壳,校验完再委托给这个内部函数。
+-- 积分规则:赢一局 +10,输一局 -5,平局不加不减;允许积分为负,不设下限
+create or replace function _finish_match_internal(p_room_id uuid, p_winner int, p_reason text)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  r rooms%rowtype;
+  p1 profiles%rowtype;
+  p2 profiles%rowtype;
+  win_points int := 10;
+  lose_points int := -5;
+  delta1 int; delta2 int;
+  new1 int; new2 int;
+begin
+  select * into r from rooms where id = p_room_id for update;
+
+  if r.id is null then
+    return jsonb_build_object('error', '房间不存在');
+  end if;
+
+  if r.status = 'finished' then
+    return jsonb_build_object('already_finished', true);
+  end if;
+
+  select * into p1 from profiles where id = r.player1_id;
+  select * into p2 from profiles where id = r.player2_id;
+
+  if p_winner = 1 then delta1 := win_points; delta2 := lose_points;
+  elsif p_winner = 2 then delta1 := lose_points; delta2 := win_points;
+  else delta1 := 0; delta2 := 0;
+  end if;
+
+  new1 := p1.rating + delta1;
+  new2 := p2.rating + delta2;
+
+  update profiles set
+    rating = new1,
+    wins = wins + (case when p_winner = 1 then 1 else 0 end),
+    losses = losses + (case when p_winner = 2 then 1 else 0 end),
+    draws = draws + (case when p_winner = 0 then 1 else 0 end)
+  where id = p1.id;
+
+  update profiles set
+    rating = new2,
+    wins = wins + (case when p_winner = 2 then 1 else 0 end),
+    losses = losses + (case when p_winner = 1 then 1 else 0 end),
+    draws = draws + (case when p_winner = 0 then 1 else 0 end)
+  where id = p2.id;
+
+  update rooms set status = 'finished', winner = p_winner, end_reason = p_reason where id = p_room_id;
+
+  insert into match_history (
+    room_id, player1_id, player2_id, winner, end_reason,
+    player1_rating_before, player2_rating_before, player1_rating_after, player2_rating_after
+  ) values (
+    p_room_id, p1.id, p2.id, p_winner, p_reason, p1.rating, p2.rating, new1, new2
+  );
+
+  return jsonb_build_object(
+    'my1_delta', new1 - p1.rating, 'my2_delta', new2 - p2.rating,
+    'p1_new', new1, 'p2_new', new2
+  );
+end;
+$$;
+
+-- p_reason 现在可能的取值:normal | forfeit | disconnect | timeout(回合超时,
+-- 服务端兜底判定) | session_kicked(别处登录顶替,旧设备的对局被强制判负)
+--
+-- 注意:新签名比原来的 finish_match(uuid, int, text) 多了一个参数,
+-- create or replace 按参数签名区分函数,不会覆盖旧的三参数版本,得先
+-- 显式 drop 掉,不然新旧两个 finish_match 会同时存在——旧的那个没有
+-- session 校验,等于开了个后门。
+drop function if exists finish_match(uuid, int, text);
+
+create or replace function finish_match(p_room_id uuid, p_winner int, p_reason text default 'normal', p_session_id uuid default null)
+returns jsonb
+language plpgsql
+security definer
+as $$
+begin
+  if auth.uid() is null or (
+    auth.uid() <> (select player1_id from rooms where id = p_room_id)
+    and auth.uid() <> (select player2_id from rooms where id = p_room_id)
+  ) then
+    return jsonb_build_object('error', '无权限操作该对局');
+  end if;
+
+  perform _validate_session(p_session_id);
+
+  return _finish_match_internal(p_room_id, p_winner, p_reason);
+end;
+$$;
+
+grant execute on function finish_match(uuid, int, text, uuid) to authenticated;
+
+-- 房主"开始对局"改成走 RPC(原来是前端直接 update status),顺便在这里
+-- 落下第一手的回合截止时间、给双方种一个初始心跳,避免游戏刚开始那几秒
+-- last_seen 是 null,被 check_timeouts 误判成"从未心跳过 = 早就该判负"。
+create or replace function start_match(p_room_id uuid)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+begin
+  if me is null then raise exception '未登录'; end if;
+  select * into r from rooms where id = p_room_id for update;
+  if r.id is null then return jsonb_build_object('error', '房间不存在'); end if;
+  if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
+  if r.status <> 'lobby' then return jsonb_build_object('error', '当前状态不能开始对局'); end if;
+
+  -- board 必须是满 225 格(15x15)的零数组再交给 make_move——jsonb_set 按
+  -- 下标写入要求目标数组本来就"够长",如果还是初始的 '[]' 空数组,落子时
+  -- 写到中间某个下标会直接失败,所以这里先补满。
+  update rooms set
+    status = 'playing',
+    board = (select jsonb_agg(0) from generate_series(1, 225)),
+    turn_deadline = now() + interval '30 seconds',
+    player1_last_seen = now(),
+    player2_last_seen = now()
+  where id = p_room_id;
+
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+grant execute on function start_match(uuid) to authenticated;
+
+-- 落子改走 RPC(原来是前端直接 update rooms 表)。除了原本的写棋盘,
+-- 顺带做两件事:1) 校验确实轮到我、这一格确实空着——之前这层校验完全
+-- 没有,客户端传什么服务端就信什么;2) 刷新 turn_deadline,给"下一手"
+-- 重新计时,配合 check_timeouts 做超时判负。
+create or replace function make_move(p_room_id uuid, p_x int, p_y int, p_session_id uuid default null)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+  my_slot int;
+  idx int;
+  board jsonb;
+  cell int;
+begin
+  if me is null then raise exception '未登录'; end if;
+  perform _validate_session(p_session_id);
+
+  select * into r from rooms where id = p_room_id for update;
+  if r.id is null then return jsonb_build_object('error', '房间不存在'); end if;
+  if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
+  if r.status <> 'playing' then return jsonb_build_object('error', '对局不在进行中'); end if;
+  if r.undo_requested_by is not null then return jsonb_build_object('error', '有悔棋请求待处理'); end if;
+
+  my_slot := case when me = r.player1_id then 1 else 2 end;
+  if r.current_turn <> my_slot then return jsonb_build_object('error', '还没轮到你'); end if;
+  if p_x < 0 or p_x >= 15 or p_y < 0 or p_y >= 15 then return jsonb_build_object('error', '坐标越界'); end if;
+
+  idx := p_y * 15 + p_x; -- 前端 flat 数组是 y*BOARD_SIZE+x,跟 logic.js toBoard2D 保持一致
+  board := r.board;
+  cell := (board->>idx)::int; -- ->> 按下标取值再转text,jsonb array直接转int会报错,得先转text
+  if cell <> 0 then return jsonb_build_object('error', '这一格已经有子了'); end if;
+
+  board := jsonb_set(board, array[idx::text], to_jsonb(my_slot));
+
+  update rooms set
+    board = board,
+    current_turn = case when my_slot = 1 then 2 else 1 end,
+    move_count = r.move_count + 1,
+    board_before_last_move = r.board,
+    undo_requested_by = null,
+    turn_deadline = now() + interval '30 seconds',
+    player1_last_seen = case when my_slot = 1 then now() else player1_last_seen end,
+    player2_last_seen = case when my_slot = 2 then now() else player2_last_seen end
+  where id = p_room_id;
+
+  return jsonb_build_object('ok', true, 'move_count', r.move_count + 1);
+end;
+$$;
+
+grant execute on function make_move(uuid, int, int, uuid) to authenticated;
+
+-- 心跳:对局进行中客户端每隔几秒调一次,只是刷新"我还在"这个时间戳,
+-- 不改棋盘本身。掉线判负不再单纯依赖 presence 的 leave 事件+对方浏览器
+-- 是否醒着,check_timeouts 直接看这个字段是否太久没更新。
+create or replace function heartbeat(p_room_id uuid)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+begin
+  if me is null then return; end if;
+  select * into r from rooms where id = p_room_id;
+  if r.id is null or r.status <> 'playing' then return; end if;
+  if me = r.player1_id then
+    update rooms set player1_last_seen = now() where id = p_room_id;
+  elsif me = r.player2_id then
+    update rooms set player2_last_seen = now() where id = p_room_id;
+  end if;
+end;
+$$;
+
+grant execute on function heartbeat(uuid) to authenticated;
+
+-- 悔棋被同意之后棋盘退回上一步、轮到发起悔棋的一方重新走——顺带把
+-- turn_deadline 也刷新一下,不然回合截止时间还停在"被悔掉的那一步"
+-- 落子之前算出来的旧值上,悔棋一同意可能立刻就被 check_timeouts 判成
+-- 超时。同一函数签名,这里直接覆盖原来的定义。
+create or replace function respond_undo(p_room_id uuid, p_accept boolean)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+begin
+  if me is null then raise exception '未登录'; end if;
+
+  select * into r from rooms where id = p_room_id for update;
+  if r.id is null then return jsonb_build_object('error', '房间不存在'); end if;
+  if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
+  if r.undo_requested_by is null then return jsonb_build_object('error', '没有待处理的悔棋请求'); end if;
+  if me = r.undo_requested_by then return jsonb_build_object('error', '不能回应自己发起的请求'); end if;
+
+  if p_accept then
+    update rooms set
+      board = r.board_before_last_move,
+      current_turn = case when current_turn = 1 then 2 else 1 end,
+      move_count = greatest(move_count - 1, 0),
+      board_before_last_move = null,
+      undo_requested_by = null,
+      turn_deadline = now() + interval '30 seconds'
+    where id = p_room_id;
+    return jsonb_build_object('accepted', true);
+  else
+    update rooms set undo_requested_by = null where id = p_room_id;
+    return jsonb_build_object('accepted', false);
+  end if;
+end;
+$$;
+
+-- 单设备登录:真正的"登录"动作(不是同一设备缓存 session 重开 App)调这个。
+-- 两阶段:
+--   1) p_force=false 先探测一下,这个账号是不是有别的设备正在 playing 中
+--      的对局——有的话不动 active_session_id,直接把 room_id 报回去,前端
+--      弹确认框("继续登录会判那局负,是否继续?")
+--   2) 用户确认后,前端带 p_force=true 再调一次:这时候才会真正顶掉旧设备
+--      (判负旧设备那局对局 + 生成新 active_session_id)。如果压根没有进行
+--      中的对局,第一次调用(p_force=false)就会直接完成顶替,不需要走两步。
+create or replace function claim_session(p_force boolean default false)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  active_room rooms%rowtype;
+  opp_slot int;
+  new_sid uuid;
+begin
+  if me is null then raise exception '未登录'; end if;
+
+  select * into active_room from rooms
+  where (player1_id = me or player2_id = me) and status = 'playing'
+  order by updated_at desc limit 1;
+
+  if active_room.id is not null and not p_force then
+    return jsonb_build_object('has_active_game', true, 'room_id', active_room.id);
+  end if;
+
+  if active_room.id is not null and p_force then
+    opp_slot := case when active_room.player1_id = me then 2 else 1 end;
+    perform _finish_match_internal(active_room.id, opp_slot, 'session_kicked');
+  end if;
+
+  new_sid := gen_random_uuid();
+  update profiles set active_session_id = new_sid where id = me;
+
+  return jsonb_build_object('session_id', new_sid);
+end;
+$$;
+
+grant execute on function claim_session(boolean) to authenticated;
+
+-- profiles 加入 Realtime 发布:旧设备靠订阅自己这一行的 UPDATE,几乎实时
+-- 发现 active_session_id 被换掉了(别处登录顶替了),自动登出
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'profiles'
+  ) then
+    alter publication supabase_realtime add table profiles;
+  end if;
+end $$;
+
+-- 服务端权威判负扫描:pg_cron 定时跑,不依赖任何一台设备的浏览器还醒着。
+--   · 回合超时:now() > turn_deadline,当前该走棋的一方判负,reason='timeout'
+--   · 掉线超时:某一方的心跳时间戳太久没刷新(用 coalesce 兜底,处理"游戏
+--     刚开始/刚重连,还没来得及心跳一次"的情况),判他负,reason='disconnect'
+-- 注意精度取舍:pg_cron 标准语法最小粒度是"分钟",这里每分钟跑一次,
+-- 意味着实际生效时间比 turn_deadline/心跳阈值本身要晚最多接近60秒。
+-- 如果想要更接近现在客户端 20~30 秒那种即时感,需要额外接一个更高频率
+-- 的外部触发器(比如 Cloudflare Cron Triggers 每15秒调一次同名逻辑的
+-- edge function),这里先给出零额外基础设施依赖的兜底版本。
+create or replace function check_timeouts()
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  r record;
+  loser int;
+  winner int;
+  p1_last timestamptz;
+  p2_last timestamptz;
+begin
+  for r in select * from rooms where status = 'playing' for update skip locked loop
+    -- 回合超时判负
+    if r.turn_deadline is not null and now() > r.turn_deadline then
+      loser := r.current_turn;
+      winner := case when loser = 1 then 2 else 1 end;
+      perform _finish_match_internal(r.id, winner, 'timeout');
+      continue;
+    end if;
+
+    -- 掉线判负:没心跳过就用 updated_at 兜底,不然刚开局/刚重连那几秒
+    -- 会被误判成"早就该判负"
+    p1_last := coalesce(r.player1_last_seen, r.updated_at);
+    p2_last := coalesce(r.player2_last_seen, r.updated_at);
+
+    if now() - p1_last > interval '45 seconds' then
+      perform _finish_match_internal(r.id, 2, 'disconnect');
+    elsif now() - p2_last > interval '45 seconds' then
+      perform _finish_match_internal(r.id, 1, 'disconnect');
+    end if;
+  end loop;
+end;
+$$;
+
+do $$
+begin
+  perform cron.unschedule('check-timeouts');
+exception when others then
+  null;
+end $$;
+
+select cron.schedule('check-timeouts', '* * * * *', $$select check_timeouts();$$);

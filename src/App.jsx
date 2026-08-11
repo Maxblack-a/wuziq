@@ -12,7 +12,10 @@ import LeaderboardScreen from "./components/LeaderboardScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import NicknameSetupScreen from "./components/NicknameSetupScreen";
 import WebAuthScreen from "./components/WebAuthScreen";
-import { supabase, loginWithTelegram, loginAnonymously, getExistingUserId } from "./lib/supabase";
+import {
+  supabase, loginWithTelegram, loginAnonymously, getExistingUserId,
+  claimSession, getStoredSessionId, clearStoredSessionId,
+} from "./lib/supabase";
 import { initTelegram, isInTelegram, getInitData, getStartParam, getTelegramUserId } from "./lib/telegram";
 import { initPresence } from "./lib/presence";
 
@@ -28,6 +31,15 @@ export default function App() {
   // 每一项: { kind: 'invite' | 'friend_request', id, fromName, fromAvatar, room_id?, created_at }
   const [notifQueue, setNotifQueue] = useState([]);
   const [notifBusy, setNotifBusy] = useState(false);
+
+  // 单设备登录:sessionConflict 非空 = 登录流程走到"这个账号在别处有一局
+  // 对局正在进行中"这一步,停下来等用户确认要不要继续(继续=判那局负);
+  // kickedOut = 我这台设备正在用的时候,账号被别处登录顶替了,弹一个
+  // 拦截全部操作的提示,不再是登录流程的一部分,是"用到一半被踢"的场景。
+  const [sessionConflict, setSessionConflict] = useState(null); // { roomId }
+  const [sessionConflictBusy, setSessionConflictBusy] = useState(false);
+  const [kickedOut, setKickedOut] = useState(false);
+  const pendingLoginUidRef = useRef(null);
 
   // 导航历史栈:每次从一个页面"跳去"另一个页面(navigate/handleMatched),
   // 把跳转前那一刻的 { screen, roomId } 压进来。Telegram 原生返回键 /
@@ -45,8 +57,55 @@ export default function App() {
   // JSX 里传下去的普通组件方法,不在 useEffect 的闭包里,拿不到里面
   // 定义的函数,只能通过 ref 中转。
   const afterLoginRef = useRef(null);
+  // 网页版登录/注册/访客登录成功之后,都要先过一遍"单设备登录"顶替流程,
+  // 不能直接跳去 afterLoginRef——那样会跳过"别处有对局正在进行"的确认。
+  const establishSessionRef = useRef(null);
   async function handleWebAuthSuccess(uid) {
+    if (establishSessionRef.current) await establishSessionRef.current(uid);
+  }
+
+  // 登录成功后(不管是网页版账号密码、Telegram 免密、还是访客登录)拿到
+  // uid 时统一走这里,先处理"顶替旧设备登录"这一步,再继续原来的收尾
+  // 流程(afterLoginRef,写 myId、路由等)。
+  async function establishSession(uid) {
+    let result;
+    try {
+      result = await claimSession(false);
+    } catch (e) {
+      console.error("会话顶替失败", e);
+      if (afterLoginRef.current) await afterLoginRef.current(uid);
+      return;
+    }
+    if (result?.has_active_game) {
+      pendingLoginUidRef.current = uid;
+      setSessionConflict({ roomId: result.room_id });
+      return; // 停在确认框,等 handleSessionConflictConfirm / Cancel
+    }
     if (afterLoginRef.current) await afterLoginRef.current(uid);
+  }
+
+  async function handleSessionConflictConfirm() {
+    setSessionConflictBusy(true);
+    try {
+      await claimSession(true);
+      const uid = pendingLoginUidRef.current;
+      setSessionConflict(null);
+      pendingLoginUidRef.current = null;
+      if (afterLoginRef.current) await afterLoginRef.current(uid);
+    } finally {
+      setSessionConflictBusy(false);
+    }
+  }
+
+  async function handleSessionConflictCancel() {
+    setSessionConflict(null);
+    pendingLoginUidRef.current = null;
+    clearStoredSessionId();
+    await supabase.auth.signOut();
+    // 简单粗暴地刷新页面重新走一遍启动流程,不用另外维护一套"取消登录后
+    // 该停在哪个界面"的状态机——Telegram 场景刷新后会重新免密登录(那台
+    // 设备继续保留原来的对局),网页版会落回登录页。
+    window.location.reload();
   }
 
   // "确认昵称"页点了确认之后:写库,顺手把本地 profile 缓存也更新一下
@@ -107,6 +166,20 @@ export default function App() {
     // 好在 WebAuthScreen 登录成功的回调里复用同一份,不用抄一遍。
     async function afterLogin(uid) {
       const cachedProfile = await refreshProfile(uid);
+
+      // 单设备登录:如果这个账号已经确立过 session(active_session_id 不为
+      // 空),而我本地存的最后一次 session_id 对不上,说明在我不知情的
+      // 时候,别的设备登录顶替了我——不管我是"缓存态直接重开 App"还是
+      // 走到这里之前的哪条路径,统一在这里兜底拦一下,不往下继续路由。
+      // (刚走完 establishSession/claimSession 的全新登录不会触发这条:
+      // 那条路径在调用 afterLogin 之前,本地存的 session_id 已经跟服务端
+      // 同步过了。)
+      if (cachedProfile?.active_session_id && getStoredSessionId() !== cachedProfile.active_session_id) {
+        setKickedOut(true);
+        setScreen("menu"); // 具体停在哪个 screen 不重要,kickedOut 的全屏提示会盖住一切
+        return;
+      }
+
       setMyId(uid);
       initPresence(uid); // 往"在线用户"这个全局频道报到,好友列表能看到谁在线
       loadPendingNotifications(uid); // 补一次:上次关闭 App 期间收到的邀请/申请,实时订阅是抓不到的,得主动查一遍
@@ -139,6 +212,10 @@ export default function App() {
         if (!uid) {
           if (isInTelegram) {
             uid = await loginWithTelegram(getInitData());
+            // Telegram 免密登录属于"全新登录",要走单设备顶替这一套流程
+            // (可能弹出"别处有对局正在进行"确认框),不能直接跳去 afterLogin。
+            await establishSession(uid);
+            return;
           } else {
             // 网页版且这台设备没有任何登录态:停在登录/注册页,等用户
             // 输入用户名密码,或者选择访客体验——不再像以前那样不问
@@ -203,6 +280,7 @@ export default function App() {
     // 网页版登录注册成功之后复用同一份逻辑。
     routeAfterLoginRef.current = routeAfterLogin;
     afterLoginRef.current = afterLogin;
+    establishSessionRef.current = establishSession;
   }, []);
 
   // 真正回首页:清空整个导航历史栈,不管之前跳了多少层,这是唯一
@@ -292,6 +370,26 @@ export default function App() {
     setNotifQueue((prev) => prev.slice(1));
   }
 
+  // 单设备登录:实时盯着自己这一行 profiles 的 active_session_id。用到
+  // 一半(不是重开 App 那种场景,是正开着的时候)如果别的设备登录顶替了
+  // 我,这里几乎实时收到通知,弹出全屏拦截提示——不依赖用户之后凑巧
+  // 触发一次刷新/重开才发现自己已经被踢了。
+  useEffect(() => {
+    if (!myId) return;
+    const sessionChannel = supabase
+      .channel(`session-guard-${myId}`)
+      .on("postgres_changes",
+        { event: "UPDATE", schema: "public", table: "profiles", filter: `id=eq.${myId}` },
+        (payload) => {
+          const latest = payload.new?.active_session_id;
+          if (latest && getStoredSessionId() !== latest) {
+            setKickedOut(true);
+          }
+        }
+      ).subscribe();
+    return () => supabase.removeChannel(sessionChannel);
+  }, [myId]);
+
   // 全局监听发给我的对战邀请 + 好友申请:不管当前停在哪个页面,只要有新的
   // 就推进队列弹窗,不需要专门跑到"好友"页面才能看到。只在拿到登录身份
   // 之后才订阅;订阅开始之前已经存在的,靠上面 loadPendingNotifications 补。
@@ -332,6 +430,47 @@ export default function App() {
       supabase.removeChannel(requestChannel);
     };
   }, [myId]);
+
+  if (kickedOut) {
+    return (
+      <div className="app-shell" style={{ alignItems: "center", justifyContent: "center", textAlign: "center", padding: 24 }}>
+        <h2 className="text-heading">账号已在其他设备登录</h2>
+        <p className="text-caption" style={{ marginTop: "var(--space-2)" }}>
+          你的账号刚刚在别的地方登录了,这台设备已经退出。如果不是你本人操作,建议尽快检查账号安全。
+        </p>
+        <button
+          className="btn-primary"
+          style={{ marginTop: "var(--space-6)" }}
+          onClick={async () => {
+            clearStoredSessionId();
+            await supabase.auth.signOut();
+            window.location.reload();
+          }}
+        >
+          好的
+        </button>
+      </div>
+    );
+  }
+
+  if (sessionConflict) {
+    return (
+      <div className="app-shell" style={{ alignItems: "center", justifyContent: "center", textAlign: "center", padding: 24 }}>
+        <h2 className="text-heading">你有一局对局正在其他设备进行中</h2>
+        <p className="text-caption" style={{ marginTop: "var(--space-2)" }}>
+          继续在这台设备登录,会让那一局直接判负,并且原设备会被登出。确定要继续吗?
+        </p>
+        <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)", width: "100%", maxWidth: 320 }}>
+          <button className="btn-ghost" style={{ flex: 1 }} onClick={handleSessionConflictCancel} disabled={sessionConflictBusy}>
+            取消
+          </button>
+          <button className="btn-primary" style={{ flex: 1 }} onClick={handleSessionConflictConfirm} disabled={sessionConflictBusy}>
+            {sessionConflictBusy ? "处理中…" : "继续登录"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (screen === "loading") {
     return (

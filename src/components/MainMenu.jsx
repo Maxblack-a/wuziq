@@ -6,8 +6,9 @@ import { titleForRating, levelForRating } from "../lib/rank";
 export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
   const [showRules, setShowRules] = useState(false);
   const level = levelForRating(rating);
-  const title = titleForRating(rating ?? 1200);
-  const progressPct = Math.min(95, Math.max(8, ((rating ?? 1200) - 800) % 40 * 2.5));
+  const title = titleForRating(rating ?? 0);
+  // 当前阶内的进度(每阶横跨100分),用于顶栏身份牌下方的小进度条
+  const progressPct = Math.min(95, Math.max(8, (((rating ?? 0) % 100) + 100) % 100));
 
   return (
     <div>

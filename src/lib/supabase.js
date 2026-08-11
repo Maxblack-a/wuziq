@@ -136,3 +136,42 @@ export async function loginAnonymously(displayName = "访客") {
   });
   return data.user.id;
 }
+
+// ============================================================
+// 单设备登录会话控制
+//
+// active_session_id 存在 profiles 表里,每次"真正登录"(不是同一设备
+// 缓存 session 重开 App)都会换一个新的,本地这份存的是"我这台设备最后
+// 一次拿到的那个值"——跟服务端的对不上,就说明别处登录顶替了自己。
+//
+// 特意不用 localStorage(那是给"登录态本身"用的,supabase-js 自己在管),
+// 用一个独立的 key,避免哪天排查问题的时候和 supabase-js 内部的存储搞混。
+// ============================================================
+const SESSION_ID_KEY = "wuzigix_active_session_id";
+
+export function getStoredSessionId() {
+  return localStorage.getItem(SESSION_ID_KEY);
+}
+
+function setStoredSessionId(id) {
+  if (id) localStorage.setItem(SESSION_ID_KEY, id);
+}
+
+export function clearStoredSessionId() {
+  localStorage.removeItem(SESSION_ID_KEY);
+}
+
+// 登录成功后调这个,顶替掉这个账号在别处的登录态。
+// 如果账号在别的设备上正有一局对局在进行中,不会直接顶替——先把这个
+// 情况报回去,让调用方决定是否要弹确认框,确认后再传 force=true 真正执行。
+export async function claimSession(force = false) {
+  const { data, error } = await supabase.rpc("claim_session", { p_force: force });
+  if (error) throw error;
+  if (data?.session_id) setStoredSessionId(data.session_id);
+  return data; // { has_active_game, room_id } 或 { session_id }
+}
+
+// 对局进行中的心跳,别的地方判负逻辑要看这个时间戳有没有太久没刷新
+export async function sendHeartbeat(roomId) {
+  await supabase.rpc("heartbeat", { p_room_id: roomId });
+}

@@ -1,9 +1,11 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Board from "./Board";
-import { supabase } from "../lib/supabase";
+import { supabase, getStoredSessionId, sendHeartbeat } from "../lib/supabase";
 import { toBoard2D, checkWin, isBoardFull, cloneBoard, BOARD_SIZE } from "../game/logic";
 import { hapticNotify, useTelegramBackButton, setClosingConfirmation } from "../lib/telegram";
 import { IconUndo } from "./Icons";
+
+const HEARTBEAT_INTERVAL_MS = 8000; // 对局进行中定期报"我还在",服务端靠这个判掉线,不再单纯依赖 presence
 
 const DISCONNECT_GRACE_MS = 20000; // 对方断线后,宽限20秒再允许判负
 const WIN_REVEAL_DELAY = 1000;     // 五连产生后,先让连线动画播完,再切出结算面板(跟 PveScreen 一致)
@@ -133,6 +135,16 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [room?.status, room?.move_count]);
+
+  // 心跳:对局进行中定期告诉服务端"我还在",服务端的 check_timeouts 兜底
+  // 判负靠这个字段,而不是只依赖对方浏览器是否醒着去跑客户端那一套判负
+  // effect——这样即使双方的 App 都被切到后台,对局最终也不会永远卡死。
+  useEffect(() => {
+    if (room?.status !== "playing") return;
+    sendHeartbeat(roomId);
+    const timer = setInterval(() => sendHeartbeat(roomId), HEARTBEAT_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [room?.status, roomId]);
 
   // 一旦服务器状态追上了本地乐观更新的那一步,就不再需要覆盖层,以服务器数据为准
   useEffect(() => {
@@ -298,15 +310,24 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   const turnSecondsLeft = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : TURN_SECONDS;
   const turnUrgent = turnSecondsLeft <= 10;
 
-  // 房主在大厅点"开始对局",真正把状态推进到 playing。RLS 允许双方任意一方
-  // 更新这一行,但按钮只在房主这边渲染出来,保证正常流程下只有房主能点这个
+  // 别处登录顶替了我(session_id 对不上),不管是哪个操作触发的,统一
+  // 刷新页面——App 顶层的会话校验会接管,弹出"账号已在其他设备登录"。
+  function isSessionSupersededError(error) {
+    return !!error && /SESSION_SUPERSEDED/i.test(error.message || "");
+  }
+  function handleSessionSuperseded() {
+    window.location.reload();
+  }
+
+  // 房主在大厅点"开始对局"。原来这里是前端直接 update status,现在改走
+  // RPC——顺带在服务端种下第一手的回合截止时间 + 初始心跳(见 schema.sql
+  // 里 start_match 的注释),不然回合超时判负这套机制从第一手就是空的。
   async function startMatch() {
-    await supabase.from("rooms").update({ status: "playing" }).eq("id", roomId);
+    await supabase.rpc("start_match", { p_room_id: roomId });
   }
 
   async function handleCellClick(x, y) {
     if (!isMyTurn || room.undo_requested_by) return; // 有悔棋请求在处理中时不能落子
-    const beforeFlat = room.board; // 落子前的棋盘快照,留给"悔棋"用
     const next = cloneBoard(board2D);
     next[y][x] = mySlot;
 
@@ -318,41 +339,49 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     setLastMove([x, y]);
     setPendingMove({ board: next, turnAfter: nextTurn, moveCountAfter: room.move_count + 1 });
 
-    const flat = next.flat();
-    const { error } = await supabase.from("rooms").update({
-      board: flat,
-      current_turn: nextTurn,
-      move_count: room.move_count + 1,
-      board_before_last_move: beforeFlat,
-      undo_requested_by: null,
-    }).eq("id", roomId);
+    // 落子改走 make_move RPC(原来是前端直接 update 整个棋盘)。服务端会
+    // 校验"确实轮到我""这一格确实空着",并刷新 turn_deadline;赢棋/
+    // 平局判定仍然由客户端算好之后再调 finish_match 上报,跟之前一致。
+    const { data, error } = await supabase.rpc("make_move", {
+      p_room_id: roomId, p_x: x, p_y: y, p_session_id: getStoredSessionId(),
+    });
 
-    if (error) {
-      // 网络失败,回滚本地落子
+    if (error || data?.error) {
+      // 网络失败或者服务端拒绝了(比如乐观更新之后其实已经不是我的回合、
+      // 或者会话被顶替了),回滚本地落子
       setPendingMove(null);
       setLastMove(null);
       hapticNotify("error");
+      if (isSessionSupersededError(error)) handleSessionSuperseded();
       return;
     }
 
     if (win) {
       hapticNotify("success");
-      const { data } = await supabase.rpc("finish_match", { p_room_id: roomId, p_winner: mySlot });
-      if (data && !data.already_finished) {
-        setRatingDelta(mySlot === 1 ? data.my1_delta : data.my2_delta);
+      const { data: fd } = await supabase.rpc("finish_match", {
+        p_room_id: roomId, p_winner: mySlot, p_session_id: getStoredSessionId(),
+      });
+      if (fd && !fd.already_finished) {
+        setRatingDelta(mySlot === 1 ? fd.my1_delta : fd.my2_delta);
       }
     } else if (full) {
-      const { data } = await supabase.rpc("finish_match", { p_room_id: roomId, p_winner: 0 });
-      if (data && !data.already_finished) {
-        setRatingDelta(mySlot === 1 ? data.my1_delta : data.my2_delta);
+      const { data: fd } = await supabase.rpc("finish_match", {
+        p_room_id: roomId, p_winner: 0, p_session_id: getStoredSessionId(),
+      });
+      if (fd && !fd.already_finished) {
+        setRatingDelta(mySlot === 1 ? fd.my1_delta : fd.my2_delta);
       }
     }
   }
 
-  // 对方断线超过宽限期:不再需要玩家手动点按钮判负,宽限倒计时一到就由
-  // 上面那个 effect 自动调用这里,直接把还在线的这一方判赢
+  // 对方断线超过宽限期:客户端这条路径是"快速路径"——还有人盯着屏幕的
+  // 话,尽量快地帮他判赢,体验上比等服务端 check_timeouts 那个分钟级的
+  // 定时任务快得多。就算这条没触发(比如这台设备也被切到后台了),
+  // 服务端那边最终也会兜底判掉,不会永远卡死。
   async function claimForfeitWin() {
-    const { data } = await supabase.rpc("finish_match", { p_room_id: roomId, p_winner: mySlot, p_reason: "disconnect" });
+    const { data } = await supabase.rpc("finish_match", {
+      p_room_id: roomId, p_winner: mySlot, p_reason: "disconnect", p_session_id: getStoredSessionId(),
+    });
     if (data && !data.already_finished) {
       setRatingDelta(mySlot === 1 ? data.my1_delta : data.my2_delta);
     }
@@ -362,9 +391,12 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   async function confirmResign() {
     setResigning(true);
     const oppSlot = mySlot === 1 ? 2 : 1;
-    await supabase.rpc("finish_match", { p_room_id: roomId, p_winner: oppSlot, p_reason: "forfeit" });
+    const { error } = await supabase.rpc("finish_match", {
+      p_room_id: roomId, p_winner: oppSlot, p_reason: "forfeit", p_session_id: getStoredSessionId(),
+    });
     setResigning(false);
     setResignConfirmOpen(false);
+    if (isSessionSupersededError(error)) { handleSessionSuperseded(); return; }
     onExit();
   }
 
