@@ -55,20 +55,54 @@ function usernameToEmail(username) {
 // 用同一份用户名密码走一次真正的 signInWithPassword,拿到本地 session——
 // 干净地把"建号"和"登录换 session"分成两步,而不是让 Edge Function 越权
 // 帮用户签发 session。
+//
+// 下面这段刻意写得比平时啰嗦:请求可能在好几个不同的层次失败(网络/CORS
+// 直接连不上、函数返回了非 JSON 的错误页、函数正常返回但业务逻辑报错),
+// 表现在用户眼里都是"点了没反应",但原因天差地别。与其让浏览器自己吞成
+// 一句语焉不详的 "Failed to fetch",这里把每一层拿到的诊断信息都原样
+// 带进抛出的 Error 里,好让页面上能直接显示出来,不用再翻开发者工具。
 export async function registerWithPassword(username, password) {
-  const res = await fetch(
-    `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/password-auth`,
-    {
+  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/password-auth`;
+
+  let res;
+  try {
+    res = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: import.meta.env.VITE_SUPABASE_ANON_KEY,
       },
       body: JSON.stringify({ username, password }),
-    }
-  );
-  const data = await res.json();
-  if (data.error) throw new Error(data.error);
+    });
+  } catch (networkErr) {
+    // fetch 本身就抛出了,说明请求根本没有跑完一整趟(常见原因:函数没
+    // 部署 / CORS 被浏览器拦下 / VITE_SUPABASE_URL 配置错误 / 断网)。
+    throw new Error(
+      `[网络层] 无法连接到 ${url}\n` +
+      `可能原因:password-auth 函数未成功部署、CORS 被拦截、或 VITE_SUPABASE_URL 配置错误\n` +
+      `浏览器原始报错: ${networkErr.message}`
+    );
+  }
+
+  const rawText = await res.text();
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch {
+    // 拿到了 HTTP 响应,但内容不是 JSON——说明请求没有真正跑到我们自己
+    // 写的函数代码里,而是被 Supabase 网关或者中间层拦截,返回了一个
+    // HTML/纯文本的错误页(最典型:JWT 校验没关掉时网关直接拦截)。
+    throw new Error(
+      `[网关层] 服务器返回了非预期内容,HTTP 状态码 ${res.status}\n` +
+      `原始响应(前200字符): ${rawText.slice(0, 200) || "(空)"}`
+    );
+  }
+
+  if (!res.ok || data.error) {
+    // 请求正常跑到了函数代码里,函数自己判定失败并返回了 error 字段——
+    // 这是最"正常"的失败,比如用户名格式不对、用户名已被注册。
+    throw new Error(`[业务层] ${data.error || "注册失败"}(HTTP ${res.status})`);
+  }
 
   return loginWithPassword(username, password);
 }
@@ -78,7 +112,15 @@ export async function registerWithPassword(username, password) {
 export async function loginWithPassword(username, password) {
   const email = usernameToEmail(username);
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) throw new Error("用户名或密码不正确");
+  if (error) {
+    // "Invalid login credentials" 是最常见的情况(用户名不存在或密码错),
+    // 直接给友好提示;其他错误(网络失败、项目配置问题等)把 Supabase
+    // 原始报错带出来,方便排查到底是哪个环节出的问题。
+    if (/invalid login credentials/i.test(error.message || "")) {
+      throw new Error("用户名或密码不正确");
+    }
+    throw new Error(`[登录失败] ${error.message}`);
+  }
   return data.user.id;
 }
 

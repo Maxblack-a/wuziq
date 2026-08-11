@@ -38,7 +38,7 @@ export default function WebAuthScreen({ onSuccess }) {
       const uid = await loginAnonymously("模拟玩家");
       await onSuccess(uid);
     } catch (e) {
-      setErrorMsg("访客登录失败,请重试");
+      setErrorMsg(`[访客登录失败] ${e.message || e}`);
       setBusy(false);
     }
   }
@@ -106,7 +106,14 @@ export default function WebAuthScreen({ onSuccess }) {
       />
 
       {errorMsg && (
-        <p style={{ textAlign: "center", fontSize: 12, color: "var(--amber)", marginBottom: 12 }}>{errorMsg}</p>
+        <div style={{
+          fontSize: 12, color: "var(--amber)", marginBottom: 12,
+          background: "var(--wood-soft)", border: "1px solid var(--amber)",
+          borderRadius: "var(--radius-sm)", padding: 10,
+          whiteSpace: "pre-wrap", wordBreak: "break-all", userSelect: "text",
+        }}>
+          {errorMsg}
+        </div>
       )}
 
       <button className="btn-primary" disabled={!canSubmit} onClick={handleSubmit} style={{ marginBottom: 12 }}>
