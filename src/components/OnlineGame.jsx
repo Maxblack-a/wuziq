@@ -298,10 +298,6 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   const turnSecondsLeft = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : TURN_SECONDS;
   const turnUrgent = turnSecondsLeft <= 10;
 
-  // 只有一方点了"返回房间"、还在等对方的状态
-  const myRematchReady = mySlot === 1 ? room.player1_rematch_ready : room.player2_rematch_ready;
-  const oppRematchReady = mySlot === 1 ? room.player2_rematch_ready : room.player1_rematch_ready;
-
   // 房主在大厅点"开始对局",真正把状态推进到 playing。RLS 允许双方任意一方
   // 更新这一行,但按钮只在房主这边渲染出来,保证正常流程下只有房主能点这个
   async function startMatch() {
@@ -384,12 +380,17 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     setRespondingUndo(false);
   }
 
-  // 结算后点"返回房间":两边都点过才会真正重开(房间状态回到 lobby 由后端
-  // 判断并广播,这里只负责发起请求、进入"等待中"的 loading 态)
+  // 结算后点"返回房间":不管对方有没有一起点,我这边点了就立刻带我回到
+  // 对局房间的准备界面(RoomScreen)——如果对方也点过了,下面这个 RPC 会
+  // 把房间状态直接推进到 lobby,我进去就看到"开始游戏";如果对方还没点,
+  // 我进去看到的是"开始匹配/邀请好友"这一层(RoomScreen 自己会根据
+  // player{1,2}_rematch_ready 这两个字段判断该显示哪一层,页面跟"第一次
+  // 进房间"时是同一个,不需要在这里等对方、也不需要另外画一个简化版大厅)
   async function handleReturnToRoom() {
     setReturningToRoom(true);
     await supabase.rpc("return_to_room", { p_room_id: roomId });
     setReturningToRoom(false);
+    onMatched(roomId);
   }
 
   const winLine = (() => {
@@ -429,7 +430,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
                 <>
                   <div className={`turn-dot black${effectiveTurn === 1 ? " active" : ""}`} />
                   <div className={`turn-dot white${effectiveTurn === 2 ? " active" : ""}`} />
-                  {opponentName}
+                  <span className="pve-turn-pill-name">{opponentName}</span>
                 </>
               )}
             </div>
@@ -490,23 +491,15 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
 
           {/* 对局结束后的操作按钮,沿用棋盘下方"确认落子"那一条 confirm-bar
               的位置——两者不会同时出现,视觉上正好是同一个位置被复用。
-              这里不用"返回菜单/再来一局",改成"返回首页/返回房间",
-              避免直接建一间新房间导致原来这间变孤儿房 */}
-          {result && !myRematchReady && (
+              这里不用"返回菜单/再来一局",改成"返回首页/返回房间"。
+              点"返回房间"不需要在这等对方——handleReturnToRoom 里点完
+              立刻就带你去房间准备界面了,对方到没到都不耽误你往下走 */}
+          {result && (
             <div className="confirm-bar">
               <button className="btn-ghost" style={{ flex: 1 }} onClick={onExit}>返回首页</button>
               <button className="btn-primary" style={{ flex: 1 }} onClick={handleReturnToRoom} disabled={returningToRoom}>
                 {returningToRoom ? "处理中…" : "返回房间"}
               </button>
-            </div>
-          )}
-
-          {/* 我已经点过"返回房间",但对方还没点——可以在这等,也可以直接
-              回首页去重新邀请好友或者进匹配找别的对手,不用死等这一间房 */}
-          {result && myRematchReady && !oppRematchReady && (
-            <div className="panel" style={{ textAlign: "center", marginTop: "var(--space-4)" }}>
-              <p className="muted" style={{ marginBottom: "var(--space-3)" }}>已返回房间,等待{opponentName}也返回…</p>
-              <button className="btn-ghost" style={{ width: "100%" }} onClick={onExit}>去邀请好友 / 匹配其他对手</button>
             </div>
           )}
         </div>

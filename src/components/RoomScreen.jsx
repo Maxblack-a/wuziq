@@ -271,6 +271,32 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   const hasOpponent = !!room?.player2_id;
   const myName = playerName || "我";
 
+  // 结算后点了"返回房间",但对方还没点:数据库层面这间房的对手位(player2_id)
+  // 还占着上一局那个对手,可这局到底还续不续得上,得看对方点没点"返回房间"。
+  // 用这两个 rematch_ready 标记判断——只要不是两边都点了,这个位置就该当成
+  // "还没定下来",跟全新开一间房、根本没人来时用同一套 UI(开始匹配/邀请
+  // 好友),而不是硬等对方或者另外画一个阉割版页面。
+  const mySlot = room?.player1_id === myId ? 1 : room?.player2_id === myId ? 2 : null;
+  const myRematchReady = mySlot === 1 ? room?.player1_rematch_ready : mySlot === 2 ? room?.player2_rematch_ready : false;
+  const oppRematchReady = mySlot === 1 ? room?.player2_rematch_ready : mySlot === 2 ? room?.player1_rematch_ready : false;
+  const awaitingRematch = room?.status === "finished" && myRematchReady && !oppRematchReady;
+
+  // "邀请好友"这颗按钮(以及"好友在线"胶囊条)平时直接展开面板就好;但如果
+  // 当前是 awaitingRematch 这种情况,原来的对手位事实上还被上一局的对手占着,
+  // 没法把新邀请塞进同一个房间——这时候先悄悄换一间全新的干净房间,原来那间
+  // 不用管(对方真要是也点了"返回房间",走的是它自己两边都确认那条路径,
+  // 跟这里互不影响),再展开邀请面板,面板本身和"第一次进房间"时长得一模一样
+  async function handleOpenInvite() {
+    if (awaitingRematch) {
+      setRoomId(null);
+      setRoom(null);
+      setOpponent(null);
+      setInvitedIds(new Set());
+      createRoom();
+    }
+    setInviting(true);
+  }
+
   const myLevel = levelForRating(rating);
   const myTitle = titleForRating(rating ?? 1200);
   const oppLevel = opponent ? levelForRating(opponent.rating) : null;
@@ -378,7 +404,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
         </div>
       </div>
 
-      {!hasOpponent && !inviting && (
+      {(!hasOpponent || awaitingRematch) && !inviting && (
         <>
           <button
             className="room-action-primary fade-in-up"
@@ -402,7 +428,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
             className="room-action-invite fade-in-up"
             style={{ animationDelay: "160ms" }}
             disabled={!roomId}
-            onClick={() => setInviting(true)}
+            onClick={handleOpenInvite}
           >
             <span className="cta-primary-lead">
               <span className="cta-primary-icon"><IconPersonPlus size={17} /></span>
@@ -416,7 +442,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
             </span>
           </button>
 
-          <button className="friends-bar fade-in-up" style={{ animationDelay: "200ms" }} onClick={() => setInviting(true)}>
+          <button className="friends-bar fade-in-up" style={{ animationDelay: "200ms" }} onClick={handleOpenInvite}>
             <span className="friends-bar-icon"><IconFriends size={18} /></span>
             <span className="friends-bar-text">
               好友在线 <span className="friends-bar-count">{onlineFriendsCount}</span> 人
@@ -433,7 +459,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
         </>
       )}
 
-      {!hasOpponent && inviting && (
+      {(!hasOpponent || awaitingRematch) && inviting && (
         <div className="fade-in-up" style={{ marginTop: "var(--space-2)" }}>
           <p className="friend-section-label">好友列表</p>
           {friends.length === 0 ? (

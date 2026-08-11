@@ -37,11 +37,12 @@
   position: relative;
 }
 
-/* 不是自己回合时,只压暗棋盘格子这一层(0.75→0.55），角标文字作为同级
-   元素叠在上面,不会被这层opacity一起拖暗,保持清晰可读 */
+/* 不是自己回合时,棋盘不能点(pointer-events: none),但视觉上保持清晰——
+   之前这里用 opacity + 去饱和度压暗棋盘,想用来提示"现在轮不到你",
+   但对手多想一会儿这层暗淡就跟着挂一会儿,棋子和线看着发灰、糊在一起,
+   反而妨碍看棋。回合信息已经在棋盘上方的状态栏里明明白白写着了,
+   这里不需要再靠"把棋盘弄得看不清"来重复提示一遍。 */
 .board-wrap.board-disabled .board-grid {
-  opacity: 0.55;
-  filter: saturate(0.5) brightness(0.9);
   pointer-events: none;
 }
 
@@ -355,6 +356,11 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0; /* 同样是为了让里面的回合胶囊能真正缩水触发省略号,
+    不然这一层自己就按内容撑开宽度,回合胶囊内部再怎么设置省略号
+    都没有实际生效的空间——跟 .pve-turn-pill / .turn-timer-label
+    是同一个套路 */
+  flex: 1 1 auto;
 }
 
 .pve-turn-pill {
@@ -367,6 +373,18 @@
   font-weight: 600;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
+  min-width: 0; /* 同样是为了让下面的昵称能在 flex 布局里真的缩、触发省略号 */
+  max-width: 100%;
+}
+/* 对手昵称长度不可控,这个胶囊在顶栏里跟"认输""悔棋"按钮抢空间,
+   窄屏上很容易被挤得只剩很小一截——不截断的话昵称会把胶囊、进而把
+   整个顶栏撑高(顶栏在棋盘上方,一旦变高棋盘就跟着往下移)。这里跟
+   下面棋盘上方的 .turn-timer-label 是同一个问题、同一个修法。 */
+.pve-turn-pill-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .turn-indicator {
@@ -389,15 +407,23 @@
   box-shadow: 0 0 0 3px rgba(91, 56, 35, 0.35);
 }
 
-/* 棋盘上方的结果展示区,替代原来盖住棋盘的弹窗。固定 min-height——不管
-   对局是不是已经结束、这块地方有没有内容,高度都不变,棋盘的位置就不会
-   跟着结果文字的出现/消失而跳动。数值是按"标题一行 + 说明一行"外加
-   上下一点呼吸空间量出来的,两种状态之间差不了几个像素,肉眼看不出来。 */
+/* 棋盘上方的结果展示区,替代原来盖住棋盘的弹窗。这里原来用的是
+   min-height(下限),对手昵称一旦长到换行就会把这块区域撑高、棋盘跟着
+   往下移——现在改成 height(硬上限)+ overflow:hidden,配合上面
+   .turn-timer-label 的单行省略号,双重保险,不管里面塞进什么内容,
+   这块区域的高度都不会再变,棋盘位置彻底焊死。 */
 .pve-result-panel {
-  min-height: 74px;
+  height: 74px;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch; /* 不能用 center——center 会让 .turn-timer
+    按自己内容的宽度收缩显示,完全不受这个容器宽度约束,下面给
+    .turn-timer-label 加的省略号也就没有"边界"可以触发,长昵称会直接
+    从两边溢出裁切、连"…"都不出现(截图实测过)。stretch 强制它撑满
+    容器宽度,省略号才有意义。h2/p 这些结算文案本来就是块级元素,
+    stretch 不影响它们横向撑满 + text-align:center 居中文字的效果,
+    肉眼看不出区别。 */
   justify-content: center;
   text-align: center;
   gap: 2px;
@@ -431,6 +457,7 @@
   padding: var(--space-2) var(--space-4);
   font-size: 14px;
   font-weight: 600;
+  flex-shrink: 0; /* 挤空间的时候该缩的是回合胶囊里的昵称,不是这个按钮 */
   transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 .btn-undo:active { background: var(--wood-soft); transform: scale(0.97); }
@@ -446,6 +473,7 @@
   font-weight: 600;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
+  flex-shrink: 0;
 }
 .resign-btn:active { background: var(--wood-soft); }
 .resign-btn:disabled { opacity: 0.4; }
@@ -463,17 +491,29 @@
   display: flex;
   justify-content: space-between;
   align-items: baseline;
+  gap: var(--space-2);
 }
+/* 对手昵称是用户自己填的,长度不可控——一旦长到把这一行撑成两行,
+   上面 .pve-result-panel 的高度就会被顶破,棋盘跟着往下移一截。
+   min-width:0 让这个 flex 子项真的能缩下去(不然 flex 子项默认
+   min-width:auto,按内容撑开,ellipsis 不生效),配合 nowrap +
+   text-overflow 直接单行截断,昵称太长就显示省略号,不留换行的可能;
+   右边倒计时数字反过来要 flex-shrink:0,不能被这一行的收缩逻辑挤没了 */
 .turn-timer-label {
   font-size: 13px;
   color: var(--text-secondary);
   font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .turn-timer-count {
   font-size: 22px;
   font-weight: 700;
   color: var(--wood);
   transition: color 0.2s ease;
+  flex-shrink: 0;
 }
 .turn-timer-track {
   width: 100%;
