@@ -56,15 +56,14 @@ export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
             <p className="brand-slogan">黑白之间 · 一念胜负</p>
           </div>
         </div>
-      </div>
 
-      {/* 在线状态行:从图片内部的绝对定位叠层挪到了图片下方的正常
-          文档流里,缩成一枚小胶囊——不再占用品牌图内一整行的高度,
-          图片本身也压矮了,下面的开始对局/人机挑战按钮不用下滑就能
-          直接看到。 */}
-      <div className="online-status-compact fade-in-up" style={{ animationDelay: "100ms" }}>
-        <span className="online-dot-glow-sm" />
-        <span>ONLINE{playerName ? ` · ${playerName}` : ""}</span>
+        {/* 在线状态:图片下半截棋盘投影下方本来就是留白区,文字直接写
+            在图片这块留白上(不是另起一段挤在图片外面)。上一版是两行
+            大块文字,现在缩成一枚小胶囊,占用的留白高度更小、更克制。 */}
+        <div className="online-status-compact fade-in-up" style={{ animationDelay: "100ms" }}>
+          <span className="online-dot-glow-sm" />
+          <span>ONLINE{playerName ? ` · ${playerName}` : ""}</span>
+        </div>
       </div>
 
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}

@@ -12,12 +12,10 @@
   width: calc(100% + var(--space-4) * 2);
   margin-left: calc(-1 * var(--space-4));
   margin-right: calc(-1 * var(--space-4));
-  /* 原来用 aspect-ratio: 1024/1535 撑出跟图片原始比例一致的高度,在
-     大多数手机宽度下能到 550-600px,是整页需要下滑才能看到按钮的
-     主因。改成一个跟视口高度挂钩、但上下都封顶的固定高度,配合下面
-     object-fit: cover 保持图片本身不变形——顶栏+标题文字依然完整
-     显示,只是图片下半截露出的画面变少了。 */
-  height: clamp(230px, 36vh, 300px);
+  /* 图片必须完整展示,不裁剪、不拉伸——高度严格跟随图片原始比例
+     (1024:1535),不能用固定/vh/vw 压出一个跟原图比例不一致的高度,
+     那样 object-fit: cover 会把棋盘连同上面的棋子一起裁掉一截。 */
+  aspect-ratio: 1024 / 1535;
   overflow: hidden;
 }
 
@@ -266,23 +264,26 @@
 .profile-exp-row .identity-progress-track { width: 120px; }
 
 /* ============================================================
-   在线状态行:原来是叠在品牌图内部的一整行(ONLINE + 已连接到棋局
-   世界·XXX),压缩品牌区高度之后已经放不下这么多内容,改成图片下方
-   正常文档流里的一枚小胶囊——不再需要跟图片同色系的浅色字,换成
-   跟页面其它次要文字一致的墨色系配色。
+   在线状态:叠在品牌图棋盘投影下方那片留白区上,不是页面正常流里的
+   独立元素——所以用绝对定位,配色延续"暖白字压暖褐图"这套方案,
+   只是从原来两行大字压缩成一行小胶囊,占用的留白高度小得多。
    ============================================================ */
 .online-status-compact {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 76%;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  margin-top: var(--space-2);
-  margin-bottom: var(--space-3);
+  gap: 7px;
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--text-secondary);
+  letter-spacing: 0.14em;
+  color: var(--wood-soft);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .online-dot-glow-sm {
@@ -290,8 +291,8 @@
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: #4C8C5A;
-  box-shadow: 0 0 0 3px rgba(76, 140, 90, 0.18);
+  background: #FBF6EC;
+  box-shadow: 0 0 0 3px rgba(251, 246, 236, 0.22), 0 0 8px rgba(251, 246, 236, 0.5);
 }
 
 /* ============================================================
@@ -303,9 +304,10 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  /* 品牌图压矮、在线状态行挪出图片之后,不再需要靠负 margin 把这个
-     按钮拉回去跟图片重叠——间距交给上面 .online-status-compact 的
-     margin-bottom 统一控制。 */
+  /* 图片恢复完整展示、不再裁剪之后,棋盘投影下方留白区自然又变长了,
+     这里用负 margin 把按钮拉回去贴着图片底部,呼应参考图"按钮紧跟
+     在棋盘图下面"的效果,而不是隔一大段空白。 */
+  margin-top: -64px;
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);
