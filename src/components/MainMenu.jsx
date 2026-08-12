@@ -57,12 +57,17 @@ export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
           </div>
         </div>
 
-        {/* 在线状态:图片下半截棋盘投影下方本来就是留白区,文字直接写
-            在图片这块留白上(不是另起一段挤在图片外面)。上一版是两行
-            大块文字,现在缩成一枚小胶囊,占用的留白高度更小、更克制。 */}
-        <div className="online-status-compact fade-in-up" style={{ animationDelay: "100ms" }}>
-          <span className="online-dot-glow-sm" />
-          <span>ONLINE{playerName ? ` · ${playerName}` : ""}</span>
+        {/* 在线状态:结构、配色、文案跟原来完全一样(两行、两级颜色、
+            两侧装饰虚线),只是整体尺寸缩小了一圈——只做"缩小",
+            不改样式。 */}
+        <div className="online-status fade-in-up" style={{ animationDelay: "100ms" }}>
+          <span className="online-status-line">
+            <span className="online-dot-glow" />
+            ONLINE
+          </span>
+          <span className="online-status-sub">
+            {playerName ? `已连接到棋局世界 · ${playerName}` : "已连接到棋局世界"}
+          </span>
         </div>
       </div>
 
