@@ -34,7 +34,7 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
   async function loadFriends() {
     const { data } = await supabase
       .from("friendships")
-      .select("friend_id, profiles:friend_id(id, display_name, rating, avatar_url)")
+      .select("friend_id, profiles:friend_id(id, display_name, exp, avatar_url)")
       .eq("user_id", myId);
     setFriends((data || []).map((r) => r.profiles).filter(Boolean));
   }
@@ -78,7 +78,7 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
     const t = setTimeout(async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("id, display_name, avatar_url, rating")
+        .select("id, display_name, avatar_url, exp")
         .ilike("display_name", `%${q}%`)
         .neq("id", myId)
         .limit(20);
@@ -196,7 +196,7 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
             </div>
             <div className="friend-row-info">
               <div className="friend-row-name">{u.display_name || "玩家"}</div>
-              <div className="friend-row-meta mono">积分 {u.rating}</div>
+              <div className="friend-row-meta mono">经验值 {u.exp}</div>
             </div>
             <div className="friend-row-actions">
               <button
@@ -226,7 +226,7 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
           </div>
           <div className="friend-row-info">
             <div className="friend-row-name">{f.display_name || "玩家"}</div>
-            <div className="friend-row-meta mono">积分 {f.rating}</div>
+            <div className="friend-row-meta mono">经验值 {f.exp}</div>
           </div>
           <div className="friend-row-actions">
             {pendingInvite?.friendId === f.id ? (

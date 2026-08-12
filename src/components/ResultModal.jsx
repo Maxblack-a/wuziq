@@ -1,7 +1,7 @@
 export default function ResultModal({ result, onRematch, onExit, rematchLoading = false }) {
   if (!result) return null;
 
-  const { outcome, ratingDelta, reason } = result; // 'win' | 'lose' | 'draw'
+  const { outcome, expDelta, reason } = result; // 'win' | 'lose' | 'draw'
   const title = outcome === "win" ? "胜局" : outcome === "lose" ? "败局" : "和棋";
 
   const desc = (() => {
@@ -19,9 +19,9 @@ export default function ResultModal({ result, onRematch, onExit, rematchLoading 
           {title}
         </h2>
         <p className="text-caption" style={{ marginTop: "var(--space-2)" }}>{desc}</p>
-        {typeof ratingDelta === "number" && (
-          <p className="mono" style={{ marginTop: "var(--space-3)", fontSize: 20, color: ratingDelta > 0 ? "var(--wood)" : ratingDelta < 0 ? "var(--gold)" : "var(--fg-muted)" }}>
-            {ratingDelta > 0 ? `+${ratingDelta}` : ratingDelta} 分
+        {typeof expDelta === "number" && (
+          <p className="mono" style={{ marginTop: "var(--space-3)", fontSize: 20, color: "var(--wood)" }}>
+            +{expDelta} EXP
           </p>
         )}
         <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>

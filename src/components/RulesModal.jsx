@@ -7,7 +7,7 @@ export default function RulesModal({ onClose }) {
           <li>黑棋先手,双方轮流在棋盘交叉点上落子</li>
           <li>横、竖、斜方向任意一个方向连成 <b>5 颗或以上</b> 同色棋子即获胜</li>
           <li>棋盘 15×15,落满无人获胜则为平局</li>
-          <li>联机对战会计入积分(赢一局 +10,输一局 -5,平局不加不减);人机对战不计分,随便练</li>
+          <li>联机对战会计入经验值(赢一局 +10,输一局 +4,平局 +6);人机对战不计分,随便练</li>
         </ul>
         <button className="btn-primary" style={{ width: "100%", marginTop: "var(--space-6)" }} onClick={onClose}>
           知道了

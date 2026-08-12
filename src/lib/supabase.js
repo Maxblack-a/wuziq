@@ -175,3 +175,68 @@ export async function claimSession(force = false) {
 export async function sendHeartbeat(roomId) {
   await supabase.rpc("heartbeat", { p_room_id: roomId });
 }
+
+// ============================================================
+// 头像上传:"我的"页面点头像选图之后走这里。
+// 1. 用 canvas 把原图裁成正方形、缩到 AVATAR_SIZE、转成 webp——不管
+//    用户传的是几 MB 的手机原图,存进 Storage 的都是一张体积很小的
+//    正方形 webp,列表/好友页那些小头像加载起来也快。
+// 2. 固定存到 `${uid}/avatar.webp` 这一个路径,upsert 覆盖旧文件,
+//    不会在 Storage 里越攒越多没用的历史头像。
+// 3. Storage 公开桶的 public URL 是不带版本号的,同一个路径覆盖后
+//    浏览器/CDN 可能还认得旧的缓存——URL 后面拼一个时间戳查询参数
+//    绕开缓存,不然用户上传完发现头像"没变"。
+// ============================================================
+const AVATAR_BUCKET = "avatars";
+const AVATAR_SIZE = 320;
+
+function fileToImage(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("图片读取失败"));
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function fileToSquareWebpBlob(file) {
+  const img = await fileToImage(file);
+  const side = Math.min(img.width, img.height);
+  const sx = (img.width - side) / 2;
+  const sy = (img.height - side) / 2;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = AVATAR_SIZE;
+  canvas.height = AVATAR_SIZE;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, sx, sy, side, side, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
+  URL.revokeObjectURL(img.src);
+
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("头像转换失败"))),
+      "image/webp",
+      0.85
+    );
+  });
+}
+
+// 裁剪+转 webp+上传+更新 profiles.avatar_url,返回新的头像 URL 给
+// 调用方直接更新本地状态(不用等下一次重新拉 profile)。
+export async function uploadAvatar(uid, file) {
+  const blob = await fileToSquareWebpBlob(file);
+  const path = `${uid}/avatar.webp`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(AVATAR_BUCKET)
+    .upload(path, blob, { upsert: true, contentType: "image/webp", cacheControl: "3600" });
+  if (uploadError) throw uploadError;
+
+  const { data } = supabase.storage.from(AVATAR_BUCKET).getPublicUrl(path);
+  const url = `${data.publicUrl}?t=${Date.now()}`;
+
+  const { error: updateError } = await supabase.from("profiles").update({ avatar_url: url }).eq("id", uid);
+  if (updateError) throw updateError;
+
+  return url;
+}

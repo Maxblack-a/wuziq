@@ -10,7 +10,7 @@ create table if not exists profiles (
   username text,
   display_name text,
   avatar_url text,
-  rating int not null default 0,
+  exp int not null default 0,
   wins int not null default 0,
   losses int not null default 0,
   draws int not null default 0,
@@ -21,10 +21,17 @@ create table if not exists profiles (
 );
 
 -- 兼容已经建过表的老项目
--- 兼容已经建过表的老项目:积分改版(初始分从 1200 改为 0,ELO 改为固定加减分),
--- 这里只改 profiles 列默认值,给"以后新注册的玩家"用;已存在玩家的历史 rating 不做
--- 回滚重置。matchmaking_queue 那张表这时候还没建出来,对应的 alter 挪到它建表之后。
-alter table profiles alter column rating set default 0;
+-- 兼容已经建过表的老项目:成长值改版(概念从"积分/rating"改名为"经验值/exp",
+-- 只涨不降,赢/输/和都直接加分,不再有负分)。如果老库里这一列还叫 rating,
+-- 先把列名改过来,数据(玩家已经攒的分数)原样保留,只是改了个名字。
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_name = 'profiles' and column_name = 'rating')
+     and not exists (select 1 from information_schema.columns where table_name = 'profiles' and column_name = 'exp') then
+    alter table profiles rename column rating to exp;
+  end if;
+end $$;
+alter table profiles alter column exp set default 0;
 
 alter table profiles add column if not exists is_guest boolean not null default false;
 alter table profiles add column if not exists nickname_confirmed boolean not null default false;
@@ -77,12 +84,19 @@ end $$;
 create table if not exists matchmaking_queue (
   id uuid primary key default gen_random_uuid(),
   player_id uuid unique references profiles(id) on delete cascade,
-  rating int not null default 0,
+  exp int not null default 0,
   created_at timestamptz not null default now()
 );
 
--- 兼容已经建过表的老项目:matchmaking_queue.rating 列默认值同步改成 0
-alter table matchmaking_queue alter column rating set default 0;
+-- 兼容已经建过表的老项目:matchmaking_queue.rating 列同步改名为 exp
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_name = 'matchmaking_queue' and column_name = 'rating')
+     and not exists (select 1 from information_schema.columns where table_name = 'matchmaking_queue' and column_name = 'exp') then
+    alter table matchmaking_queue rename column rating to exp;
+  end if;
+end $$;
+alter table matchmaking_queue alter column exp set default 0;
 
 -- 兼容已经建过表的老项目:补上 end_reason 字段
 alter table rooms add column if not exists end_reason text default 'normal';
@@ -164,7 +178,7 @@ create policy "queue_delete" on matchmaking_queue for delete using (auth.uid() =
 -- 原子匹配函数:把队列里等待时间最长、且不是自己的一个人拉出来配对
 -- 用 FOR UPDATE SKIP LOCKED 避免两个客户端同时抢到同一个对手
 -- ============================================================
-create or replace function match_players(me uuid, my_rating int default 0)
+create or replace function match_players(me uuid, my_exp int default 0)
 returns uuid
 language plpgsql
 security definer
@@ -206,7 +220,7 @@ begin
     return new_room_id;
   else
     -- 没找到,自己进队列等待,返回 null 表示"请等待"
-    insert into matchmaking_queue (player_id, rating) values (me, my_rating);
+    insert into matchmaking_queue (player_id, exp) values (me, my_exp);
     return null;
   end if;
 end;
@@ -446,7 +460,7 @@ begin
     return jsonb_build_object('error', '未登录');
   end if;
 
-  select id, display_name, avatar_url, rating into target
+  select id, display_name, avatar_url, exp into target
   from profiles where friend_code = upper(target_code);
 
   if target.id is null then
@@ -461,7 +475,7 @@ begin
 
   return jsonb_build_object(
     'id', target.id, 'display_name', target.display_name,
-    'avatar_url', target.avatar_url, 'rating', target.rating
+    'avatar_url', target.avatar_url, 'exp', target.exp
   );
 end;
 $$;
@@ -656,7 +670,7 @@ end;
 $$;
 
 -- ============================================================
--- 战绩记录 + 积分(固定加减分)系统
+-- 战绩记录 + 经验值(只涨不降)系统
 -- ============================================================
 create table if not exists match_history (
   id uuid primary key default gen_random_uuid(),
@@ -665,14 +679,31 @@ create table if not exists match_history (
   player2_id uuid references profiles(id),
   winner int, -- 0=平局 1/2=对应玩家
   end_reason text default 'normal',
-  player1_rating_before int,
-  player2_rating_before int,
-  player1_rating_after int,
-  player2_rating_after int,
+  player1_exp_before int,
+  player2_exp_before int,
+  player1_exp_after int,
+  player2_exp_after int,
   created_at timestamptz not null default now()
 );
 
 alter table match_history add column if not exists end_reason text default 'normal';
+
+-- 兼容已经建过表的老项目:match_history 里原来叫 xxx_rating_xxx 的四列同步改名成 xxx_exp_xxx
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_name = 'match_history' and column_name = 'player1_rating_before') then
+    alter table match_history rename column player1_rating_before to player1_exp_before;
+  end if;
+  if exists (select 1 from information_schema.columns where table_name = 'match_history' and column_name = 'player2_rating_before') then
+    alter table match_history rename column player2_rating_before to player2_exp_before;
+  end if;
+  if exists (select 1 from information_schema.columns where table_name = 'match_history' and column_name = 'player1_rating_after') then
+    alter table match_history rename column player1_rating_after to player1_exp_after;
+  end if;
+  if exists (select 1 from information_schema.columns where table_name = 'match_history' and column_name = 'player2_rating_after') then
+    alter table match_history rename column player2_rating_after to player2_exp_after;
+  end if;
+end $$;
 
 alter table match_history enable row level security;
 
@@ -681,10 +712,10 @@ create policy "history_select" on match_history for select using (
   auth.uid() = player1_id or auth.uid() = player2_id
 );
 
--- 结束一局对战:计算积分(固定分制)、更新双方 profiles、写历史、关闭房间
--- 用 security definer 是因为普通玩家的 RLS 权限改不了对方的 rating
+-- 结束一局对战:计算经验值(只涨不降)、更新双方 profiles、写历史、关闭房间
+-- 用 security definer 是因为普通玩家的 RLS 权限改不了对方的 exp
 -- p_reason: normal(五连/平局) | forfeit(主动认输离开) | disconnect(对方掉线超时,由在线一方判负)
--- 积分规则:赢一局 +10,输一局 -5,平局不加不减;允许积分为负,不设下限
+-- 经验值规则:赢一局 +10,输一局 +4,和棋 +6;只涨不降,没有扣分/负分
 create or replace function finish_match(p_room_id uuid, p_winner int, p_reason text default 'normal')
 returns jsonb
 language plpgsql
@@ -694,8 +725,9 @@ declare
   r rooms%rowtype;
   p1 profiles%rowtype;
   p2 profiles%rowtype;
-  win_points int := 10;
-  lose_points int := -5;
+  win_exp int := 10;
+  lose_exp int := 4;
+  draw_exp int := 6;
   delta1 int; delta2 int;
   new1 int; new2 int;
 begin
@@ -706,7 +738,7 @@ begin
   end if;
 
   -- 安全修复:必须是这局对局的参与者才能结算它,否则任何登录用户随便传个 room_id
-  -- 和 winner 就能篡改别人的对局结果和积分
+  -- 和 winner 就能篡改别人的对局结果和经验值
   if auth.uid() is null or (auth.uid() <> r.player1_id and auth.uid() <> r.player2_id) then
     return jsonb_build_object('error', '无权限操作该对局');
   end if;
@@ -718,23 +750,23 @@ begin
   select * into p1 from profiles where id = r.player1_id;
   select * into p2 from profiles where id = r.player2_id;
 
-  if p_winner = 1 then delta1 := win_points; delta2 := lose_points;
-  elsif p_winner = 2 then delta1 := lose_points; delta2 := win_points;
-  else delta1 := 0; delta2 := 0;
+  if p_winner = 1 then delta1 := win_exp; delta2 := lose_exp;
+  elsif p_winner = 2 then delta1 := lose_exp; delta2 := win_exp;
+  else delta1 := draw_exp; delta2 := draw_exp;
   end if;
 
-  new1 := p1.rating + delta1;
-  new2 := p2.rating + delta2;
+  new1 := p1.exp + delta1;
+  new2 := p2.exp + delta2;
 
   update profiles set
-    rating = new1,
+    exp = new1,
     wins = wins + (case when p_winner = 1 then 1 else 0 end),
     losses = losses + (case when p_winner = 2 then 1 else 0 end),
     draws = draws + (case when p_winner = 0 then 1 else 0 end)
   where id = p1.id;
 
   update profiles set
-    rating = new2,
+    exp = new2,
     wins = wins + (case when p_winner = 2 then 1 else 0 end),
     losses = losses + (case when p_winner = 1 then 1 else 0 end),
     draws = draws + (case when p_winner = 0 then 1 else 0 end)
@@ -744,13 +776,13 @@ begin
 
   insert into match_history (
     room_id, player1_id, player2_id, winner, end_reason,
-    player1_rating_before, player2_rating_before, player1_rating_after, player2_rating_after
+    player1_exp_before, player2_exp_before, player1_exp_after, player2_exp_after
   ) values (
-    p_room_id, p1.id, p2.id, p_winner, p_reason, p1.rating, p2.rating, new1, new2
+    p_room_id, p1.id, p2.id, p_winner, p_reason, p1.exp, p2.exp, new1, new2
   );
 
   return jsonb_build_object(
-    'my1_delta', new1 - p1.rating, 'my2_delta', new2 - p2.rating,
+    'my1_delta', new1 - p1.exp, 'my2_delta', new2 - p2.exp,
     'p1_new', new1, 'p2_new', new2
   );
 end;
@@ -948,7 +980,7 @@ $$;
 -- 但对 check_timeouts 这种系统级定时任务(没有 auth.uid() 上下文)和
 -- claim_session 这种"新设备登录顶替旧设备正在进行的对局"的场景不适用。
 -- finish_match 本身改成一层薄薄的权限校验壳,校验完再委托给这个内部函数。
--- 积分规则:赢一局 +10,输一局 -5,平局不加不减;允许积分为负,不设下限
+-- 经验值规则:赢一局 +10,输一局 +4,和棋 +6;只涨不降,没有扣分/负分
 create or replace function _finish_match_internal(p_room_id uuid, p_winner int, p_reason text)
 returns jsonb
 language plpgsql
@@ -958,8 +990,9 @@ declare
   r rooms%rowtype;
   p1 profiles%rowtype;
   p2 profiles%rowtype;
-  win_points int := 10;
-  lose_points int := -5;
+  win_exp int := 10;
+  lose_exp int := 4;
+  draw_exp int := 6;
   delta1 int; delta2 int;
   new1 int; new2 int;
 begin
@@ -976,23 +1009,23 @@ begin
   select * into p1 from profiles where id = r.player1_id;
   select * into p2 from profiles where id = r.player2_id;
 
-  if p_winner = 1 then delta1 := win_points; delta2 := lose_points;
-  elsif p_winner = 2 then delta1 := lose_points; delta2 := win_points;
-  else delta1 := 0; delta2 := 0;
+  if p_winner = 1 then delta1 := win_exp; delta2 := lose_exp;
+  elsif p_winner = 2 then delta1 := lose_exp; delta2 := win_exp;
+  else delta1 := draw_exp; delta2 := draw_exp;
   end if;
 
-  new1 := p1.rating + delta1;
-  new2 := p2.rating + delta2;
+  new1 := p1.exp + delta1;
+  new2 := p2.exp + delta2;
 
   update profiles set
-    rating = new1,
+    exp = new1,
     wins = wins + (case when p_winner = 1 then 1 else 0 end),
     losses = losses + (case when p_winner = 2 then 1 else 0 end),
     draws = draws + (case when p_winner = 0 then 1 else 0 end)
   where id = p1.id;
 
   update profiles set
-    rating = new2,
+    exp = new2,
     wins = wins + (case when p_winner = 2 then 1 else 0 end),
     losses = losses + (case when p_winner = 1 then 1 else 0 end),
     draws = draws + (case when p_winner = 0 then 1 else 0 end)
@@ -1002,13 +1035,13 @@ begin
 
   insert into match_history (
     room_id, player1_id, player2_id, winner, end_reason,
-    player1_rating_before, player2_rating_before, player1_rating_after, player2_rating_after
+    player1_exp_before, player2_exp_before, player1_exp_after, player2_exp_after
   ) values (
-    p_room_id, p1.id, p2.id, p_winner, p_reason, p1.rating, p2.rating, new1, new2
+    p_room_id, p1.id, p2.id, p_winner, p_reason, p1.exp, p2.exp, new1, new2
   );
 
   return jsonb_build_object(
-    'my1_delta', new1 - p1.rating, 'my2_delta', new2 - p2.rating,
+    'my1_delta', new1 - p1.exp, 'my2_delta', new2 - p2.exp,
     'p1_new', new1, 'p2_new', new2
   );
 end;

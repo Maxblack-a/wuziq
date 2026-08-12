@@ -10,6 +10,7 @@ import OnlineGame from "./components/OnlineGame";
 import FriendsScreen from "./components/FriendsScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
 import ProfileScreen from "./components/ProfileScreen";
+import MatchHistoryScreen from "./components/MatchHistoryScreen";
 import NicknameSetupScreen from "./components/NicknameSetupScreen";
 import WebAuthScreen from "./components/WebAuthScreen";
 import {
@@ -22,7 +23,7 @@ import { initPresence } from "./lib/presence";
 export default function App() {
   const [myId, setMyId] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [screen, setScreen] = useState("loading"); // loading | nickname | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile
+  const [screen, setScreen] = useState("loading"); // loading | nickname | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile | history
   const [roomId, setRoomId] = useState(null);
   const [prefillRoomCode, setPrefillRoomCode] = useState(null);
   // 对战邀请、好友申请统一进这一个队列,一个个强制弹窗处理——两种通知
@@ -503,7 +504,7 @@ export default function App() {
   return (
     <div className={`app-shell${screen === "menu" ? " app-shell-menu" : ""}`}>
       {screen === "menu" && (
-        <MainMenu onSelect={navigate} playerName={profile?.display_name} rating={profile?.rating} avatarUrl={profile?.avatar_url} />
+        <MainMenu onSelect={navigate} playerName={profile?.display_name} exp={profile?.exp} avatarUrl={profile?.avatar_url} />
       )}
       {screen === "pve" && <PveScreen onExit={goBack} onExitHome={goMenu} />}
       {screen === "matchmaking" && (
@@ -523,7 +524,7 @@ export default function App() {
           roomId={roomId}
           playerName={profile?.display_name}
           avatarUrl={profile?.avatar_url}
-          rating={profile?.rating}
+          exp={profile?.exp}
           onMatched={handleMatched}
           onExit={goBack}
           onRandomMatch={() => navigate("matchmaking")}
@@ -533,7 +534,8 @@ export default function App() {
         <FriendsScreen myId={myId} onMatched={handleMatched} onExit={goBack} />
       )}
       {screen === "leaderboard" && <LeaderboardScreen myId={myId} onExit={goBack} />}
-      {screen === "profile" && <ProfileScreen myId={myId} onExit={goBack} />}
+      {screen === "profile" && <ProfileScreen myId={myId} onExit={goBack} onNavigate={navigate} />}
+      {screen === "history" && <MatchHistoryScreen myId={myId} onExit={goBack} />}
       {screen === "game" && <OnlineGame roomId={roomId} myId={myId} onExit={goMenu} onMatched={handleMatched} />}
 
       {notifQueue[0]?.kind === "invite" && (

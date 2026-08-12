@@ -1,14 +1,14 @@
 import { useState } from "react";
 import RulesModal from "./RulesModal";
-import { IconFriends, IconTrophy, IconProfile, IconRobot, IconArrowRight, IconSeal, IconAvatarFallback } from "./Icons";
-import { titleForRating, levelForRating } from "../lib/rank";
+import { IconRules, IconRobot, IconArrowRight, IconAvatarFallback } from "./Icons";
+import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
 
-export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
+export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
   const [showRules, setShowRules] = useState(false);
-  const level = levelForRating(rating);
-  const title = titleForRating(rating ?? 0);
-  // 当前阶内的进度(每阶横跨100分),用于顶栏身份牌下方的小进度条
-  const progressPct = Math.min(95, Math.max(8, (((rating ?? 0) % 100) + 100) % 100));
+  const level = levelForExp(exp);
+  const title = titleForExp(exp ?? 0);
+  // 当前阶内的进度,用于顶栏身份牌下方的小进度条
+  const progressPct = Math.min(95, Math.max(8, progressPctForExp(exp)));
 
   return (
     <div>
@@ -21,8 +21,11 @@ export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
         <img className="hero-scene-bg" src="/hero-scene.png" alt="" aria-hidden="true" />
 
         <div className="hero-full-bleed-inner">
-          {/* 顶栏:左边身份牌(头像+等级),右边三个轻量图标入口。"规则"不再
-              单独占一个导航位,挪去品牌区的印章上触发,顶栏严格保持三图标 */}
+          {/* 顶栏:左边身份牌(头像+等级+经验值文字),右边只留"规则"
+              一个入口——好友/排行榜/我的都已经从顶栏收起,"我的"点左边
+              身份牌就能进,好友已并入"我的"页面,排行榜暂时隐藏。
+              规则原本挂在品牌区的印章上,现在挪回顶栏,占住"我的"原来
+              的位置,风格也换成跟其它导航项一致的图标+文字。 */}
           <div className="top-bar fade-in-up" style={{ animationDelay: "0ms" }}>
             <div className="identity-badge" onClick={() => onSelect("profile")}>
               <div className="identity-avatar">
@@ -33,21 +36,14 @@ export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
                 <span className="identity-progress-track">
                   <span className="identity-progress-fill" style={{ width: `${progressPct}%` }} />
                 </span>
+                <span className="identity-exp-text">{expProgressText(exp)}</span>
               </div>
             </div>
 
             <nav className="top-nav-light">
-              <button className="nav-icon-btn" onClick={() => onSelect("friends")}>
-                <IconFriends />
-                <span>好友</span>
-              </button>
-              <button className="nav-icon-btn" onClick={() => onSelect("leaderboard")}>
-                <IconTrophy />
-                <span>排行榜</span>
-              </button>
-              <button className="nav-icon-btn" onClick={() => onSelect("profile")}>
-                <IconProfile />
-                <span>我的</span>
+              <button className="nav-icon-btn" onClick={() => setShowRules(true)}>
+                <IconRules />
+                <span>规则</span>
               </button>
             </nav>
           </div>
@@ -56,28 +52,19 @@ export default function MainMenu({ onSelect, playerName, rating, avatarUrl }) {
             <div className="brand-name">WUZIGIX</div>
             <div className="brand-title-row">
               <h1>五子棋</h1>
-              <button className="brand-seal" onClick={() => setShowRules(true)} aria-label="玩法规则">
-                <IconSeal />
-              </button>
             </div>
             <p className="brand-slogan">黑白之间 · 一念胜负</p>
           </div>
         </div>
+      </div>
 
-        {/* 在线状态行:图片下方留白本来就是设计图预留给这行字的位置,
-            不是"棋盘结束后的空白",所以直接叠在图片这块暖色留白区里,
-            而不是另起一段、在图片外面再加一份间距——那样两份空白会
-            叠加,显得空得不正常。菜单页只有在 App.jsx 里 boot() 成功、
-            拿到 myId 之后才会渲染,所以到这一步一定已经连上了 */}
-        <div className="online-status fade-in-up" style={{ animationDelay: "100ms" }}>
-          <span className="online-status-line">
-            <span className="online-dot-glow" />
-            ONLINE
-          </span>
-          <span className="online-status-sub">
-            {playerName ? `已连接到棋局世界 · ${playerName}` : "已连接到棋局世界"}
-          </span>
-        </div>
+      {/* 在线状态行:从图片内部的绝对定位叠层挪到了图片下方的正常
+          文档流里,缩成一枚小胶囊——不再占用品牌图内一整行的高度,
+          图片本身也压矮了,下面的开始对局/人机挑战按钮不用下滑就能
+          直接看到。 */}
+      <div className="online-status-compact fade-in-up" style={{ animationDelay: "100ms" }}>
+        <span className="online-dot-glow-sm" />
+        <span>ONLINE{playerName ? ` · ${playerName}` : ""}</span>
       </div>
 
       {showRules && <RulesModal onClose={() => setShowRules(false)} />}

@@ -10,9 +10,9 @@ export default function LeaderboardScreen({ myId, onExit }) {
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("id, display_name, rating, wins, losses, draws")
+      .select("id, display_name, exp, wins, losses, draws")
       .eq("is_guest", false)
-      .order("rating", { ascending: false })
+      .order("exp", { ascending: false })
       .limit(50)
       .then(({ data }) => setRows(data || []));
   }, []);
@@ -44,7 +44,7 @@ export default function LeaderboardScreen({ myId, onExit }) {
             <div className="title">{r.display_name || "玩家"}</div>
             <div className="desc">{r.wins}胜 {r.losses}负 {r.draws}平</div>
           </div>
-          <div className="mono" style={{ fontSize: 18, color: "var(--jade)" }}>{r.rating}</div>
+          <div className="mono" style={{ fontSize: 18, color: "var(--jade)" }}>{r.exp}</div>
         </div>
       ))}
       {rows.length === 0 && <p className="muted" style={{ textAlign: "center" }}>暂无数据</p>}

@@ -12,7 +12,12 @@
   width: calc(100% + var(--space-4) * 2);
   margin-left: calc(-1 * var(--space-4));
   margin-right: calc(-1 * var(--space-4));
-  aspect-ratio: 1024 / 1535;
+  /* 原来用 aspect-ratio: 1024/1535 撑出跟图片原始比例一致的高度,在
+     大多数手机宽度下能到 550-600px,是整页需要下滑才能看到按钮的
+     主因。改成一个跟视口高度挂钩、但上下都封顶的固定高度,配合下面
+     object-fit: cover 保持图片本身不变形——顶栏+标题文字依然完整
+     显示,只是图片下半截露出的画面变少了。 */
+  height: clamp(230px, 36vh, 300px);
   overflow: hidden;
 }
 
@@ -104,6 +109,15 @@
   background: var(--gold);
 }
 
+/* 进度条下方的经验值文字,如 "0/100"——表示当前阶已经攒了多少经验、
+   还差多少到下一阶,字号刻意压得很小,不跟等级文字抢视觉重量 */
+.identity-exp-text {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.02em;
+  color: var(--text-secondary);
+}
+
 .top-nav-light {
   display: flex;
   align-items: center;
@@ -131,7 +145,7 @@
   position: relative;
   z-index: 1;
   text-align: center;
-  padding: var(--space-6) 0 var(--space-4);
+  padding: var(--space-4) 0 var(--space-3);
 }
 
 .brand-name {
@@ -155,20 +169,6 @@
   font-size: var(--text-title);
 }
 
-/* 印章按钮:装饰性的鉴赏章,同时承担"规则"入口的点击功能 */
-.brand-seal {
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  margin-bottom: 4px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s ease;
-}
-.brand-seal:active { transform: scale(0.88); }
-
 .brand-slogan {
   font-family: var(--font-display);
   font-size: 13px;
@@ -191,66 +191,107 @@
 }
 
 /* ============================================================
-   在线状态行:重新对照设计图放大看了这一小块——之前想错了方向,
-   design 里这行字根本不是"深色字压浅色底",而是白色/暖白字直接压在
-   棋盘投影那圈还没完全褪干净的深色暖褐区域上,圆点也是纯白发光,不是
-   绿色。hero-scene.png 棋盘投影下方 66%-70% 那一段刚好也是这种深色
-   过渡调,天然适合放白字——不用再纠结"往下挪到浅色区才能看清"这种
-   顾虑了,直接搬 design 的配色方案。
+   "我的"页面头部:头像(可点击上传更换)+ 昵称(可编辑)+ 经验值行,
+   风格上尽量克制,不占太多竖向空间——下面还要放好友/战绩两个入口。
    ============================================================ */
-.online-status {
+.profile-head {
+  text-align: center;
+  padding: var(--space-4) 0 var(--space-2);
+}
+
+.profile-avatar-wrap {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  margin: 0 auto;
+  cursor: pointer;
+}
+
+.profile-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--wood-soft);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border-token);
+}
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-loading {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 68%;
-  z-index: 1;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.profile-avatar-loading .spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+/* 头像右下角的相机角标,提示"点击可更换" */
+.profile-avatar-cam {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ink-token);
+  color: #FBF6EC;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+}
+
+.profile-exp-row {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  text-align: center;
-  padding: 0 var(--space-4);
+  gap: 4px;
+  margin-top: 10px;
 }
+.profile-exp-row .identity-progress-track { width: 120px; }
 
-.online-status-line {
-  display: inline-flex;
+/* ============================================================
+   在线状态行:原来是叠在品牌图内部的一整行(ONLINE + 已连接到棋局
+   世界·XXX),压缩品牌区高度之后已经放不下这么多内容,改成图片下方
+   正常文档流里的一枚小胶囊——不再需要跟图片同色系的浅色字,换成
+   跟页面其它次要文字一致的墨色系配色。
+   ============================================================ */
+.online-status-compact {
+  display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 6px;
+  margin-top: var(--space-2);
+  margin-bottom: var(--space-3);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.22em;
-  /* 暖白/米白,不是纯 #FFFFFF——量出来设计图这里的字色偏米黄,
-     直接复用 --wood-soft 这个已有的暖白 token,不用再造一个新色 */
-  color: var(--wood-soft);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
 }
 
-.online-dot-glow {
+.online-dot-glow-sm {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #FBF6EC;
-  box-shadow: 0 0 0 4px rgba(251, 246, 236, 0.22), 0 0 10px rgba(251, 246, 236, 0.55);
-}
-
-.online-status-sub {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: 12px;
-  color: rgba(241, 231, 216, 0.78);
-  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-}
-
-/* 副标题两侧的短横线,呼应设计图里"已连接到棋局世界"左右那两条
-   装饰虚线——纯 CSS 画,不额外切图 */
-.online-status-sub::before,
-.online-status-sub::after {
-  content: "";
-  width: 20px;
-  height: 1px;
-  background: rgba(241, 231, 216, 0.45);
+  flex-shrink: 0;
+  background: #4C8C5A;
+  box-shadow: 0 0 0 3px rgba(76, 140, 90, 0.18);
 }
 
 /* ============================================================
@@ -262,10 +303,9 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  /* online-status 这次从 top:72% 又往上挪到 68%(离棋盘更近,贴 design
-     的位置),下面留给按钮的尾巴相应变长了,负 margin 要跟着加大,
-     不然又会变回"在线状态离棋盘近了,但离按钮远了"的跷跷板问题 */
-  margin-top: -100px;
+  /* 品牌图压矮、在线状态行挪出图片之后,不再需要靠负 margin 把这个
+     按钮拉回去跟图片重叠——间距交给上面 .online-status-compact 的
+     margin-bottom 统一控制。 */
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);
@@ -389,7 +429,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  margin-top: var(--space-6);
+  margin-top: var(--space-4);
   padding-bottom: var(--space-4);
   font-size: 12px;
   letter-spacing: 0.14em;

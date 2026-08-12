@@ -82,6 +82,20 @@ export function IconSeal({ size = 22 }) {
   );
 }
 
+// 顶栏"规则"入口图标:线性风格,跟好友/排行榜/我的这几个导航图标保持
+// 同一套视觉语言(之前规则藏在品牌区的印章按钮里,现在挪回顶栏后需要
+// 一个跟其它导航项风格一致的图标,不能继续用那枚红色印章)
+export function IconRules({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="3" width="14" height="18" rx="2" />
+      <path d="M9 8h6" />
+      <path d="M9 12h6" />
+      <path d="M9 16h3.5" />
+    </svg>
+  );
+}
+
 // 头像占位:没有 avatar_url 时使用的默认剪影,风格跟其余线性图标保持一致
 export function IconAvatarFallback({ size = 22 }) {
   return (
@@ -210,6 +224,16 @@ export function IconPencil({ size = 14 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  );
+}
+
+// "我的"页面 · 头像右下角的相机角标,提示头像可点击上传更换
+export function IconCamera({ size = 13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.4l1-1.6A1.5 1.5 0 0 1 10.2 4.6h3.6a1.5 1.5 0 0 1 1.3.8l1 1.6h2.4A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9z" />
+      <circle cx="12" cy="13" r="3.4" />
     </svg>
   );
 }

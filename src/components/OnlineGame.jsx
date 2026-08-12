@@ -29,7 +29,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   const [room, setRoom] = useState(null);
   const [opponentName, setOpponentName] = useState("对手");
   const [lastMove, setLastMove] = useState(null);
-  const [ratingDelta, setRatingDelta] = useState(null);
+  const [expDelta, setExpDelta] = useState(null);
   // 乐观更新:落子瞬间先在本地显示,等服务器确认后再对齐/回滚
   const [pendingMove, setPendingMove] = useState(null); // { board, moveCountAfter }
   // 对手在线状态:disconnectSince=null 表示在线;有值表示从那一刻起断线,配合宽限期显示倒计时
@@ -57,11 +57,11 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     let cancelled = false;
 
     // roomId 变化通常发生在"再来一局"——这是切到一间全新的房间,上一局遗留的
-    // 状态(积分变化、断线计时、乐观更新覆盖层……)都属于旧房间,必须先清空,
-    // 不然新的一局可能显示上一局的旧积分变化,或者带着奇怪的残留状态
+    // 状态(经验值变化、断线计时、乐观更新覆盖层……)都属于旧房间,必须先清空,
+    // 不然新的一局可能显示上一局的旧经验值变化,或者带着奇怪的残留状态
     setRoom(null);
     setLastMove(null);
-    setRatingDelta(null);
+    setExpDelta(null);
     setPendingMove(null);
     setDisconnectSince(null);
     setOpponentName("对手");
@@ -160,22 +160,22 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
       .then(({ data }) => data && setOpponentName(data.display_name || "对手"));
   }, [room, myId]);
 
-  // 结算之后,不管是不是自己触发的 finish_match,都从战绩表里把积分变化读出来
+  // 结算之后,不管是不是自己触发的 finish_match,都从战绩表里把经验值变化读出来
   useEffect(() => {
-    if (!room || room.status !== "finished" || ratingDelta !== null) return;
+    if (!room || room.status !== "finished" || expDelta !== null) return;
     supabase.from("match_history").select("*").eq("room_id", roomId)
       .order("created_at", { ascending: false }).limit(1).single()
       .then(({ data }) => {
         if (!data) return;
         const mySlot = room.player1_id === myId ? 1 : 2;
-        setRatingDelta(mySlot === 1
-          ? data.player1_rating_after - data.player1_rating_before
-          : data.player2_rating_after - data.player2_rating_before);
+        setExpDelta(mySlot === 1
+          ? data.player1_exp_after - data.player1_exp_before
+          : data.player2_exp_after - data.player2_exp_before);
       });
-  }, [room, roomId, myId, ratingDelta]);
+  }, [room, roomId, myId, expDelta]);
 
   // 五连产生的瞬间先进入"揭晓中"状态,650ms 之后(跟连线动画同步)才真正
-  // 把结果面板切出来,同一局只触发一次,不会因为 ratingDelta 之类的后续
+  // 把结果面板切出来,同一局只触发一次,不会因为 expDelta 之类的后续
   // 更新又重新播一遍动画
   useEffect(() => {
     if (!room) return;
@@ -190,13 +190,13 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   }, [room, pendingMove, lastMove]);
 
   // "返回房间"重开成功、房间状态回到 lobby 时,清掉这一局遗留的本地状态,
-  // 不然大厅界面还会带着上一局的最后一手/积分变化之类的残留
+  // 不然大厅界面还会带着上一局的最后一手/经验值变化之类的残留
   useEffect(() => {
     if (!room) return;
     if (room.status === "lobby" && !lobbyResetRef.current) {
       lobbyResetRef.current = true;
       setLastMove(null);
-      setRatingDelta(null);
+      setExpDelta(null);
       setRevealing(false);
       revealTriggeredRef.current = false;
     }
@@ -362,14 +362,14 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
         p_room_id: roomId, p_winner: mySlot, p_session_id: getStoredSessionId(),
       });
       if (fd && !fd.already_finished) {
-        setRatingDelta(mySlot === 1 ? fd.my1_delta : fd.my2_delta);
+        setExpDelta(mySlot === 1 ? fd.my1_delta : fd.my2_delta);
       }
     } else if (full) {
       const { data: fd } = await supabase.rpc("finish_match", {
         p_room_id: roomId, p_winner: 0, p_session_id: getStoredSessionId(),
       });
       if (fd && !fd.already_finished) {
-        setRatingDelta(mySlot === 1 ? fd.my1_delta : fd.my2_delta);
+        setExpDelta(mySlot === 1 ? fd.my1_delta : fd.my2_delta);
       }
     }
   }
@@ -383,7 +383,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
       p_room_id: roomId, p_winner: mySlot, p_reason: "disconnect", p_session_id: getStoredSessionId(),
     });
     if (data && !data.already_finished) {
-      setRatingDelta(mySlot === 1 ? data.my1_delta : data.my2_delta);
+      setExpDelta(mySlot === 1 ? data.my1_delta : data.my2_delta);
     }
   }
 
@@ -489,9 +489,9 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
                   {RESULT_COPY[result.outcome].title}
                 </h2>
                 <p className="pve-result-desc">{resultDesc(result.outcome, result.reason)}</p>
-                {typeof ratingDelta === "number" && (
-                  <p className="mono" style={{ margin: "2px 0 0", fontSize: 18, fontWeight: 700, color: ratingDelta >= 0 ? "var(--wood)" : "var(--gold)" }}>
-                    {ratingDelta > 0 ? `+${ratingDelta}` : ratingDelta} 分
+                {typeof expDelta === "number" && (
+                  <p className="mono" style={{ margin: "2px 0 0", fontSize: 18, fontWeight: 700, color: "var(--wood)" }}>
+                    +{expDelta} EXP
                   </p>
                 )}
               </>

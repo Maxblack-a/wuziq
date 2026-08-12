@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { shareInviteLink, isInTelegram, useTelegramBackButton } from "../lib/telegram";
 import { useOnlineUserIds } from "../lib/presence";
-import { titleForRating, levelForRating } from "../lib/rank";
+import { titleForExp, levelForExp } from "../lib/rank";
 import {
   IconAvatarFallback,
   IconArrowRight,
@@ -41,7 +41,7 @@ const APP_SHORT_NAME = import.meta.env.VITE_TELEGRAM_APP_NAME || "gomoku";
 // 开始才是页面自己的内容)、居中的印章式标题区、放大的 VS 头像位配
 // 六边形等级徽章、"好友在线"胶囊条、墨色主 CTA、描边邀请按钮,以及
 // 底部的房间自动解散提示。
-export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, avatarUrl, rating, onMatched, onExit, onRandomMatch }) {
+export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, avatarUrl, exp, onMatched, onExit, onRandomMatch }) {
   const [roomId, setRoomId] = useState(incomingRoomId || null);
   const [room, setRoom] = useState(null);
   const [opponent, setOpponent] = useState(null);
@@ -133,7 +133,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   // 分数是为了推算 ta 的 LV.几 等级徽章,跟"我"这边用同一套算法
   useEffect(() => {
     if (!room?.player2_id) { setOpponent(null); return; }
-    supabase.from("profiles").select("display_name, avatar_url, rating").eq("id", room.player2_id).single()
+    supabase.from("profiles").select("display_name, avatar_url, exp").eq("id", room.player2_id).single()
       .then(({ data }) => setOpponent(data));
   }, [room?.player2_id]);
 
@@ -202,7 +202,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     if (!myId) return;
     supabase
       .from("friendships")
-      .select("friend_id, profiles:friend_id(id, display_name, avatar_url, rating)")
+      .select("friend_id, profiles:friend_id(id, display_name, avatar_url, exp)")
       .eq("user_id", myId)
       .then(({ data }) => setFriends((data || []).map((r) => r.profiles).filter(Boolean)));
   }, [myId]);
@@ -224,7 +224,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     const t = setTimeout(async () => {
       const { data } = await supabase
         .from("profiles")
-        .select("id, display_name, avatar_url, rating")
+        .select("id, display_name, avatar_url, exp")
         .ilike("display_name", `%${q}%`)
         .neq("id", myId)
         .limit(20);
@@ -242,7 +242,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
       // 会出现在上面的"邀请对战"名单里,不用等再打开一次这个面板
       const { data: fr } = await supabase
         .from("friendships")
-        .select("friend_id, profiles:friend_id(id, display_name, avatar_url, rating)")
+        .select("friend_id, profiles:friend_id(id, display_name, avatar_url, exp)")
         .eq("user_id", myId);
       setFriends((fr || []).map((r) => r.profiles).filter(Boolean));
     } else {
@@ -300,10 +300,10 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     setInviting(true);
   }
 
-  const myLevel = levelForRating(rating);
-  const myTitle = titleForRating(rating ?? 0);
-  const oppLevel = opponent ? levelForRating(opponent.rating) : null;
-  const oppTitle = opponent ? titleForRating(opponent.rating ?? 0) : null;
+  const myLevel = levelForExp(exp);
+  const myTitle = titleForExp(exp ?? 0);
+  const oppLevel = opponent ? levelForExp(opponent.exp) : null;
+  const oppTitle = opponent ? titleForExp(opponent.exp ?? 0) : null;
   const opponentOnline = room?.player2_id ? onlineIds.has(room.player2_id) : false;
   const onlineFriendsCount = friends.filter((f) => onlineIds.has(f.id)).length;
 
@@ -518,7 +518,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
                 </div>
                 <div className="friend-row-info">
                   <div className="friend-row-name">{u.display_name || "玩家"}</div>
-                  <div className="friend-row-meta mono">积分 {u.rating}</div>
+                  <div className="friend-row-meta mono">经验值 {u.exp}</div>
                 </div>
                 <div className="friend-row-actions">
                   <button
