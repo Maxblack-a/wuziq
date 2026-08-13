@@ -271,3 +271,23 @@ export function getAiMove(board, aiPlayer, humanPlayer, difficulty = "medium") {
   }
   return pickEasy(generalPool(scored, 0.55));
 }
+
+// ---- 以下这批导出专供 game/skillTest.js(棋力测试的"林墨"引擎)复用 ----
+// 棋力测试需要的不是"直接给我一步棋",而是"给我候选点的原始打分,
+// 我自己按测试关卡的需要去挑",所以把内部这几个原本只在本文件用的
+// 函数也导出,避免在 skillTest.js 里重新写一遍同样的棋型评估逻辑——
+// 两处评估标准不一致,是最容易埋下"测试判定跟AI实际下棋逻辑对不上"
+// 这种bug的地方。
+export {
+  SCORE,
+  scoreCandidates,
+  evaluatePoint,
+  candidateMoves,
+  findForcedMove,
+  findThreatPool,
+  bestMoveFor,
+  bestScoreFor,
+  countLiveThreeThreats,
+  generalPool,
+  weightedRandomPick,
+};

@@ -40,6 +40,25 @@ alter table profiles add column if not exists nickname_confirmed boolean not nul
 -- 靠订阅这一行的 realtime UPDATE 几乎实时发现自己"过期"了,自动登出。
 alter table profiles add column if not exists active_session_id uuid;
 
+-- 棋力测试(林墨):新用户认识林墨、确认昵称之后,紧接着邀请下一局"考官式"
+-- 测试局,目的不是给玩家打分定级(不跟 exp/段位挂钩),而是给"每日试炼"
+-- 功能一个冷启动的难度匹配起点,同时包装成六维风格画像展示给玩家看。
+-- status: pending(还没测,新老用户默认都是这个) | completed(测完了) | skipped(邀请时选了"改天吧"/中途放弃)
+-- dims: 六维风格分(展示用) {attack,defense,vision,calc,opening,adapt},0-100
+-- type: 棋手类型 key,对应 src/lib/skillProfile.js 里 TYPE_DEFS 的键名
+-- hidden_score: 隐藏综合水平分(不展示),每日试炼定初始难度用
+-- confidence: 这次测试结果的置信度(none/low/medium),关卡触发得越少越低,
+--   每日试炼消费这个分数时应该按置信度决定要不要放宽初期难度浮动范围
+-- raw: 原始信号(逐步棋谱 + 关卡事件 + 开局采样),供以后重新设计六维算法/
+--   校准算法时回溯使用,不需要因为算法迭代重新收集数据
+alter table profiles add column if not exists skill_test_status text not null default 'pending';
+alter table profiles add column if not exists skill_test_dims jsonb;
+alter table profiles add column if not exists skill_test_type text;
+alter table profiles add column if not exists skill_test_hidden_score int;
+alter table profiles add column if not exists skill_test_confidence text;
+alter table profiles add column if not exists skill_test_raw jsonb;
+alter table profiles add column if not exists skill_test_completed_at timestamptz;
+
 -- 网页版用户名密码账号:username 唯一性本来就已经靠 auth.users.email 的
 -- 唯一约束间接保证了(注册时用用户名拼邮箱),这里加一道不区分大小写的
 -- 唯一索引纯粹是双保险 + 方便以后按用户名查询。

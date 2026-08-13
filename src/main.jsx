@@ -4,6 +4,7 @@ import App from "./App";
 import "./styles/global.css";
 import "./styles/menu.css";
 import "./styles/board.css";
+import "./styles/linmo.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>

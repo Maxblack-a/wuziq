@@ -11,7 +11,9 @@ import FriendsScreen from "./components/FriendsScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import MatchHistoryScreen from "./components/MatchHistoryScreen";
-import NicknameSetupScreen from "./components/NicknameSetupScreen";
+import LinMoIntroScreen from "./components/LinMoIntroScreen";
+import SkillTestScreen from "./components/SkillTestScreen";
+import SkillTestResultScreen from "./components/SkillTestResultScreen";
 import WebAuthScreen from "./components/WebAuthScreen";
 import {
   supabase, loginWithTelegram, loginAnonymously, getExistingUserId,
@@ -23,7 +25,8 @@ import { initPresence } from "./lib/presence";
 export default function App() {
   const [myId, setMyId] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [screen, setScreen] = useState("loading"); // loading | nickname | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile | history
+  const [screen, setScreen] = useState("loading"); // loading | nickname | skilltest | skilltest_result | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile | history
+  const [skillTestProfile, setSkillTestProfile] = useState(null); // 棋力测试结果(揭晓页要用),测完/看完就不需要再留着
   const [roomId, setRoomId] = useState(null);
   const [prefillRoomCode, setPrefillRoomCode] = useState(null);
   // 对战邀请、好友申请统一进这一个队列,一个个强制弹窗处理——两种通知
@@ -109,9 +112,10 @@ export default function App() {
     window.location.reload();
   }
 
-  // "确认昵称"页点了确认之后:写库,顺手把本地 profile 缓存也更新一下
-  // (不然接下来菜单页头像旁边的名字要等下一次 refreshProfile 才会变),
-  // 再接上原来登录成功后该走的路由(深链接/断线续局/回首页)。
+  // 林墨见面场景第一步"确认昵称"之后:写库,顺手把本地 profile 缓存也
+  // 更新一下(不然接下来菜单页头像旁边的名字要等下一次 refreshProfile
+  // 才会变)。注意这里不再往下路由——LinMoIntroScreen 会留在同一个场景里
+  // 接着问"要不要测一下棋力",路由要等那一步(接受/跳过/测完)才会发生。
   async function handleNicknameConfirmed(name) {
     const { error } = await supabase
       .from("profiles")
@@ -119,11 +123,57 @@ export default function App() {
       .eq("id", myId);
     if (error) throw error;
     setProfile((prev) => (prev ? { ...prev, display_name: name, nickname_confirmed: true } : prev));
+  }
+
+  // 林墨见面场景第二步:接受邀请,进棋力测试对局
+  function handleSkillTestStart() {
+    setScreen("skilltest");
+  }
+
+  // 棋力测试路由完成之后(测完看完揭晓页 / 跳过 / 中途放弃)统一走这里,
+  // 继续原来登录成功后该走的路由(深链接/断线续局/回首页)——跟昵称
+  // 确认完之后本来要做的事是同一件事,复用同一个 ref。
+  async function continueAfterSkillTest() {
+    setSkillTestProfile(null);
     if (routeAfterLoginRef.current) {
       await routeAfterLoginRef.current(myId);
     } else {
       setScreen("menu");
     }
+  }
+
+  // 邀请时点"改天吧",或者对局中途点"先不测了":都当作跳过处理,记一笔
+  // 状态(以后如果要做"提醒用户还没测过"这类功能用得上),但不阻塞流程。
+  async function handleSkillTestSkip() {
+    if (myId) {
+      supabase.from("profiles").update({ skill_test_status: "skipped" }).eq("id", myId)
+        .then(({ error }) => { if (error) console.error("记录跳过棋力测试失败", error); });
+    }
+    await continueAfterSkillTest();
+  }
+
+  // 测试对局结束(不管是关卡收集完、撞了步数上限、还是意外分出了胜负):
+  // 把六维风格分/隐藏水平分/原始数据写库,再进结果揭晓页——揭晓页看完
+  // 点"继续"才会真正往下路由,不在这里直接走。
+  async function handleSkillTestFinish(profile, testState) {
+    if (myId) {
+      const { error } = await supabase.from("profiles").update({
+        skill_test_status: "completed",
+        skill_test_dims: profile.dims,
+        skill_test_type: profile.type,
+        skill_test_hidden_score: profile.hiddenScore,
+        skill_test_confidence: profile.confidence,
+        skill_test_raw: {
+          moves: testState.moves,
+          checkpoints: testState.checkpoints,
+          openingSamples: testState.openingSamples,
+        },
+        skill_test_completed_at: new Date().toISOString(),
+      }).eq("id", myId);
+      if (error) console.error("保存棋力测试结果失败", error);
+    }
+    setSkillTestProfile(profile);
+    setScreen("skilltest_result");
   }
 
   async function refreshProfile(uid) {
@@ -492,11 +542,28 @@ export default function App() {
   if (screen === "nickname") {
     return (
       <div className="app-shell">
-        <NicknameSetupScreen
+        <LinMoIntroScreen
           initialName={profile?.display_name || ""}
-          avatarUrl={profile?.avatar_url}
-          onConfirm={handleNicknameConfirmed}
+          onNameConfirm={handleNicknameConfirmed}
+          onStartTest={handleSkillTestStart}
+          onSkipTest={handleSkillTestSkip}
         />
+      </div>
+    );
+  }
+
+  if (screen === "skilltest") {
+    return (
+      <div className="app-shell">
+        <SkillTestScreen onFinish={handleSkillTestFinish} onAbort={handleSkillTestSkip} />
+      </div>
+    );
+  }
+
+  if (screen === "skilltest_result" && skillTestProfile) {
+    return (
+      <div className="app-shell">
+        <SkillTestResultScreen profile={skillTestProfile} onContinue={continueAfterSkillTest} />
       </div>
     );
   }

@@ -1,0 +1,277 @@
+/* ============================================================
+   林墨见面场景(替代原来纯表单式的"确认昵称"页)
+   图片是真正的背景(全出血,横向撑满屏幕),对话框和输入框浮在上面——
+   不是往界面里插一张图,是直接拿图当背景来做版式,跟首页 hero 图
+   同一个思路,复用同一套"picture + webp/jpg 兜底"写法。
+   ============================================================ */
+.linmo-scene {
+  position: relative;
+  width: calc(100% + var(--space-4) * 2);
+  margin-left: calc(-1 * var(--space-4));
+  margin-right: calc(-1 * var(--space-4));
+  /* 高度严格跟随原图比例(941:1672),跟首页 hero 图同一个思路——不用
+     固定/vh 撑高度,那样在不同屏幕比例下会裁切或拉伸背景里的人物构图 */
+  aspect-ratio: 941 / 1672;
+  overflow: hidden;
+  background: linear-gradient(180deg, #2A2118 0%, #1C1712 60%, #120E0A 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+.linmo-scene-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 底部叠一层渐深的暗遮罩,保证不管背景图哪块区域,叠在上面的白字
+   对话框和输入框都还能看得清楚——人物立绘本身偏暗色调,但棋馆背景
+   里有不少浅色区域,不压一层遮罩的话文字对比度不稳定 */
+.linmo-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 0%, transparent 38%, rgba(18, 14, 10, 0.55) 62%, rgba(14, 11, 8, 0.88) 100%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+.linmo-scene-content {
+  position: relative;
+  z-index: 2;
+  padding: var(--space-4) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.linmo-eyebrow {
+  color: var(--gold);
+  font-size: 12px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-family: var(--font-mono);
+  opacity: 0.85;
+}
+
+.linmo-bubble {
+  background: rgba(245, 240, 230, 0.96);
+  border-radius: var(--radius-md) var(--radius-md) var(--radius-md) 4px;
+  padding: var(--space-4);
+  box-shadow: var(--shadow-modal);
+  position: relative;
+}
+
+.linmo-bubble-line {
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--ink-token);
+  line-height: 1.55;
+}
+
+.linmo-bubble-line + .linmo-bubble-line {
+  margin-top: 6px;
+}
+
+.linmo-name-highlight {
+  color: var(--wood);
+}
+
+.linmo-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.linmo-input-label {
+  color: rgba(245, 240, 230, 0.75);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.linmo-input {
+  width: 100%;
+  padding: 14px 16px;
+  font-size: 17px;
+  background: rgba(245, 240, 230, 0.95);
+  color: var(--ink-token);
+  border: 1px solid rgba(198, 161, 91, 0.5);
+  border-radius: var(--radius-md);
+}
+.linmo-input::placeholder { color: var(--text-secondary); }
+
+.linmo-hint {
+  color: rgba(245, 240, 230, 0.6);
+  font-size: 12px;
+  text-align: center;
+}
+
+.linmo-error {
+  color: #E7B7A8;
+  font-size: 12px;
+  text-align: center;
+}
+
+.linmo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.linmo-actions-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.linmo-actions-row > * { flex: 1; }
+
+/* ============================================================
+   棋力测试对局页:顶部一条"林墨小像 + 台词气泡"状态条,下面照常复用
+   现有棋盘组件——不重新设计棋盘,保持跟联机/人机对战视觉统一。
+   ============================================================ */
+.skilltest-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-1) var(--space-3);
+}
+
+.skilltest-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--wood-soft);
+  border: 1px solid var(--border-token);
+}
+.skilltest-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.skilltest-header-text {
+  flex: 1;
+  min-width: 0;
+}
+.skilltest-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-token);
+}
+.skilltest-line {
+  font-size: 13px;
+  color: var(--fg-muted);
+  min-height: 17px;
+  transition: opacity 0.2s ease;
+}
+
+.skilltest-progress {
+  display: flex;
+  gap: 4px;
+  padding: 0 var(--space-1) var(--space-2);
+}
+.skilltest-progress-dot {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--wood-soft);
+}
+.skilltest-progress-dot.done { background: var(--gold); }
+.skilltest-progress-dot.active { background: var(--wood); }
+
+/* ============================================================
+   结果揭晓页:林墨半身像 + 一句点评 + 六维雷达图 + 类型标签
+   ============================================================ */
+.result-linmo-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+.result-linmo-portrait {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 2px solid var(--gold);
+  box-shadow: var(--shadow-card);
+}
+.result-linmo-portrait img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+.result-linmo-bubble {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border-token);
+  border-radius: 4px var(--radius-md) var(--radius-md) var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--ink-token);
+  box-shadow: var(--shadow-card);
+}
+
+.result-type-badge {
+  text-align: center;
+  margin-bottom: var(--space-2);
+}
+.result-type-name {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--wood);
+}
+.result-type-summary {
+  color: var(--fg-muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.radar-wrap {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+.result-dim-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.result-dim-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.result-dim-label {
+  width: 62px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.result-dim-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--wood-soft);
+  overflow: hidden;
+}
+.result-dim-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--wood), var(--gold));
+}
