@@ -41,6 +41,25 @@
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
 }
 
+/* 见 MainMenu.jsx 里对应注释:压暗棋盘投影到按钮之间那段留白,把图片
+   自带的桌面高光收束成有意为之的"聚光"效果,不再是突兀的亮色块。
+   叠在图片之上、正文内容之下(DOM 顺序在 hero-scene-bg 之后、
+   hero-full-bleed-inner 之前,同为默认层叠顺序,后者盖住前者)。 */
+.hero-bottom-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 46%,
+    rgba(28, 20, 13, 0.22) 68%,
+    rgba(23, 23, 23, 0.55) 92%,
+    rgba(23, 23, 23, 0.62) 100%
+  );
+}
+
 .hero-full-bleed-inner {
   position: relative;
   z-index: 1;
