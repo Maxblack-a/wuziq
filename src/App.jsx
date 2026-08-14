@@ -12,8 +12,11 @@ import LeaderboardScreen from "./components/LeaderboardScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import MatchHistoryScreen from "./components/MatchHistoryScreen";
 import LinMoIntroScreen from "./components/LinMoIntroScreen";
+import LinMoRetakeIntroScreen from "./components/LinMoRetakeIntroScreen";
 import SkillTestScreen from "./components/SkillTestScreen";
 import SkillTestResultScreen from "./components/SkillTestResultScreen";
+import SkillTestReviewScreen from "./components/SkillTestReviewScreen";
+import { RESULT_INTRO_LINE_RETAKE } from "./lib/linmoDialogue";
 import WebAuthScreen from "./components/WebAuthScreen";
 import {
   supabase, loginWithTelegram, loginAnonymously, getExistingUserId,
@@ -25,8 +28,17 @@ import { initPresence } from "./lib/presence";
 export default function App() {
   const [myId, setMyId] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [screen, setScreen] = useState("loading"); // loading | nickname | skilltest | skilltest_result | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile | history
+  const [screen, setScreen] = useState("loading"); // loading | nickname | skilltest | skilltest_result | skilltest_retake | skilltest_view | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile | history
   const [skillTestProfile, setSkillTestProfile] = useState(null); // 棋力测试结果(揭晓页要用),测完/看完就不需要再留着
+  // 'onboarding':新用户第一次见面那次触发的测试,结束后要接回登录后原本
+  // 该走的路由;'retake':从"我的"页面主动发起的复测,结束后应该退回
+  // 到发起测试之前所在的页面(靠 goBack),两种模式结束时的路由不一样,
+  // 所以测试流程本身(SkillTestScreen)不需要关心,靠这个标记来分流。
+  const [skillTestMode, setSkillTestMode] = useState("onboarding");
+  // 见面场景从哪一步开始:'name' 要问名字(Telegram/访客新用户),'invite'
+  // 跳过问名字、直接邀请测试(网页版注册账号已经有名字了,或者是老账号
+  // 第一次遇到这个新功能)。见 afterLogin 里的判断。
+  const [linmoIntroStep, setLinmoIntroStep] = useState("name");
   const [roomId, setRoomId] = useState(null);
   const [prefillRoomCode, setPrefillRoomCode] = useState(null);
   // 对战邀请、好友申请统一进这一个队列,一个个强制弹窗处理——两种通知
@@ -125,16 +137,30 @@ export default function App() {
     setProfile((prev) => (prev ? { ...prev, display_name: name, nickname_confirmed: true } : prev));
   }
 
-  // 林墨见面场景第二步:接受邀请,进棋力测试对局
+  // 林墨见面场景第二步:接受邀请,进棋力测试对局(第一次见面这条路,
+  // 模式固定是 onboarding)
   function handleSkillTestStart() {
+    setSkillTestMode("onboarding");
     setScreen("skilltest");
   }
 
-  // 棋力测试路由完成之后(测完看完揭晓页 / 跳过 / 中途放弃)统一走这里,
-  // 继续原来登录成功后该走的路由(深链接/断线续局/回首页)——跟昵称
-  // 确认完之后本来要做的事是同一件事,复用同一个 ref。
+  // 从"我的"页面主动发起的复测:打完招呼直接开始,不走昵称/见面那一套
+  function handleRetakeStart() {
+    setSkillTestMode("retake");
+    setScreen("skilltest");
+  }
+
+  // 棋力测试路由完成之后(测完看完揭晓页 / 跳过 / 中途放弃)统一走这里。
+  // onboarding 模式:继续原来登录成功后该走的路由(深链接/断线续局/回首页)。
+  // retake 模式:哪来的回哪去——用 goBack() 退回发起复测之前所在的页面
+  // (一般是"我的"),不能碰 routeAfterLoginRef,那是专属登录流程的东西。
   async function continueAfterSkillTest() {
     setSkillTestProfile(null);
+    if (skillTestMode === "retake") {
+      setSkillTestMode("onboarding");
+      goBack();
+      return;
+    }
     if (routeAfterLoginRef.current) {
       await routeAfterLoginRef.current(myId);
     } else {
@@ -142,9 +168,14 @@ export default function App() {
     }
   }
 
-  // 邀请时点"改天吧",或者对局中途点"先不测了":都当作跳过处理,记一笔
-  // 状态(以后如果要做"提醒用户还没测过"这类功能用得上),但不阻塞流程。
+  // 邀请时点"改天吧",或者对局中途点"先不测了":onboarding 模式下当作
+  // 跳过处理并继续登录路由;retake 模式下不写库(不能让一次复测中途
+  // 放弃,就把之前测出来的正式结果状态覆盖成"skipped"),直接退回原页面。
   async function handleSkillTestSkip() {
+    if (skillTestMode === "retake") {
+      goBack();
+      return;
+    }
     if (myId) {
       supabase.from("profiles").update({ skill_test_status: "skipped" }).eq("id", myId)
         .then(({ error }) => { if (error) console.error("记录跳过棋力测试失败", error); });
@@ -235,12 +266,25 @@ export default function App() {
       initPresence(uid); // 往"在线用户"这个全局频道报到,好友列表能看到谁在线
       loadPendingNotifications(uid); // 补一次:上次关闭 App 期间收到的邀请/申请,实时订阅是抓不到的,得主动查一遍
 
-      // 第一次进这个游戏(或者昵称还没走过确认这一步的老账号):停在
-      // "确认昵称"页,不往下走深链接/断线续局那套路由逻辑——用户点了
-      // 确认之后,handleNicknameConfirmed 会接着把 routeAfterLogin 补上。
-      // (网页版用户名密码注册的账号,注册那一步已经手动填过昵称,
-      // nickname_confirmed 直接是 true,不会停在这一页。)
+      // 第一次进这个游戏、且昵称还没走过确认这一步:停在"认识林墨"场景,
+      // 先问名字。往下走深链接/断线续局那套路由逻辑要等这一步和棋力
+      // 测试邀请都走完(handleNicknameConfirmed / continueAfterSkillTest
+      // 会接着补上)。
+      //
+      // 网页版用户名密码注册的账号,注册那一步已经手动填过昵称了
+      // (password-auth 云函数直接把 nickname_confirmed 标成 true),不需要
+      // 再问一遍名字——但棋力测试的邀请不能因此被跳过,不然网页版用户
+      // 会永远见不到林墨、也永远不会被邀请测棋力。所以这里拆成两种情况:
+      // 昵称没确认过 -> 走完整流程(问名字+邀请);昵称确认过但棋力测试
+      // 还没问过(pending,包括老账号第一次跑到这个新功能上线之后) ->
+      // 跳过问名字,直接从"邀请测试"这一步开始。
       if (!cachedProfile?.nickname_confirmed) {
+        setLinmoIntroStep("name");
+        setScreen("nickname");
+        return;
+      }
+      if (cachedProfile?.skill_test_status === "pending") {
+        setLinmoIntroStep("invite");
         setScreen("nickname");
         return;
       }
@@ -544,6 +588,7 @@ export default function App() {
       <div className="app-shell">
         <LinMoIntroScreen
           initialName={profile?.display_name || ""}
+          initialStep={linmoIntroStep}
           onNameConfirm={handleNicknameConfirmed}
           onStartTest={handleSkillTestStart}
           onSkipTest={handleSkillTestSkip}
@@ -563,7 +608,23 @@ export default function App() {
   if (screen === "skilltest_result" && skillTestProfile) {
     return (
       <div className="app-shell">
-        <SkillTestResultScreen profile={skillTestProfile} onContinue={continueAfterSkillTest} />
+        <SkillTestResultScreen
+          profile={skillTestProfile}
+          onContinue={continueAfterSkillTest}
+          introLine={skillTestMode === "retake" ? RESULT_INTRO_LINE_RETAKE : undefined}
+        />
+      </div>
+    );
+  }
+
+  if (screen === "skilltest_retake") {
+    return (
+      <div className="app-shell">
+        <LinMoRetakeIntroScreen
+          displayName={profile?.display_name}
+          onStart={handleRetakeStart}
+          onCancel={goBack}
+        />
       </div>
     );
   }
@@ -602,6 +663,9 @@ export default function App() {
       )}
       {screen === "leaderboard" && <LeaderboardScreen myId={myId} onExit={goBack} />}
       {screen === "profile" && <ProfileScreen myId={myId} onExit={goBack} onNavigate={navigate} />}
+      {screen === "skilltest_view" && (
+        <SkillTestReviewScreen myId={myId} onExit={goBack} onRetake={() => navigate("skilltest_retake")} />
+      )}
       {screen === "history" && <MatchHistoryScreen myId={myId} onExit={goBack} />}
       {screen === "game" && <OnlineGame roomId={roomId} myId={myId} onExit={goMenu} onMatched={handleMatched} />}
 

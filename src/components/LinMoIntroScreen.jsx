@@ -9,12 +9,17 @@ import {
 // 对话框和输入框浮在上面。第一步问名字,确认之后(onNameConfirm 把
 // 名字写库)停在同一个场景里,换一句台词邀请棋力测试;棋力测试本身
 // 可以跳过("改天吧"),但见面这一步跟原来的昵称确认一样,没有出口。
-export default function LinMoIntroScreen({ initialName, onNameConfirm, onStartTest, onSkipTest }) {
-  const [step, setStep] = useState("name"); // 'name' | 'invite'
+//
+// initialStep='invite':网页版用户名密码注册的账号,注册那一步已经
+// 手动填过名字了,不需要再问一遍——直接从"邀请测试"这一步开始,
+// initialName 这时候传进来的就是注册时填的用户名,直接当"已确认的
+// 名字"用。
+export default function LinMoIntroScreen({ initialName, initialStep = "name", onNameConfirm, onStartTest, onSkipTest }) {
+  const [step, setStep] = useState(initialStep); // 'name' | 'invite'
   const [name, setName] = useState(initialName || "");
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [confirmedName, setConfirmedName] = useState("");
+  const [confirmedName, setConfirmedName] = useState(initialStep === "invite" ? (initialName || "") : "");
 
   const trimmed = name.trim();
   const valid = trimmed.length >= 1 && trimmed.length <= 20;

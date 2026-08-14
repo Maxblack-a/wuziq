@@ -10,8 +10,28 @@ export const GREETING_LINES = [
 export const NAME_PROMPT_LINE = "你好,我叫林墨。你叫什么名字啊?";
 export const NAME_HINT = "林墨会记住这个名字";
 
+// 复测(从"我的"页面主动发起,不是新用户见面那一次)用的招呼语——不用
+// 再问名字,林墨已经认识你了,语气上要体现"认识"和"再来一次"这两点,
+// 跟第一次见面的陌生感区分开。
+export function retakeGreetingLine(name) {
+  const n = name ? name : "";
+  const variants = [
+    `${n}又来啦?这次让我再看看你的棋。`,
+    `想再测一次?行啊,${n},来吧。`,
+    `${n},好久没在棋盘前见你了——要不要再下一局?`,
+  ];
+  return variants[Math.floor(Math.random() * variants.length)];
+}
+
+export const RETAKE_ACCEPT_LABEL = "开始";
+export const RETAKE_CANCEL_LABEL = "再想想";
+
 export function inviteLine(name) {
-  return `${name},既然认识了名字,那我倒想看看你的棋——陪我下一局?`;
+  const variants = [
+    `${name},既然认识了名字,那我倒想看看你的棋——陪我下一局?`,
+    `${name},棋馆刚好没什么人,要不要下一局?我来陪你。`,
+  ];
+  return variants[Math.floor(Math.random() * variants.length)];
 }
 
 export const INVITE_ACCEPT_LABEL = "好啊";
@@ -20,34 +40,49 @@ export const INVITE_SKIP_LABEL = "改天吧";
 export const SKIP_RESPONSE_LINE = "行,那就改天。棋馆一直都在。";
 
 // 测试局过程中的即时点评——只在关卡触发/结束这几个明确时机说,不是
-// 每一步都插话。每个 key 下给 2 条候选,随机挑一条,避免每次都一样。
+// 每一步都插话。每个 key 下多备几条候选,随机挑一条,尽量别让老玩家
+// 第二次测试(或者旁边看直播的人)一眼就看出是在念固定台词。
 export const IN_GAME_LINES = {
   defense_trigger: [
     "这边,我随手落一子。",
     "嗯,该你了。",
+    "我下这里,你看看。",
+    "轮到你了。",
   ],
   defense_hit: [
     "反应挺快。",
     "看来这个你很熟。",
+    "挡得很干净。",
+    "嗯,这手不错。",
   ],
   defense_partial: [
     "挡是挡住了。",
     "算是防住了,不算最干净的那种。",
+    "有惊无险。",
+    "这样也行,不算最优。",
   ],
   defense_miss: [
     "你刚才是不是犹豫了一下?",
     "……这里其实有点危险。",
+    "这边你好像没太留意。",
+    "嗯,这里我可以走了。",
   ],
   offense_hit: [
     "两条线一起来,可以。",
     "这一手,我倒没想到。",
+    "两边都顾上了,厉害。",
+    "这个组合,挺干净的。",
   ],
   global_trigger: [
     "这边我也走一步。",
     "棋盘上不止一处,你留意一下。",
+    "别只看着这一块。",
+    "我这边动一下。",
   ],
   game_start: [
     "你先来吧,我看看。",
+    "开始了,你随意。",
+    "第一步,你来。",
   ],
 };
 
@@ -60,6 +95,7 @@ export function pickInGameLine(key) {
 // 结果揭晓:开场白 + 每种类型对应一句"点评"(不是解释规则,是像真的在
 // 复盘这盘棋一样说一句有信息量的话)
 export const RESULT_INTRO_LINE = "下完了。让我想想怎么说……";
+export const RESULT_INTRO_LINE_RETAKE = "又下完一局。有些地方跟我记得的不太一样了。";
 
 export const TYPE_COMMENT = {
   attack: "你几乎每一步都在往前顶,棋盘上留给自己的退路不多——但也正因为这样,我没什么喘息的机会。",

@@ -3,9 +3,10 @@ import { supabase, uploadAvatar } from "../lib/supabase";
 import { isInTelegram, useTelegramBackButton } from "../lib/telegram";
 import {
   IconPencil, IconCheck, IconClose, IconChevronLeft, IconChevronRight,
-  IconCamera, IconAvatarFallback, IconFriends, IconTrophy,
+  IconCamera, IconAvatarFallback, IconFriends, IconTrophy, IconRadar,
 } from "./Icons";
 import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
+import { TYPE_DEFS } from "../lib/skillProfile";
 
 // "我的"页面:改成一个轻量的个人信息卡(头像/昵称/经验值)+ 两个可点击
 // 跳详情的入口(好友列表、战绩),不再把好友列表、完整对局记录都直接
@@ -177,6 +178,21 @@ export default function ProfileScreen({ myId, onExit, onNavigate }) {
         <div style={{ flex: 1 }}>
           <div className="title">战绩</div>
           <div className="desc">{profile.wins}胜 {profile.losses}负 {profile.draws}平 · 点击查看详情</div>
+        </div>
+        <div className="muted" style={{ display: "flex" }}><IconChevronRight /></div>
+      </button>
+
+      {/* 棋力测试(林墨)入口:任何状态都显示——没测过/跳过了引导去测,
+          测过了显示当次类型,点进去还能再测一次 */}
+      <button className="mode-card" style={{ marginTop: 10 }} onClick={() => onNavigate?.("skilltest_view")}>
+        <div className="icon"><IconRadar /></div>
+        <div style={{ flex: 1 }}>
+          <div className="title">棋风</div>
+          <div className="desc">
+            {profile.skill_test_status === "completed"
+              ? `${(TYPE_DEFS[profile.skill_test_type] || TYPE_DEFS.balanced).name} · 林墨的棋力测试结果`
+              : "还没测过 · 点击去测一下"}
+          </div>
         </div>
         <div className="muted" style={{ display: "flex" }}><IconChevronRight /></div>
       </button>

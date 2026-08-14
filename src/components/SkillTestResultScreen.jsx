@@ -58,7 +58,9 @@ function RadarChart({ dims }) {
 }
 
 // profile: computeSkillProfile 的返回值。onContinue: 揭晓看完,继续原来该走的路由。
-export default function SkillTestResultScreen({ profile, onContinue }) {
+// continueLabel: 按钮文案,测完当场揭晓用"继续"(默认),从"我的"页面回看
+// 历史结果时外部会传"返回"进来,复用同一个组件不用另外再画一份。
+export default function SkillTestResultScreen({ profile, onContinue, continueLabel, introLine }) {
   const { dims, typeInfo, type } = profile;
 
   return (
@@ -68,7 +70,7 @@ export default function SkillTestResultScreen({ profile, onContinue }) {
           <img src="/linmo-portrait.webp" alt="林墨" />
         </div>
         <div className="result-linmo-bubble">
-          <p style={{ marginBottom: 4, color: "var(--fg-muted)", fontSize: 12 }}>{RESULT_INTRO_LINE}</p>
+          <p style={{ marginBottom: 4, color: "var(--fg-muted)", fontSize: 12 }}>{introLine || RESULT_INTRO_LINE}</p>
           <p>{resultLine(type)}</p>
         </div>
       </div>
@@ -94,7 +96,7 @@ export default function SkillTestResultScreen({ profile, onContinue }) {
       </div>
 
       <button className="btn-primary" style={{ width: "100%", marginTop: "var(--space-6)" }} onClick={onContinue}>
-        {RESULT_CONTINUE_LABEL}
+        {continueLabel || RESULT_CONTINUE_LABEL}
       </button>
     </div>
   );

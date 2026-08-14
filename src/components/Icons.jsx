@@ -25,6 +25,15 @@ export function IconTrophy({ size = 20 }) {
   );
 }
 
+export function IconRadar({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l8 4.6v8.8L12 21l-8-4.6V7.6L12 3z" />
+      <path d="M12 3v9M12 12l8-4.4M12 12l-8-4.4M12 12l4 8.2M12 12l-4 8.2" />
+    </svg>
+  );
+}
+
 export function IconProfile({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
