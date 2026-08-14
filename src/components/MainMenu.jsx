@@ -1,7 +1,72 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import RulesModal from "./RulesModal";
 import { IconRules, IconRobot, IconArrowRight, IconAvatarFallback } from "./Icons";
 import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
+
+/* 临时调试面板:排查线上"色差"问题专用,不用开发者工具,截图就能看到
+   浏览器实际生效(computed)的颜色值——不是源码里写的值,是浏览器最终
+   算出来、真正拿去画在屏幕上的值,所以能排除"部署的是不是新文件"这类
+   疑问。只有 URL 带 ?debug=1 时才显示,不影响正常用户看到的页面。
+   排查完这次的问题之后可以整段删掉(包括上面这个 import 里的
+   useEffect/useRef,以及下面 <DebugBadge /> 那一行)。 */
+function DebugBadge({ heroRef }) {
+  const [info, setInfo] = useState(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const hero = heroRef.current;
+      if (!hero) return;
+      const heroStyle = getComputedStyle(hero);
+      const shellEl = hero.closest(".app-shell-menu");
+      const shellStyle = shellEl ? getComputedStyle(shellEl) : null;
+      const heroRect = hero.getBoundingClientRect();
+      // 在 hero 容器底边正下方 6px 取一个真实存在的元素,看那里的背景色
+      const belowPoint = document.elementFromPoint(
+        window.innerWidth / 2,
+        Math.min(heroRect.bottom + 6, window.innerHeight - 1)
+      );
+      const belowStyle = belowPoint ? getComputedStyle(belowPoint) : null;
+
+      setInfo({
+        w: window.innerWidth,
+        h: window.innerHeight,
+        dpr: window.devicePixelRatio,
+        heroBottom: Math.round(heroRect.bottom),
+        heroBg: heroStyle.backgroundImage.slice(0, 90),
+        shellBg: shellStyle ? shellStyle.backgroundImage.slice(0, 90) : "n/a",
+        belowTag: belowPoint ? belowPoint.className || belowPoint.tagName : "n/a",
+        belowBg: belowStyle ? belowStyle.backgroundColor : "n/a",
+      });
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [heroRef]);
+
+  if (!info) return null;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        left: 4,
+        right: 4,
+        bottom: 4,
+        zIndex: 9999,
+        background: "rgba(0,0,0,0.82)",
+        color: "#7CFC9A",
+        fontFamily: "monospace",
+        fontSize: "9px",
+        lineHeight: 1.5,
+        padding: "6px 8px",
+        borderRadius: "6px",
+        whiteSpace: "pre-wrap",
+        wordBreak: "break-all",
+        pointerEvents: "none",
+      }}
+    >
+      {`viewport: ${info.w}x${info.h}  dpr:${info.dpr}\nhero.bottom: ${info.heroBottom}px\nhero-full-bleed bg: ${info.heroBg}\napp-shell-menu bg: ${info.shellBg}\nelement right below hero: ${info.belowTag}\n  -> its bg-color: ${info.belowBg}`}
+    </div>
+  );
+}
 
 export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
   const [showRules, setShowRules] = useState(false);
@@ -9,15 +74,20 @@ export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
   const title = titleForExp(exp ?? 0);
   // 当前阶内的进度,用于顶栏身份牌下方的小进度条
   const progressPct = Math.min(95, Math.max(8, progressPctForExp(exp)));
+  const heroRef = useRef(null);
+  const showDebug =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("debug") === "1";
 
   return (
     <div>
+      {showDebug && <DebugBadge heroRef={heroRef} />}
       {/* 品牌区整体全出血(横向撑满屏幕,不受 app-shell 左右内边距限制):
           图片是真正的背景,不是一张"贴上去"的卡片——顶栏和标题文字都
           浮在这张背景之上,内部再用 hero-full-bleed-inner 把内容拉回
           和页面其他内容对齐的左右边距,这样文字/图标位置不变,只有
           背景图本身是通到屏幕两侧的。 */}
-      <div className="hero-full-bleed">
+      <div className="hero-full-bleed" ref={heroRef}>
         {/* 原图是没压缩过的 2MB PNG(1024×1535),每次进首页都要重新拉这么
             大一张图,弱网/首次打开时会有明显的空白/延迟。换成体积小两个
             数量级的 WebP(~27KB,大多数 Telegram 内置浏览器和现代手机
