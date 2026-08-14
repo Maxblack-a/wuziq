@@ -75,9 +75,9 @@ export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
   // 当前阶内的进度,用于顶栏身份牌下方的小进度条
   const progressPct = Math.min(95, Math.max(8, progressPctForExp(exp)));
   const heroRef = useRef(null);
-  const showDebug =
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("debug") === "1";
+  // 临时排查阶段:先不依赖 URL 参数,直接显示,排除"参数有没有传到页面"
+  // 这个变量本身。确认问题后记得把这行连同 DebugBadge 一起删掉。
+  const showDebug = true;
 
   return (
     <div>
