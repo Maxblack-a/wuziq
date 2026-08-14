@@ -44,7 +44,14 @@
 /* 见 MainMenu.jsx 里对应注释:压暗棋盘投影到按钮之间那段留白,把图片
    自带的桌面高光收束成有意为之的"聚光"效果,不再是突兀的亮色块。
    叠在图片之上、正文内容之下(DOM 顺序在 hero-scene-bg 之后、
-   hero-full-bleed-inner 之前,同为默认层叠顺序,后者盖住前者)。 */
+   hero-full-bleed-inner 之前,同为默认层叠顺序,后者盖住前者)。
+   注意:.hero-full-bleed 的盒子高度是按图片原始比例撑出来的,比"开始
+   对局"按钮还要往下多出一截(这一截会跟 .secondary-row 在几何上重叠,
+   secondary-row 那边已经单独给了更高的层级,这块本身不会再盖住卡片,
+   但卡片两侧露出来的缝隙还是能看到这一截的颜色)。所以这层渐变过了
+   按钮的位置之后必须转回透明,让缝隙里露出来的是 hero-full-bleed 自己
+   那层跟页面底色接近的占位色,而不是停在很暗的墨色上,跟卡片外的暖
+   褐色页面背景脱节。 */
 .hero-bottom-vignette {
   position: absolute;
   inset: 0;
@@ -54,9 +61,11 @@
     to bottom,
     transparent 0%,
     transparent 46%,
-    rgba(28, 20, 13, 0.22) 68%,
-    rgba(23, 23, 23, 0.55) 92%,
-    rgba(23, 23, 23, 0.62) 100%
+    rgba(28, 20, 13, 0.22) 66%,
+    rgba(23, 23, 23, 0.55) 78%,
+    rgba(23, 23, 23, 0.5) 88%,
+    rgba(23, 23, 23, 0.12) 95%,
+    transparent 100%
   );
 }
 
@@ -413,6 +422,16 @@
   display: flex;
   gap: var(--space-3);
   margin-top: var(--space-2);
+  /* .hero-full-bleed 的实际盒子高度是按图片原始比例撑出来的(远比棋盘
+     视觉内容本身高),而 .cta-primary 又用负 margin 把后面的正常流内容
+     往上拉,拉到跟 hero-full-bleed 的盒子在几何上重叠。.hero-full-bleed
+     有 position: relative(哪怕没写 z-index),按 CSS 层叠规则就已经
+     高于普通静态定位元素——这块 .secondary-row 之前没有自己的定位/
+     层级,重叠区域里就被 hero-full-bleed 盖在了上面,只是之前露出来的
+     刚好是图片本身偏亮的色调,不仔细看不容易发现。给它一个明确高于
+     hero-full-bleed 的层级,从根上解决,不依赖两边颜色恰好凑巧接近。 */
+  position: relative;
+  z-index: 2;
 }
 
 .secondary-card {
@@ -487,6 +506,11 @@
   font-size: 12px;
   letter-spacing: 0.14em;
   color: var(--text-secondary);
+  /* 跟 .secondary-row 同样的原因:更窄的屏幕宽度下 hero-full-bleed 的
+     盒子(按图片比例撑出来的)可能延伸到这里,需要同样明确的层级
+     才能保证任何屏幕宽度下都不会被盖住。 */
+  position: relative;
+  z-index: 2;
 }
 
 .tagline-line {
