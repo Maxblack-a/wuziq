@@ -49,7 +49,7 @@ function DebugBadge({ heroRef }) {
         position: "fixed",
         left: 4,
         right: 4,
-        bottom: 4,
+        top: 4,
         zIndex: 9999,
         background: "rgba(0,0,0,0.82)",
         color: "#7CFC9A",
