@@ -21,25 +21,8 @@
      一瞬间还是会有图片还没下载完的空档——用从图片本身取样出来的
      主色调铺一层渐变占位,这段空档看到的是跟图片基本同色系的底色,
      而不是一块突兀的白/灰,图片加载完之后盖上去几乎看不出切换的
-     痕迹。
-     之前这里 100% 停在一个写死的十六进制颜色,想凑一个跟它正下方
-     .app-shell-menu 一样的颜色——但 .app-shell-menu 那层背景本身带
-     radial-gradient,颜色会随容器宽高比、内容长度变化,写死的颜色
-     只能保证在某一个特定尺寸下对得上,换个宽度(比如 Telegram 里
-     实测的 384px)就会对不上,而且就算数值对上了,两条曲线的走向
-     (一条在变亮、一条在变暗)在交界处相反,会形成一个"先亮后暗"的
-     尖峰,看着像两块背景硬接在一起。
-     这里改成在图片有效内容结束后(70% 左右,棋盘/文字/ONLINE 状态
-     都已经展示完)就淡出到完全透明,不再用任何颜色去"接" —— 这样
-     露出来的就是 .app-shell-menu 自己那层背景本身,不管它在哪个宽度
-     下是什么颜色、往哪个方向变化,衔接的都是同一层东西,不存在两条
-     曲线对不齐的问题。 */
-  background: linear-gradient(
-    180deg,
-    #EFE4D2 0%,
-    #D8C29E 55%,
-    rgba(216, 194, 158, 0) 78%
-  );
+     痕迹 */
+  background: linear-gradient(180deg, #EFE4D2 0%, #C9B497 60%, #A79683 100%);
 }
 
 .hero-scene-bg {
@@ -56,33 +39,6 @@
      只淡出图片本身最后一截,在线状态行叠在它上面的稳定色区,不受影响 */
   mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
   -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
-}
-
-/* 见 MainMenu.jsx 里对应注释:压暗棋盘投影到按钮之间那段留白,把图片
-   自带的桌面高光收束成有意为之的"聚光"效果,不再是突兀的亮色块。
-   叠在图片之上、正文内容之下(DOM 顺序在 hero-scene-bg 之后、
-   hero-full-bleed-inner 之前,同为默认层叠顺序,后者盖住前者)。
-   注意:.hero-full-bleed 的盒子高度是按图片原始比例撑出来的,比"开始
-   对局"按钮还要往下多出一截(这一截会跟 .secondary-row 在几何上重叠,
-   secondary-row 那边已经单独给了更高的层级,这块本身不会再盖住卡片,
-   但卡片两侧露出来的缝隙还是能看到这一截的颜色)。所以这层渐变过了
-   按钮的位置之后必须转回透明,让缝隙里露出来的是 hero-full-bleed 自己
-   那层跟页面底色接近的占位色,而不是停在很暗的墨色上,跟卡片外的暖
-   褐色页面背景脱节。 */
-.hero-bottom-vignette {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    transparent 46%,
-    rgba(28, 20, 13, 0.22) 66%,
-    rgba(23, 23, 23, 0.55) 76%,
-    rgba(23, 23, 23, 0.4) 82%,
-    transparent 90%
-  );
 }
 
 .hero-full-bleed-inner {
@@ -438,16 +394,6 @@
   display: flex;
   gap: var(--space-3);
   margin-top: var(--space-2);
-  /* .hero-full-bleed 的实际盒子高度是按图片原始比例撑出来的(远比棋盘
-     视觉内容本身高),而 .cta-primary 又用负 margin 把后面的正常流内容
-     往上拉,拉到跟 hero-full-bleed 的盒子在几何上重叠。.hero-full-bleed
-     有 position: relative(哪怕没写 z-index),按 CSS 层叠规则就已经
-     高于普通静态定位元素——这块 .secondary-row 之前没有自己的定位/
-     层级,重叠区域里就被 hero-full-bleed 盖在了上面,只是之前露出来的
-     刚好是图片本身偏亮的色调,不仔细看不容易发现。给它一个明确高于
-     hero-full-bleed 的层级,从根上解决,不依赖两边颜色恰好凑巧接近。 */
-  position: relative;
-  z-index: 2;
 }
 
 .secondary-card {
@@ -522,11 +468,6 @@
   font-size: 12px;
   letter-spacing: 0.14em;
   color: var(--text-secondary);
-  /* 跟 .secondary-row 同样的原因:更窄的屏幕宽度下 hero-full-bleed 的
-     盒子(按图片比例撑出来的)可能延伸到这里,需要同样明确的层级
-     才能保证任何屏幕宽度下都不会被盖住。 */
-  position: relative;
-  z-index: 2;
 }
 
 .tagline-line {

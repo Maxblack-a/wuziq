@@ -25,6 +25,11 @@ import {
 import { initTelegram, isInTelegram, getInitData, getStartParam, getTelegramUserId } from "./lib/telegram";
 import { initPresence } from "./lib/presence";
 
+// ⚠️ 调试用开关:改成 true 之后,不管账号昵称/棋力测试状态是什么,
+// 每次登录成功都会强制停在"认识林墨"这个见面场景,方便反复测试效果。
+// 正式发布前记得改回 false,不然所有用户每次打开都会被拦在这一页。
+const DEBUG_ALWAYS_SHOW_LINMO = true;
+
 export default function App() {
   const [myId, setMyId] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -278,6 +283,11 @@ export default function App() {
       // 昵称没确认过 -> 走完整流程(问名字+邀请);昵称确认过但棋力测试
       // 还没问过(pending,包括老账号第一次跑到这个新功能上线之后) ->
       // 跳过问名字,直接从"邀请测试"这一步开始。
+      if (DEBUG_ALWAYS_SHOW_LINMO) {
+        setLinmoIntroStep("name");
+        setScreen("nickname");
+        return;
+      }
       if (!cachedProfile?.nickname_confirmed) {
         setLinmoIntroStep("name");
         setScreen("nickname");
@@ -589,6 +599,8 @@ export default function App() {
         <LinMoIntroScreen
           initialName={profile?.display_name || ""}
           initialStep={linmoIntroStep}
+          exp={profile?.exp}
+          avatarUrl={profile?.avatar_url}
           onNameConfirm={handleNicknameConfirmed}
           onStartTest={handleSkillTestStart}
           onSkipTest={handleSkillTestSkip}
@@ -622,6 +634,8 @@ export default function App() {
       <div className="app-shell">
         <LinMoRetakeIntroScreen
           displayName={profile?.display_name}
+          exp={profile?.exp}
+          avatarUrl={profile?.avatar_url}
           onStart={handleRetakeStart}
           onCancel={goBack}
         />

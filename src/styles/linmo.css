@@ -1,22 +1,31 @@
 /* ============================================================
    林墨见面场景(替代原来纯表单式的"确认昵称"页)
-   图片是真正的背景(全出血,横向撑满屏幕),对话框和输入框浮在上面——
-   不是往界面里插一张图,是直接拿图当背景来做版式,跟首页 hero 图
-   同一个思路,复用同一套"picture + webp/jpg 兜底"写法。
+   图片是真正的背景(全出血,不是插入的图片),对话框/输入框浮在上面。
+
+   关键结构说明(参考设计图的实际排版,不是"顶部品牌区+底部对话"这种
+   上下堆叠结构):
+   - 背景照片本身就是"左亮右暗"的构图——左边是浅色棋馆/竹叶背景,
+     右边是人物暗调半身像。这个明暗对比是照片自带的,不需要额外叠加
+     黑色渐变遮罩去"造"可读性;文字色到底用深色还是浅色,取决于文字
+     具体落在图片的哪个区域(左边深色字、顶栏浅色字)。
+   - 顶栏(身份牌 + 好友/排行榜/我的)横跨整个宽度,贴在图片最上方——
+     这一条无论落在左边浅色区还是右边人物暗调区,顶部都有统一的暗
+     渐变,浅色文字全程可读。
+   - 真正的内容(品牌区 + 对话 + 输入框 + 按钮)是一条贴左对齐的窄列,
+     宽度大约图片宽度的 44%,压在左边那块浅色区域上,深色文字——
+     不是居中,也不是占满整个宽度。
+   - "你好,我叫林墨…你叫什么名字啊?"这两句是直接写在背景上的深色
+     字,没有气泡框;只有第一句招呼("哎,你就是那个新来的棋手吧")
+     是真正带气泡的。
    ============================================================ */
 .linmo-scene {
   position: relative;
   width: calc(100% + var(--space-4) * 2);
   margin-left: calc(-1 * var(--space-4));
   margin-right: calc(-1 * var(--space-4));
-  /* 高度严格跟随原图比例(941:1672),跟首页 hero 图同一个思路——不用
-     固定/vh 撑高度,那样在不同屏幕比例下会裁切或拉伸背景里的人物构图 */
   aspect-ratio: 941 / 1672;
   overflow: hidden;
-  background: linear-gradient(180deg, #2A2118 0%, #1C1712 60%, #120E0A 100%);
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  background: #1C1712;
 }
 
 .linmo-scene-bg {
@@ -31,58 +40,179 @@
   user-select: none;
 }
 
-/* 底部叠一层渐深的暗遮罩,保证不管背景图哪块区域,叠在上面的白字
-   对话框和输入框都还能看得清楚——人物立绘本身偏暗色调,但棋馆背景
-   里有不少浅色区域,不压一层遮罩的话文字对比度不稳定 */
+/* 只在最顶上留一条很浅的暗角,保证顶栏(不管落在左边浅色区还是右边
+   人物区)文字对比度都够——不是覆盖全图的渐变 */
 .linmo-scene::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, transparent 0%, transparent 38%, rgba(18, 14, 10, 0.55) 62%, rgba(14, 11, 8, 0.88) 100%);
+  background: linear-gradient(180deg, rgba(10, 8, 6, 0.55) 0%, rgba(10, 8, 6, 0.15) 12%, transparent 22%);
   z-index: 1;
   pointer-events: none;
 }
 
-.linmo-scene-content {
-  position: relative;
+.linmo-scene-topbar {
+  position: absolute;
   z-index: 2;
-  padding: var(--space-4) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.linmo-scene-topbar .identity-level { color: #F5F0E6; }
+.linmo-scene-topbar .identity-exp-text { color: rgba(245, 240, 230, 0.7); }
+.linmo-scene-topbar .identity-progress-track { background: rgba(245, 240, 230, 0.25); }
+
+.linmo-nav {
+  display: flex;
+  gap: var(--space-4);
+}
+.linmo-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: #F5F0E6;
+  font-size: 11px;
+}
+
+/* 左侧内容窄列——宽度按参考图比例大致是整张图的 44%,贴左对齐,
+   压在背景照片天然偏亮的那一侧 */
+.linmo-scene-column {
+  position: absolute;
+  z-index: 2;
+  top: 19%;
+  left: 0;
+  width: 45%;
+  padding: 0 0 0 var(--space-4);
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
 
-.linmo-eyebrow {
-  color: var(--gold);
-  font-size: 12px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+.linmo-brand-block {
+  margin-bottom: 2px;
+}
+.linmo-brand-name {
+  color: var(--wood);
   font-family: var(--font-mono);
-  opacity: 0.85;
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  font-weight: 600;
+}
+.linmo-brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.linmo-brand-title-row h1 {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--ink-token);
+  margin: 0;
+}
+.linmo-brand-seal {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #B23B2E;
+  color: #F5F0E6;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-card);
+}
+.linmo-brand-slogan {
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  margin-top: 4px;
 }
 
 .linmo-bubble {
-  background: rgba(245, 240, 230, 0.96);
-  border-radius: var(--radius-md) var(--radius-md) var(--radius-md) 4px;
-  padding: var(--space-4);
-  box-shadow: var(--shadow-modal);
   position: relative;
+  background: rgba(245, 240, 230, 0.96);
+  border: 1px solid rgba(198, 161, 91, 0.35);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-modal);
+  /* 票券式切角,不是普通圆角——四角各斜切一小块 */
+  clip-path: polygon(
+    10px 0, calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px), 0 10px
+  );
+}
+/* 气泡左上角压着的小装饰图标(参考图里是个小花/星形点缀) */
+.linmo-bubble-deco {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  width: 16px;
+  height: 16px;
+  color: var(--gold);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
 }
 
 .linmo-bubble-line {
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--ink-token);
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
-.linmo-bubble-line + .linmo-bubble-line {
-  margin-top: 6px;
+/* "你好,我叫林墨…你叫什么名字啊?"——不带气泡框,直接压在背景的
+   浅色区域上,跟气泡文字同一个字号级别 */
+.linmo-plain-line {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-token);
+  line-height: 1.5;
 }
 
 .linmo-name-highlight {
   color: var(--wood);
+}
+
+.linmo-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.linmo-divider::before,
+.linmo-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(198, 161, 91, 0.7));
+}
+.linmo-divider::after {
+  background: linear-gradient(90deg, rgba(198, 161, 91, 0.7), transparent);
+}
+.linmo-divider-dot {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--gold);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  position: relative;
+}
+.linmo-divider-dot::after {
+  content: "";
+  position: absolute;
+  inset: 2.5px;
+  background: var(--gold);
 }
 
 .linmo-input-row {
@@ -92,44 +222,108 @@
 }
 
 .linmo-input-label {
-  color: rgba(245, 240, 230, 0.75);
+  color: var(--text-secondary);
   font-size: 12px;
   letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
 }
+.linmo-input-label .linmo-diamond { margin-left: 0; }
 
+.linmo-input-wrap {
+  position: relative;
+}
 .linmo-input {
   width: 100%;
-  padding: 14px 16px;
-  font-size: 17px;
-  background: rgba(245, 240, 230, 0.95);
+  padding: 12px 32px 16px 14px;
+  min-height: 44px;
+  font-size: 15px;
+  background: rgba(245, 240, 230, 0.9);
   color: var(--ink-token);
   border: 1px solid rgba(198, 161, 91, 0.5);
   border-radius: var(--radius-md);
+  box-sizing: border-box;
 }
 .linmo-input::placeholder { color: var(--text-secondary); }
+.linmo-input-icon {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  color: var(--gold);
+  opacity: 0.45;
+  pointer-events: none;
+}
 
 .linmo-hint {
-  color: rgba(245, 240, 230, 0.6);
-  font-size: 12px;
+  color: var(--text-secondary);
+  font-size: 11px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
+.linmo-hint-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--gold);
+  flex-shrink: 0;
+}
+
+/* 装饰用的小菱形分隔符,只用在"你的名字"这个标签前面——跟上面
+   linmo-hint 两侧的小圆点是两种不同的点缀,不要混用 */
+.linmo-diamond {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: var(--gold);
+  transform: rotate(45deg);
+  margin: 0 6px 1px;
+  vertical-align: middle;
+}
+
+/* "继续/好啊/开始"这几个主按钮,只在林墨见面场景里用——深色照片
+   背景上要用胶囊形 + 金色描边 + 金色字,跟全局纸色背景上用的
+   .btn-primary(木色底、浅色字)是两套配色,不能共用同一套样式 */
+.linmo-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: rgba(23, 19, 16, 0.92);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 12px 20px;
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+.linmo-cta:disabled { opacity: 0.5; }
+.linmo-cta svg { color: var(--gold); }
 
 .linmo-error {
-  color: #E7B7A8;
+  color: #B23B2E;
   font-size: 12px;
   text-align: center;
 }
 
-.linmo-actions {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-}
 .linmo-actions-row {
   display: flex;
   gap: var(--space-2);
 }
 .linmo-actions-row > * { flex: 1; }
+/* "改天吧"这类次要按钮,在林墨见面场景的深色背景上,原本给纸色背景
+   设计的 .btn-ghost(深色字、浅色描边)基本看不见,需要单独覆盖一套
+   跟场景背景匹配的浅色描边/浅色字版本 */
+.linmo-actions-row .btn-ghost {
+  background: rgba(245, 240, 230, 0.08);
+  color: #F5F0E6;
+  border: 1px solid rgba(245, 240, 230, 0.35);
+  border-radius: 999px;
+}
 
 /* ============================================================
    棋力测试对局页:顶部一条"林墨小像 + 台词气泡"状态条,下面照常复用
