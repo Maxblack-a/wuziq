@@ -181,18 +181,20 @@
   line-height: 1.5;
 }
 
-/* "你好,我叫林墨…你叫什么名字啊?"——不带气泡框,直接压在背景的
-   浅色区域上,跟气泡文字同一个字号级别 */
+/* "你好,我叫林墨…你叫什么名字啊?"——不带气泡框,直接压在背景上。
+   注意:这一行往下,左侧文字列压着的背景已经从"五子棋"标题那一段
+   的浅色区域,过渡到偏暗的棕色区域了——不能再用深色墨字(那是给
+   上面浅色区域用的),这里跟下面的标签/提示文字一样,统一用浅色。 */
 .linmo-plain-line {
   font-family: var(--font-display);
   font-size: 14px;
   font-weight: 600;
-  color: var(--ink-token);
+  color: #F5F0E6;
   line-height: 1.5;
 }
 
 .linmo-name-highlight {
-  color: var(--wood);
+  color: var(--gold);
 }
 
 .linmo-divider {
@@ -233,7 +235,7 @@
 }
 
 .linmo-input-label {
-  color: var(--text-secondary);
+  color: #F5F0E6;
   font-size: 12px;
   letter-spacing: 0.04em;
   display: flex;
@@ -266,7 +268,7 @@
 }
 
 .linmo-hint {
-  color: var(--text-secondary);
+  color: rgba(245, 240, 230, 0.75);
   font-size: 11px;
   text-align: center;
   display: flex;
