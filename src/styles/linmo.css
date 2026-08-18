@@ -23,8 +23,14 @@
   width: calc(100% + var(--space-4) * 2);
   margin-left: calc(-1 * var(--space-4));
   margin-right: calc(-1 * var(--space-4));
+  /* 只用这一张图,不叠加、不裁切、不留白:严格按图片原始比例
+     (941:1672)撑出高度,图片保持完整、不变形。如果这个高度超出了
+     当前屏幕/窗口能显示的范围,交给外层容器去滚动(下面
+     flex-shrink:0 + 不设 overflow:hidden 就是为了不挡住这个滚动),
+     用户往下滑就能看到按钮——矮屏幕下需要滑一下,是"图片必须完整、
+     不裁不留白"这个前提下唯一剩下的办法。 */
   aspect-ratio: 941 / 1672;
-  overflow: hidden;
+  flex-shrink: 0;
   background: #1C1712;
 }
 
@@ -33,8 +39,6 @@
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
-  object-position: top center;
   z-index: 0;
   pointer-events: none;
   user-select: none;
@@ -51,6 +55,12 @@
   pointer-events: none;
 }
 
+/* 顶栏(身份牌 + 好友/排行榜/我的)已经拿掉了——这个页面出现的时候
+   用户昵称都还没确认,这些入口本来就没有实际内容,而且占掉的顶部
+   空间对矮屏幕/矮窗口很不友好,去掉之后能省出接近顶部 15%~20% 的
+   高度,让整张卡片需要的总高度变矮,减少"需要往下滑才能看到按钮"
+   的情况。相关的 .linmo-scene-topbar / .linmo-nav 样式先留着不删,
+   万一以后要在别处复用同一套顶栏样式。 */
 .linmo-scene-topbar {
   position: absolute;
   z-index: 2;
@@ -81,11 +91,12 @@
 }
 
 /* 左侧内容窄列——宽度按参考图比例大致是整张图的 44%,贴左对齐,
-   压在背景照片天然偏亮的那一侧 */
+   压在背景照片天然偏亮的那一侧。top 从原来的 19%(给顶栏让位)
+   收紧到 6%,紧贴顶部,把顶栏空出来的高度让给实际内容。 */
 .linmo-scene-column {
   position: absolute;
   z-index: 2;
-  top: 19%;
+  top: 6%;
   left: 0;
   width: 45%;
   padding: 0 0 0 var(--space-4);

@@ -251,8 +251,8 @@ export default function App() {
     // 访客登录)之后共用的收尾逻辑:写 myId、上线报到、补历史通知、
     // 按昵称确认状态决定去"确认昵称"页还是直接往下路由。单独拆出来,
     // 好在 WebAuthScreen 登录成功的回调里复用同一份,不用抄一遍。
-    async function afterLogin(uid) {
-      const cachedProfile = await refreshProfile(uid);
+    async function afterLogin(uid, preloadedProfile) {
+      const cachedProfile = preloadedProfile || await refreshProfile(uid);
 
       // 单设备登录:如果这个账号已经确立过 session(active_session_id 不为
       // 空),而我本地存的最后一次 session_id 对不上,说明在我不知情的
@@ -307,11 +307,18 @@ export default function App() {
         // 但要核对一下:这个缓存的账号,是不是真的对应当前打开 App 的这个 Telegram 用户——
         // 同一设备如果切换过 Telegram 账号,不能盲目沿用上一个人的登录态。
         let uid = await getExistingUserId();
+        // 免密登录这条路径下面已经查过一次账号资料了(核对 Telegram 账号有没有换过),
+        // 查到的结果顺手存下来传给 afterLogin,不用它再重复查一遍同样的数据——
+        // 之前这里漏了这层复用,导致每次用 Telegram Mini App 免密打开都要多等
+        // 一轮网络请求,这也是"每次打开都很慢"最主要的原因。
+        let preloadedProfile = null;
         if (uid && isInTelegram) {
           const cachedProfile = await refreshProfile(uid);
+          preloadedProfile = cachedProfile;
           const currentTgId = getTelegramUserId();
           if (currentTgId && cachedProfile?.telegram_id && String(cachedProfile.telegram_id) !== String(currentTgId)) {
             uid = null; // 对不上,丢弃缓存,走下面的完整登录
+            preloadedProfile = null;
           }
         }
         if (!uid) {
@@ -329,7 +336,7 @@ export default function App() {
             return;
           }
         }
-        await afterLogin(uid);
+        await afterLogin(uid, preloadedProfile);
       } catch (e) {
         console.error("登录失败", e);
         setScreen("menu");
