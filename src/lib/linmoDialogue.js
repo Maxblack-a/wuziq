@@ -26,15 +26,59 @@ export function retakeGreetingLine(name) {
 export const RETAKE_ACCEPT_LABEL = "开始";
 export const RETAKE_CANCEL_LABEL = "再想想";
 
-export function inviteLine(name) {
-  const variants = [
-    `${name},既然认识了名字,那我倒想看看你的棋——陪我下一局?`,
-    `${name},棋馆刚好没什么人,要不要下一局?我来陪你。`,
-  ];
-  return variants[Math.floor(Math.random() * variants.length)];
+// 邀请下第一局测试局:按玩家昵称的"感觉"给一句克制、自然的反馈,
+// 再顺势带出"想看看你的棋"这个邀请——目标是让玩家觉得"林墨对我这个
+// 人有点兴趣,想跟我下一局",而不是"系统提示我去完成一个棋力测试
+// 任务"。所以全程不出现"测试""棋力"这类系统化的词。
+//
+// 昵称分类只是一个粗略的启发式判断,不追求完全准确——判断错了也没
+// 关系,反馈本身写得足够克制、留有余地,不会显得像在下断言。
+function categorizeNickname(name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed) return "special";
+  const chars = Array.from(trimmed);
+  // 叠字/重复模式(比如"夏夏""KK""洋洋"),这类昵称通常给人的感觉
+  // 比较可爱、亲切,优先判断
+  if (chars.length >= 2 && chars.length % 2 === 0) {
+    const half = chars.length / 2;
+    const first = chars.slice(0, half).join("");
+    const second = chars.slice(half).join("");
+    if (first.toLowerCase() === second.toLowerCase()) return "cute";
+  }
+  if (chars.length <= 2) return "simple";
+  return "special";
 }
 
-export const INVITE_ACCEPT_LABEL = "好啊";
+const NAME_REACTION_LINES = {
+  cute: [
+    "这个名字听起来挺可爱的。",
+    "这名字,有点意思,挺可爱。",
+  ],
+  special: [
+    "这个名字挺特别。",
+    "这名字,倒是第一次听到。",
+  ],
+  simple: [
+    "简单的名字,也很有记忆点。",
+    "名字挺干脆。",
+  ],
+};
+
+const NAME_INVITE_FOLLOWUPS = [
+  "不过,我还挺好奇你的棋力怎么样——要不要和我下一局?",
+  "正好棋馆现在没什么人,陪我下一局?我想看看你的棋。",
+  "既然认识了,那我倒挺想看看你下棋是什么风格的。",
+];
+
+export function inviteLine(name) {
+  const category = categorizeNickname(name);
+  const reactionPool = NAME_REACTION_LINES[category];
+  const reaction = reactionPool[Math.floor(Math.random() * reactionPool.length)];
+  const followup = NAME_INVITE_FOLLOWUPS[Math.floor(Math.random() * NAME_INVITE_FOLLOWUPS.length)];
+  return `${reaction}${followup}`;
+}
+
+export const INVITE_ACCEPT_LABEL = "和林墨下一局";
 export const INVITE_SKIP_LABEL = "改天吧";
 
 export const SKIP_RESPONSE_LINE = "行,那就改天。棋馆一直都在。";
