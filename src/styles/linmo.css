@@ -151,15 +151,21 @@
 
 .linmo-bubble {
   position: relative;
-  background: rgba(245, 240, 230, 0.96);
-  border: 1px solid rgba(198, 161, 91, 0.35);
-  padding: var(--space-3);
-  box-shadow: var(--shadow-modal);
-  /* 票券式切角,不是普通圆角——四角各斜切一小块 */
+  /* 不透明的暖调宣纸色,而不是半透明叠色——跟深色场景照片形成清晰的
+     "信笺压在照片上"的对比,而不是让照片透出来把纸面弄脏 */
+  background: #EFE6D3;
+  border: 1px solid rgba(198, 161, 91, 0.55);
+  padding: var(--space-4) var(--space-3);
+  /* 双层投影:近处一层收紧的暗影贴着卡片给出厚度,远处一层更大更淡
+     的投影把卡片从深色背景照片上"提"起来 */
+  box-shadow:
+    0 1px 2px rgba(23, 17, 10, 0.25),
+    0 14px 32px rgba(10, 8, 5, 0.45);
+  /* 票券式切角,不是普通圆角——四角各斜切一小块,切口比之前更明显 */
   clip-path: polygon(
-    10px 0, calc(100% - 10px) 0, 100% 10px,
-    100% calc(100% - 10px), calc(100% - 10px) 100%,
-    10px 100%, 0 calc(100% - 10px), 0 10px
+    14px 0, calc(100% - 14px) 0, 100% 14px,
+    100% calc(100% - 14px), calc(100% - 14px) 100%,
+    14px 100%, 0 calc(100% - 14px), 0 14px
   );
 }
 /* 气泡左上角压着的小装饰图标(参考图里是个小花/星形点缀) */
@@ -170,7 +176,7 @@
   width: 16px;
   height: 16px;
   color: var(--gold);
-  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
 }
 
 .linmo-bubble-line {
@@ -182,12 +188,13 @@
 }
 
 /* "你好,我叫林墨…你叫什么名字啊?"——不带气泡框,直接压在背景上。
-   注意:这一行往下,左侧文字列压着的背景已经从"五子棋"标题那一段
-   的浅色区域,过渡到偏暗的棕色区域了——不能再用深色墨字(那是给
-   上面浅色区域用的),这里跟下面的标签/提示文字一样,统一用浅色。 */
+   注意两点:①这一行往下,左侧文字列压着的背景已经从"五子棋"标题
+   那一段的浅色区域,过渡到偏暗的棕色区域了,要用浅色字,不能用深色
+   墨字;②实际测过原图像素,这行字比气泡内的文字略大一些(不是同一
+   个字号),不能直接照抄气泡的字号。 */
 .linmo-plain-line {
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   color: #F5F0E6;
   line-height: 1.5;
@@ -304,15 +311,20 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  background: rgba(23, 19, 16, 0.92);
-  border: 1px solid var(--gold);
+  /* 接近纯黑的实底,比之前更沉、更不透——跟金色描边形成更干净利落的
+     对比,而不是让深色场景照片透过来 */
+  background: #100D0A;
+  border: 1px solid rgba(198, 161, 91, 0.9);
   border-radius: 999px;
-  padding: 12px 20px;
+  padding: 13px 22px;
   color: var(--gold);
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: 600;
-  box-shadow: var(--shadow-card);
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.4),
+    0 10px 22px rgba(10, 8, 5, 0.5);
 }
 .linmo-cta:disabled { opacity: 0.5; }
 .linmo-cta svg { color: var(--gold); }
@@ -334,7 +346,9 @@
 .linmo-actions-row .btn-ghost {
   background: rgba(245, 240, 230, 0.08);
   color: #F5F0E6;
-  border: 1px solid rgba(245, 240, 230, 0.35);
+  /* 描边改成跟主按钮同色系的暗金,弱化透明度做区分,让两个按钮看起来
+     是同一套风格里的"主/次"关系,而不是两套不相关的描边色 */
+  border: 1px solid rgba(198, 161, 91, 0.4);
   border-radius: 999px;
 }
 
