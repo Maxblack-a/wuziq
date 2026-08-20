@@ -44,6 +44,14 @@ export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
           />
         </picture>
 
+        {/* 图片本身在棋盘下方那段留白里,天然有一片偏亮的虚焦桌面高光——
+            单独看没问题,但它上面顶着棋盘投影、下面紧贴纯黑的"开始对局"
+            按钮,强对比之下这片高光会被视觉误读成一块"没对齐好的色块"。
+            这里不改图片,叠一层从透明到暗的竖向渐变,把这片高光自然
+            压暗、平滑过渡到按钮的墨色,变成有意为之的"聚光收束"效果,
+            而不是意外露出来的一块背景色。 */}
+        <div className="hero-bottom-vignette" aria-hidden="true" />
+
         <div className="hero-full-bleed-inner">
           {/* 顶栏:左边身份牌(头像+等级+经验值文字),右边只留"规则"
               一个入口——好友/排行榜/我的都已经从顶栏收起,"我的"点左边
