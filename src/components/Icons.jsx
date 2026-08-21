@@ -67,6 +67,45 @@ export function IconRobot({ size = 22 }) {
   );
 }
 
+export function IconCalendarStar({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="5.5" width="16" height="14" rx="3" />
+      <path d="M8 3.5v4M16 3.5v4M4 10h16" />
+      <path d="M12 12.6l.9 1.9 2.1.3-1.5 1.5.35 2.1L12 17.4l-1.85 1L10.5 16.3 9 14.8l2.1-.3.9-1.9z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// 体力值:闪电,每日试炼消耗/展示体力用
+export function IconBolt({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />
+    </svg>
+  );
+}
+
+// 钻石货币:实心刻面宝石,跟 IconDiamondOutline(纯装饰用的小菱形章)
+// 区分开——这个是真正的"货币"图标,要能在数字旁边一眼认出来。
+export function IconGem({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
+      <path d="M6 3h12l4 6-10 12L2 9l4-6z" fill="currentColor" fillOpacity="0.18" />
+      <path d="M2 9h20M8.5 3 6 9l6 12 6-12-2.5-6M6 9l6 3.2L18 9" />
+    </svg>
+  );
+}
+
+// 连胜:火焰,连胜徽章用
+export function IconFlame({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2c1 3-2.5 4.5-2.5 8a4 4 0 1 0 8 0c0-1.5-.8-2.3-1.3-3 .3 2-1 2.8-1.7 2.2.8-2-.5-4-2.5-7.2z" fill="currentColor" fillOpacity="0.18" />
+    </svg>
+  );
+}
+
 export function IconLink({ size = 22 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">

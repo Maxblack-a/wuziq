@@ -1,0 +1,125 @@
+/* ============================================================
+   每日试炼:NPC 对话邀请 / 对局中点评 / 续约协商 / 结算
+   视觉语言跟 menu.css / linmo.css 保持一致(暖宣纸底、深胡桃木强调、
+   鎏金高光),不引入新的配色体系。
+   ============================================================ */
+
+.daily-trial-lobby {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: var(--space-2) 0 var(--space-4);
+}
+
+/* 顶部体力/钻石/连胜的小状态条,不阻断对话流程 */
+.daily-trial-resource-bar {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+.daily-trial-resource-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+}
+.daily-trial-resource-item.win { color: var(--wood); }
+.daily-trial-resource-item.lose { color: var(--text-secondary); }
+
+.daily-trial-npc-card {
+  text-align: center;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+}
+
+.daily-trial-npc-avatar {
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  overflow: hidden;
+  margin: 0 auto var(--space-3);
+  background: var(--wood-soft);
+  border: 2px solid var(--border-token);
+  box-shadow: var(--shadow-card);
+}
+.daily-trial-npc-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.daily-trial-npc-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 20px;
+  color: var(--ink-token);
+}
+
+/* 对话气泡:邀请语/日常闲聊/点评/续约协商共用同一套卡片,line-secondary
+   用更淡的颜色区分"补充的第二句话"(日常闲聊/续约邀请语/拒绝理由),
+   不跟主台词抢视觉重量 */
+.daily-trial-bubble {
+  background: var(--surface);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  margin-top: var(--space-2);
+  box-shadow: var(--shadow-card);
+}
+.daily-trial-bubble-line {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+.daily-trial-bubble-line + .daily-trial-bubble-line {
+  margin-top: var(--space-2);
+}
+.daily-trial-bubble-line-secondary {
+  color: var(--fg-muted);
+  font-size: 13px;
+}
+
+.daily-trial-error-text {
+  text-align: center;
+  font-size: 12px;
+  color: var(--seal-red);
+  margin-top: var(--space-2);
+}
+
+.daily-trial-error {
+  text-align: center;
+  padding: 60px var(--space-4);
+}
+.daily-trial-error p {
+  color: var(--fg-muted);
+  margin-bottom: var(--space-3);
+}
+
+/* ---- 对局结算揭晓(胜/负/平 + 奖励)---- */
+.daily-trial-result {
+  max-width: 360px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-4) var(--space-4);
+  text-align: center;
+}
+
+.daily-trial-reward-row {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+.daily-trial-reward-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--wood-soft);
+  color: var(--wood);
+  font-weight: 600;
+  font-size: 13px;
+}

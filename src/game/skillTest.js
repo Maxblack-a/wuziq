@@ -215,11 +215,9 @@ function recordPlayerMove(board, testState, x, y) {
     }
   }
 
-  // 应变力信号:上一个关卡如果是 miss 或 partial(受挫程度不同,但都算
-  // 遇到了压力),顺手记一下"受挫后几步"的分数走势——原来只认 miss,
-  // 样本太薄,大多数局都测不出这个维度
+  // 应变力信号:如果上一个关卡是 miss,顺手记一下"失误后几步"的分数走势
   const lastCheckpoint = next.checkpoints[next.checkpoints.length - 1];
-  if (lastCheckpoint && (lastCheckpoint.result === "miss" || lastCheckpoint.result === "partial")) {
+  if (lastCheckpoint && lastCheckpoint.result === "miss") {
     const sinceMiss = next.moves.length - lastCheckpoint.triggeredAtMove;
     if (sinceMiss <= 3) {
       lastCheckpoint.recoveryTrend = [...(lastCheckpoint.recoveryTrend || []), moveEntry.attack + moveEntry.defend];

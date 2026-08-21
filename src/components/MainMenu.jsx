@@ -1,6 +1,6 @@
 import { useState } from "react";
 import RulesModal from "./RulesModal";
-import { IconRules, IconRobot, IconArrowRight, IconAvatarFallback } from "./Icons";
+import { IconRules, IconRobot, IconCalendarStar, IconArrowRight, IconAvatarFallback } from "./Icons";
 import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
 
 export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
@@ -116,13 +116,18 @@ export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
         <span className="cta-primary-arrow"><IconArrowRight /></span>
       </button>
 
-      {/* 次级入口:人机挑战。"邀请好友"已经并入上面的主 CTA 流程,
-          这里不再重复放一个入口 */}
+      {/* 次级入口:人机挑战 + 每日试炼,并排展示。"邀请好友"已经并入
+          上面的主 CTA 流程,这里不再重复放一个入口 */}
       <div className="secondary-row fade-in-up" style={{ animationDelay: "200ms" }}>
         <button className="secondary-card" onClick={() => onSelect("pve")}>
           <div className="secondary-card-icon"><IconRobot /></div>
           <div className="secondary-card-title">人机挑战</div>
           <div className="secondary-card-sub">AI MATCH</div>
+        </button>
+        <button className="secondary-card" onClick={() => onSelect("daily")}>
+          <div className="secondary-card-icon"><IconCalendarStar /></div>
+          <div className="secondary-card-title">每日试炼</div>
+          <div className="secondary-card-sub">DAILY QUEST</div>
         </button>
       </div>
 

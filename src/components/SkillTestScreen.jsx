@@ -10,6 +10,15 @@ const THINKING_DELAY = 500; // 固定思考延迟,不用像三档AI那样区分�
 const WIN_REVEAL_DELAY = 1000;
 const DRAW_REVEAL_DELAY = 400;
 
+// 顶部进度条按阶段分 4 段展示(开局采样合并进"防守"之前那一段,不单独占格,
+// 玩家不需要知道"现在在采样开局"这种内部实现细节)
+const PHASE_STEPS = ["defense_watch", "offense_watch", "global_watch", "closing"];
+function phaseStepIndex(phase) {
+  if (phase === "opening") return -1;
+  const idx = PHASE_STEPS.indexOf(phase);
+  return idx === -1 ? PHASE_STEPS.length - 1 : idx;
+}
+
 // onFinish(profile, testState, reason): 测试结束(不管是关卡收集完、撞了步数
 // 上限、还是真的下出了胜负)统一走这一个回调,交给上层决定去结果揭晓页。
 // onAbort: 中途放弃,不产出结果,等同于没测过。
@@ -21,7 +30,7 @@ export default function SkillTestScreen({ onFinish, onAbort }) {
   const [thinking, setThinking] = useState(false);
   const [revealing, setRevealing] = useState(false);
   const [testState, setTestState] = useState(() => skillTestEngine.createTestState());
-  const [currentLine, setCurrentLine] = useState(() => pickInGameLine("game_start"));
+  const [currentLine, setCurrentLine] = useState("你先来吧,我看看。");
   const linmoTimerRef = useRef(null);
   const revealTimerRef = useRef(null);
   const finishedRef = useRef(false); // 防止揭晓延迟期间又触发一次 finalize
@@ -131,6 +140,8 @@ export default function SkillTestScreen({ onFinish, onAbort }) {
     performLinMoMove(afterBoard, recordedState);
   }
 
+  const stepIdx = phaseStepIndex(testState.phase);
+
   return (
     <div>
       <div className="game-layout">
@@ -145,6 +156,11 @@ export default function SkillTestScreen({ onFinish, onAbort }) {
               {thinking && <span className="skilltest-thinking-dots" aria-hidden="true">…</span>}
             </div>
           </div>
+        </div>
+        <div className="skilltest-progress">
+          {PHASE_STEPS.map((step, i) => (
+            <div key={step} className={`skilltest-progress-dot${i < stepIdx ? " done" : i === stepIdx ? " active" : ""}`} />
+          ))}
         </div>
 
         <div className="game-board-col">
