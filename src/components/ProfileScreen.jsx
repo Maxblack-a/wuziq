@@ -190,7 +190,7 @@ export default function ProfileScreen({ myId, onExit, onNavigate }) {
           <div className="title">棋风</div>
           <div className="desc">
             {profile.skill_test_status === "completed"
-              ? `${(TYPE_DEFS[profile.skill_test_type] || TYPE_DEFS.balanced).name} · 林墨的棋力测试结果`
+              ? `${(TYPE_DEFS[profile.skill_test_type] || TYPE_DEFS.balanced).name} · 林墨的棋风测试结果`
               : "还没测过 · 点击去测一下"}
           </div>
         </div>

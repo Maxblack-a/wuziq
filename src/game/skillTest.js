@@ -124,7 +124,27 @@ function recordPlayerMove(board, testState, x, y) {
   // 开局采样(前 OPENING_SAMPLE_MOVES 手,不带关卡判定)
   if (testState.moveIndex < OPENING_SAMPLE_MOVES) {
     const d = nearestOwnDist(board, x, y, PLAYER_COLOR);
-    next.openingSamples = [...testState.openingSamples, { x, y, distToNearestOwn: d }];
+    next.openingSamples = [...next.openingSamples, { x, y, distToNearestOwn: d }];
+  }
+
+  // 双活三(双三杀)是五子棋规则里真正意义上的必胜棋型——林墨一步只能
+  // 挡住其中一条线,另一条线下一手就会被补成活四,直接赢棋。这本来就是
+  // "进攻"关卡故意要测的东西(能不能下出双活三),但下面 offense_watch
+  // 分支里的判定只在"诱导"这个专门窗口期生效;真实情况是,棋力强的
+  // 玩家未必会乖乖等到这个窗口才发力,在"观察/控场/收网"任何一个阶段
+  // 都可能提前做出双活三,棋照样会正常分出胜负、提前结束测试——但如果
+  // 判定没触发,这一步漂亮的攻杀就不会被记成"进攻关卡命中",六维图里
+  // 攻击力只能停在中性分,跟玩家实际靠攻杀赢棋的表现完全对不上。这里
+  // 单独补一道不分阶段的判定,只要这局"进攻"这一项还没出过结果,任何
+  // 阶段做出双活三都直接记 hit——不影响 offense_watch 自己原有的判定
+  // (那边命中了就不会再进这里,靠 alreadyHasOffenseResult 挡住重复记录)。
+  const alreadyHasOffenseResult = testState.checkpoints.some((c) => c.type === "offense");
+  if (!alreadyHasOffenseResult && testState.phase !== "offense_watch"
+    && mine.attack >= SCORE.LIVE_THREE && countLiveThreeThreatsAfter(board, x, y) >= 2) {
+    next.checkpoints = [...next.checkpoints, {
+      type: "offense", triggeredAtMove: next.moves.length, result: "hit",
+      detail: { move: [x, y] }, catalyzed: false,
+    }];
   }
 
   // 有一个关卡正等着这一步来判定
@@ -195,9 +215,11 @@ function recordPlayerMove(board, testState, x, y) {
     }
   }
 
-  // 应变力信号:如果上一个关卡是 miss,顺手记一下"失误后几步"的分数走势
+  // 应变力信号:上一个关卡如果是 miss 或 partial(受挫程度不同,但都算
+  // 遇到了压力),顺手记一下"受挫后几步"的分数走势——原来只认 miss,
+  // 样本太薄,大多数局都测不出这个维度
   const lastCheckpoint = next.checkpoints[next.checkpoints.length - 1];
-  if (lastCheckpoint && lastCheckpoint.result === "miss") {
+  if (lastCheckpoint && (lastCheckpoint.result === "miss" || lastCheckpoint.result === "partial")) {
     const sinceMiss = next.moves.length - lastCheckpoint.triggeredAtMove;
     if (sinceMiss <= 3) {
       lastCheckpoint.recoveryTrend = [...(lastCheckpoint.recoveryTrend || []), moveEntry.attack + moveEntry.defend];
@@ -276,10 +298,15 @@ function decideLinMoMove(board, testState) {
     // 观察阶段:占据关键位置、不主动进攻——用较窄的候选池 + 加权随机,
     // 避免每次都下一模一样的开局,但也不深算,保留"还在观察你"的克制感
     const move = weightedRandomPick(generalPool(scored, 0.6), (c) => Math.max(c.attack, c.defend) * 0.5 + 1);
+    let enteringControl = false;
     if (testState.moveIndex >= OPENING_SAMPLE_MOVES) {
       next = { ...testState, phase: "defense_watch", phaseEnteredAt: testState.moveIndex };
+      enteringControl = true;
     }
-    return { move, testState: next, dialogueKey: null };
+    // 观察阶段一结束就正式"控场"(防守关卡窗口打开),给一句过渡台词,
+    // 让玩家能感觉到"刚才还在看,现在开始认真了"——四个阶段里第一处
+    // 节奏切换点
+    return { move, testState: next, dialogueKey: enteringControl ? "phase_control" : null };
   }
 
   if (testState.phase === "defense_watch") {
@@ -319,7 +346,11 @@ function decideLinMoMove(board, testState) {
     const soft = scored.filter((c) => c.defend < SCORE.LIVE_THREE * 0.8);
     const pool = soft.length ? soft : scored;
     const move = weightedRandomPick(generalPool(pool, 0.55), (c) => Math.max(c.attack, c.defend * 0.3) + 1);
-    return { move: move, testState, dialogueKey: null };
+    // 刚从"控场"切进"诱导"阶段的第一手,给一句过渡台词——语气上要体现
+    // "我先松一松,看你敢不敢"这个态度上的转变,不然玩家只会觉得林墨
+    // 突然变弱了,却不知道这是故意的
+    const enteringEntice = testState.moveIndex === testState.phaseEnteredAt;
+    return { move: move, testState, dialogueKey: enteringEntice ? "phase_entice" : null };
   }
 
   if (testState.phase === "global_watch") {
@@ -369,18 +400,26 @@ function decideLinMoMove(board, testState) {
     }
 
     const move = weightedRandomPick(generalPool(scored, 0.65), (c) => Math.max(c.attack, c.defend));
-    return { move, testState, dialogueKey: null };
+    // 没触发本轮的"收网"考验,但如果这是刚从"诱导"切进来的第一手,
+    // 仍然给一句过渡台词,提醒玩家棋盘不止一处——不然这个阶段切换
+    // 可能完全悄无声息地过去
+    const enteringNet = testState.moveIndex === testState.phaseEnteredAt;
+    return { move, testState, dialogueKey: enteringNet ? "phase_net" : null };
   }
 
   // closing:关卡都测完了。如果还没到最低步数门槛,继续保持克制——不下
   // 真正的杀棋,避免测试提前结束、显得敷衍(这里的 scored 已经是上面
   // 砍掉活四/五连候选之后的池子了);到了门槛之后才正常发挥收官。
+  // 刚从"收网"切进"收官"的第一手,给一句收尾过渡台词——closingBuffer
+  // 只在真正进入 closing 之后才会被 recordLinMoMove 递增,这里读到的
+  // 还是"这一手之前"的值,等于 0 就说明是这个阶段的第一手。
+  const enteringClosing = testState.phase === "closing" && testState.closingBuffer === 0;
   if (stillTesting) {
     const move = weightedRandomPick(generalPool(scored, 0.65), (c) => Math.max(c.attack, c.defend));
-    return { move, testState, dialogueKey: null };
+    return { move, testState, dialogueKey: enteringClosing ? "phase_closing" : null };
   }
   const move = bestMoveFor(board, LINMO_COLOR, PLAYER_COLOR) || weightedRandomPick(generalPool(scored, 0.7), (c) => Math.max(c.attack, c.defend));
-  return { move, testState, dialogueKey: null };
+  return { move, testState, dialogueKey: enteringClosing ? "phase_closing" : null };
 }
 
 function recordLinMoMove(board, testState, x, y) {

@@ -35,6 +35,7 @@ export default function App() {
   const [profile, setProfile] = useState(null);
   const [screen, setScreen] = useState("loading"); // loading | nickname | skilltest | skilltest_result | skilltest_retake | skilltest_view | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile | history
   const [skillTestProfile, setSkillTestProfile] = useState(null); // 棋力测试结果(揭晓页要用),测完/看完就不需要再留着
+  const [skillTestPriorHistory, setSkillTestPriorHistory] = useState([]); // 这次测试之前的历史记录(倒序),给结果页做"跟上次比/最近怎么样"
   // 'onboarding':新用户第一次见面那次触发的测试,结束后要接回登录后原本
   // 该走的路由;'retake':从"我的"页面主动发起的复测,结束后应该退回
   // 到发起测试之前所在的页面(靠 goBack),两种模式结束时的路由不一样,
@@ -192,7 +193,20 @@ export default function App() {
   // 把六维风格分/隐藏水平分/原始数据写库,再进结果揭晓页——揭晓页看完
   // 点"继续"才会真正往下路由,不在这里直接走。
   async function handleSkillTestFinish(profile, testState) {
+    let priorHistory = [];
     if (myId) {
+      // 写入这次结果之前,先把"这次之前"的历史记录取出来,给结果页做
+      // "跟上次比""最近这段时间"这两句用——顺序很重要,如果先插入
+      // 这次的记录再查,会把这次自己也查出来,变成"跟自己比"。
+      const { data: historyRows, error: historyError } = await supabase
+        .from("skill_test_history")
+        .select("dims, type, completed_at")
+        .eq("profile_id", myId)
+        .order("completed_at", { ascending: false })
+        .limit(5);
+      if (historyError) console.error("读取棋力测试历史失败", historyError);
+      priorHistory = (historyRows || []).map((r) => ({ dims: r.dims, type: r.type, completedAt: r.completed_at }));
+
       const { error } = await supabase.from("profiles").update({
         skill_test_status: "completed",
         skill_test_dims: profile.dims,
@@ -207,8 +221,20 @@ export default function App() {
         skill_test_completed_at: new Date().toISOString(),
       }).eq("id", myId);
       if (error) console.error("保存棋力测试结果失败", error);
+
+      // 追加历史行,不覆盖 profiles 上的快照(那一列继续只代表"最新一次",
+      // 每日试炼那类功能读它不用关心历史表的存在)
+      const { error: historyInsertError } = await supabase.from("skill_test_history").insert({
+        profile_id: myId,
+        dims: profile.dims,
+        type: profile.type,
+        hidden_score: profile.hiddenScore,
+        confidence: profile.confidence,
+      });
+      if (historyInsertError) console.error("记录棋力测试历史失败", historyInsertError);
     }
     setSkillTestProfile(profile);
+    setSkillTestPriorHistory(priorHistory);
     setScreen("skilltest_result");
   }
 
@@ -629,6 +655,7 @@ export default function App() {
       <div className="app-shell">
         <SkillTestResultScreen
           profile={skillTestProfile}
+          priorHistory={skillTestPriorHistory}
           onContinue={continueAfterSkillTest}
           introLine={skillTestMode === "retake" ? RESULT_INTRO_LINE_RETAKE : undefined}
         />

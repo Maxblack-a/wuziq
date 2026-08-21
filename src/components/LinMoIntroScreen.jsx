@@ -120,16 +120,21 @@ export default function LinMoIntroScreen({
           </>
         ) : (
           <>
-            <div className="linmo-bubble">
+            <div className="linmo-bubble linmo-invite-bubble">
               <span className="linmo-bubble-deco" aria-hidden="true"><IconSparkle size={16} /></span>
-              <p className="linmo-bubble-line">{inviteLine(confirmedName)}</p>
+              <div className="linmo-invite-bubble-name">
+                林墨<span className="linmo-invite-bubble-name-icon"><IconSparkle size={11} /></span>
+              </div>
+              <div className="linmo-invite-bubble-divider" />
+              <p className="linmo-bubble-line linmo-invite-bubble-line">{inviteLine(confirmedName)}</p>
+              <div className="linmo-invite-bubble-end-divider"><span className="linmo-invite-bubble-end-divider-dot" /></div>
             </div>
-            <div className="linmo-actions-row">
-              <button className="btn-ghost" onClick={onSkipTest}>{INVITE_SKIP_LABEL}</button>
-              <button className="linmo-cta" onClick={onStartTest}>
+            <div className="linmo-actions-row linmo-invite-actions-row">
+              <button className="linmo-cta linmo-invite-cta" onClick={onStartTest}>
                 <span>{INVITE_ACCEPT_LABEL}</span>
                 <IconArrowRight size={16} />
               </button>
+              <button className="btn-ghost linmo-invite-skip" onClick={onSkipTest}>{INVITE_SKIP_LABEL}</button>
             </div>
           </>
         )}

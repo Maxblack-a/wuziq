@@ -59,6 +59,35 @@ alter table profiles add column if not exists skill_test_confidence text;
 alter table profiles add column if not exists skill_test_raw jsonb;
 alter table profiles add column if not exists skill_test_completed_at timestamptz;
 
+-- 棋力测试历史:上面 profiles.skill_test_* 那几列只留"最新一次"的快照,
+-- 每次复测都会被直接覆盖掉——这张表反过来专门留存"每一次"的结果,
+-- 用来支持"这次跟上次比怎么样""最近这段时间感觉如何"这类需要看
+-- 多次记录才能说清楚的点评。每次测试完成(不管是新用户第一次测,还是
+-- 从"我的"页面发起的复测)都会插入一行,不会覆盖、不会删除。
+-- dims/type/hidden_score/confidence 字段含义跟 profiles 上同名列一致,
+-- 复制一份存历史行里是为了不用回头 join/依赖 profiles 当前值(那一列
+-- 会被后续的测试覆盖掉)。
+create table if not exists skill_test_history (
+  id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references profiles(id) on delete cascade,
+  dims jsonb not null,
+  type text not null,
+  hidden_score int,
+  confidence text,
+  completed_at timestamptz not null default now()
+);
+
+create index if not exists skill_test_history_profile_idx
+  on skill_test_history (profile_id, completed_at desc);
+
+alter table skill_test_history enable row level security;
+
+drop policy if exists "skill_test_history_select" on skill_test_history;
+create policy "skill_test_history_select" on skill_test_history for select using (auth.uid() = profile_id);
+
+drop policy if exists "skill_test_history_insert" on skill_test_history;
+create policy "skill_test_history_insert" on skill_test_history for insert with check (auth.uid() = profile_id);
+
 -- 网页版用户名密码账号:username 唯一性本来就已经靠 auth.users.email 的
 -- 唯一约束间接保证了(注册时用用户名拼邮箱),这里加一道不区分大小写的
 -- 唯一索引纯粹是双保险 + 方便以后按用户名查询。

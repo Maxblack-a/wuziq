@@ -36,16 +36,21 @@ export default function LinMoRetakeIntroScreen({ displayName, onStart, onCancel 
           <p className="linmo-brand-slogan">黑白之间 · 一念胜负</p>
         </div>
 
-        <div className="linmo-bubble">
+        <div className="linmo-bubble linmo-invite-bubble">
           <span className="linmo-bubble-deco" aria-hidden="true"><IconSparkle size={16} /></span>
-          <p className="linmo-bubble-line">{greeting}</p>
+          <div className="linmo-invite-bubble-name">
+            林墨<span className="linmo-invite-bubble-name-icon"><IconSparkle size={11} /></span>
+          </div>
+          <div className="linmo-invite-bubble-divider" />
+          <p className="linmo-bubble-line linmo-invite-bubble-line">{greeting}</p>
+          <div className="linmo-invite-bubble-end-divider"><span className="linmo-invite-bubble-end-divider-dot" /></div>
         </div>
-        <div className="linmo-actions-row">
-          <button className="btn-ghost" onClick={onCancel}>{RETAKE_CANCEL_LABEL}</button>
-          <button className="linmo-cta" onClick={onStart}>
+        <div className="linmo-actions-row linmo-invite-actions-row">
+          <button className="linmo-cta linmo-invite-cta" onClick={onStart}>
             <span>{RETAKE_ACCEPT_LABEL}</span>
             <IconArrowRight size={16} />
           </button>
+          <button className="btn-ghost linmo-invite-skip" onClick={onCancel}>{RETAKE_CANCEL_LABEL}</button>
         </div>
       </div>
     </div>
