@@ -48,18 +48,26 @@ function openingScore(samples) {
   return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 }
 
-// 应变力:关卡 miss 之后紧接着几步的表现有没有明显滑坡。用"失误后的分数
-// 走势是持平/回升"还是"越来越差"来判断,没有 miss 过的话给中性分——
-// 不代表应变力不行,只是没有数据能看出来(小分放在 checklist 的置信度里体现)。
+// 应变力:关卡 miss 或 partial 之后紧接着几步的表现有没有明显滑坡。用
+// "受挫后的分数走势是持平/回升"还是"越来越差"来判断——miss 是更硬的
+// 挫折信号,partial(没做到最优但也不算彻底失手)压力更轻,回升/下滑
+// 给的分差也相应收窄,避免"partial 之后随便走两步"就跟"miss 之后真扛
+// 住了"混到同一档分数。
+// 之前这里只认 miss,没出现过 miss 的话直接给中性分——但这局面站得住
+// (棋下得越稳越测不出应变力)也站不住(玩家会以为自己应变力一般,实际
+// 只是这局没给他机会犯错)。所以返回值除了分数,还带一个 measured 标记,
+// 没有真实数据时消费方(结果页)可以选择不把这个分数当真实测量值展示。
 function adaptScore(checkpoints) {
-  const missed = checkpoints.filter((c) => c.result === "miss" && c.recoveryTrend?.length >= 2);
-  if (!missed.length) return NOT_TRIGGERED_SCORE;
-  const trends = missed.map((c) => {
+  const withTrend = checkpoints.filter((c) => (c.result === "miss" || c.result === "partial") && c.recoveryTrend?.length >= 2);
+  if (!withTrend.length) return { score: NOT_TRIGGERED_SCORE, measured: false };
+  const trends = withTrend.map((c) => {
     const t = c.recoveryTrend;
     const rising = t[t.length - 1] >= t[0];
-    return rising ? 75 : 35;
+    const swing = c.result === "miss" ? 20 : 10;
+    return rising ? 55 + swing : 55 - swing;
   });
-  return Math.round(trends.reduce((a, b) => a + b, 0) / trends.length);
+  const score = Math.round(trends.reduce((a, b) => a + b, 0) / trends.length);
+  return { score, measured: true };
 }
 
 // 从原始信号里挑几个"这一局专属"的具体细节,给 lib/linmoDialogue.js 的
@@ -77,7 +85,7 @@ function buildHighlights(testState) {
   const relevant = moves.filter((m) => m.player === "human" && m.bestAvailable > 0);
   const near = relevant.filter((m) => Math.max(m.attack, m.defend) / m.bestAvailable >= 0.95);
 
-  const recoveredMiss = checkpoints.find((c) => c.result === "miss" && c.recoveryTrend?.length >= 2
+  const recoveredSetback = checkpoints.find((c) => (c.result === "miss" || c.result === "partial") && c.recoveryTrend?.length >= 2
     && c.recoveryTrend[c.recoveryTrend.length - 1] >= c.recoveryTrend[0]);
 
   return {
@@ -86,7 +94,7 @@ function buildHighlights(testState) {
     global: globalCp ? { result: globalCp.result, turn: globalCp.triggeredAtMove } : null,
     calc: relevant.length ? { total: relevant.length, near: near.length } : null,
     opening: openingScore(testState.openingSamples) >= 60,
-    adapt: recoveredMiss ? { recovered: true, missTurn: recoveredMiss.triggeredAtMove } : null,
+    adapt: recoveredSetback ? { recovered: true, missTurn: recoveredSetback.triggeredAtMove } : null,
     totalMoves: moves.length,
   };
 }
@@ -97,6 +105,7 @@ export function computeSkillProfile(testState) {
   const defenseR = checkpointScore(checkpoints, "defense");
   const offenseR = checkpointScore(checkpoints, "offense");
   const globalR = checkpointScore(checkpoints, "global");
+  const adaptR = adaptScore(checkpoints);
 
   const dims = {
     attack: offenseR.score,
@@ -104,7 +113,19 @@ export function computeSkillProfile(testState) {
     vision: globalR.score,
     calc: calcScore(moves),
     opening: openingScore(openingSamples),
-    adapt: adaptScore(checkpoints),
+    adapt: adaptR.score,
+  };
+
+  // 每个维度是不是"真的测出来的",而不是分层降级/没遇到挫折时兜底的
+  // 中性分——结果页用这个决定要不要在对应维度旁边标"未测出",不能让
+  // 一个没数据支撑的 50 分看起来跟其他维度一样是认真测出来的。
+  const dimsMeasured = {
+    attack: offenseR.confidence !== "none",
+    defense: defenseR.confidence !== "none",
+    vision: globalR.confidence !== "none",
+    calc: moves.some((m) => m.player === "human" && m.bestAvailable > 0),
+    opening: openingSamples.some((s) => s.distToNearestOwn != null),
+    adapt: adaptR.measured,
   };
 
   // 隐藏综合水平分(0-100,不展示):关卡命中率 + 计算精度加权,是每日
@@ -121,6 +142,7 @@ export function computeSkillProfile(testState) {
   return {
     dims,
     dimLabels: DIM_LABELS,
+    dimsMeasured,
     hiddenScore,
     confidence,
     type: type.key,
