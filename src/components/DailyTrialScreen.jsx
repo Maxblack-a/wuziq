@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import DailyTrialGameScreen from "./DailyTrialGameScreen";
-import { IconChevronLeft, IconBolt, IconGem, IconFlame } from "./Icons";
+import { IconChevronLeft, IconBolt, IconGem, IconFlame, IconArrowRight, IconSparkle } from "./Icons";
 import { getDailyTrialStatus, startDailyTrial, finishDailyTrial } from "../lib/dailyTrial";
 import { pickRandomNpc } from "../lib/npcRoster";
 import {
@@ -20,21 +20,80 @@ const RESULT_COPY = {
   draw: { title: "和棋", color: "var(--fg)" },
 };
 
-// 顶部体力/钻石的小型状态条,非阻塞展示——每日试炼现在是"点开就直接
-// 进对话"的流程,不再有单独一步"先看数据再点挑战"的大厅页,但玩家
-// 还是需要能随时瞄一眼自己还剩多少体力/钻石,所以留一条不打断流程
-// 的小状态条,贴在对话卡片上方。
-function ResourceBar({ status }) {
-  if (!status) return null;
+// 每日试炼的见面邀请/点评续约/换对手/体力不足这几步,跟填昵称、邀请
+// 棋力测试是同一场戏的延续,所以沿用完全同一套"图片背景 + 信笺气泡 +
+// 胶囊按钮"视觉(.linmo-scene 系统,定义在 linmo.css),不重新发明一套
+// 卡片式 UI。这个 SceneShell 就是把 LinMoIntroScreen / LinMoRetakeIntroScreen
+// 里那段背景图+品牌区的骨架抽出来复用,每日试炼比那两个场景多两样
+// 东西:左上角的返回按钮(填昵称/棋力测试邀请是没有退出口的强制流程,
+// 每日试炼是可以随时退出的可选玩法)、右上角的体力/钻石/连胜状态条。
+function SceneShell({ npc, status, onBack, children }) {
   return (
-    <div className="daily-trial-resource-bar">
-      <span className="daily-trial-resource-item"><IconBolt size={13} /> {status.stamina}/{DAILY_STAMINA_CAP}</span>
-      <span className="daily-trial-resource-item"><IconGem size={13} /> {status.diamonds}</span>
-      {status.streak !== 0 && (
-        <span className={`daily-trial-resource-item${status.streak > 0 ? " win" : " lose"}`}>
-          <IconFlame size={13} /> {status.streak > 0 ? `连胜${status.streak}` : `连败${Math.abs(status.streak)}`}
-        </span>
+    <div className="linmo-scene">
+      <picture>
+        <source srcSet={npc?.sceneWebp || "/linmo-scene.webp"} type="image/webp" />
+        <img
+          className="linmo-scene-bg"
+          src={npc?.scene || "/linmo-scene.jpg"}
+          width="941"
+          height="1672"
+          alt=""
+          aria-hidden="true"
+          loading="eager"
+          decoding="async"
+        />
+      </picture>
+
+      {onBack && (
+        <button className="linmo-scene-back-btn" onClick={onBack} aria-label="返回">
+          <IconChevronLeft size={18} />
+        </button>
       )}
+
+      {status && (
+        <div className="linmo-scene-resource-bar">
+          <span className="linmo-scene-resource-item"><IconBolt size={12} /> {status.stamina}/{DAILY_STAMINA_CAP}</span>
+          <span className="linmo-scene-resource-item"><IconGem size={12} /> {status.diamonds}</span>
+          {status.streak !== 0 && (
+            <span className={`linmo-scene-resource-item${status.streak > 0 ? " win" : " lose"}`}>
+              <IconFlame size={12} /> {status.streak > 0 ? `连胜${status.streak}` : `连败${Math.abs(status.streak)}`}
+            </span>
+          )}
+        </div>
+      )}
+
+      <div className="linmo-scene-column">
+        <div className="linmo-brand-block">
+          <div className="linmo-brand-name">WUZIQIX</div>
+          <div className="linmo-brand-title-row">
+            <h1>五子棋</h1>
+            <span className="linmo-brand-seal">规</span>
+          </div>
+          <p className="linmo-brand-slogan">黑白之间 · 一念胜负</p>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// 信笺气泡:NPC 落款 + 一到三行台词 + 收尾细线,跟棋力测试邀请那屏
+// 用的是同一套 .linmo-invite-bubble 结构,只是这里可能要连着说好几句
+// (点评 + 续约邀请/理由),所以台词是个数组,依次渲染。
+function InviteBubble({ npc, lines }) {
+  return (
+    <div className="linmo-bubble linmo-invite-bubble">
+      <span className="linmo-bubble-deco" aria-hidden="true"><IconSparkle size={16} /></span>
+      <div className="linmo-invite-bubble-name">
+        {npc?.name}<span className="linmo-invite-bubble-name-icon"><IconSparkle size={11} /></span>
+      </div>
+      <div className="linmo-invite-bubble-divider" />
+      {lines.filter(Boolean).map((line, i) => (
+        <p key={i} className={`linmo-bubble-line linmo-invite-bubble-line${i > 0 ? " linmo-invite-bubble-line-secondary" : ""}`}>
+          {line}
+        </p>
+      ))}
+      <div className="linmo-invite-bubble-end-divider"><span className="linmo-invite-bubble-end-divider-dot" /></div>
     </div>
   );
 }
@@ -115,7 +174,12 @@ export default function DailyTrialScreen({ onExit, onExitHome }) {
     try {
       const started = await startDailyTrial();
       setStatus((prev) => ({ ...prev, ...started }));
-      setBattleSeed({ rating: started.rating, linmoRating: started.linmoRating, streak: started.streak });
+      setBattleSeed({
+        rating: started.rating,
+        linmoRating: started.linmoRating,
+        streak: started.streak,
+        gamesPlayed: status?.gamesPlayed ?? 0,
+      });
       setMode("battle");
     } catch (e) {
       console.error("开始每日试炼失败", e);
@@ -131,6 +195,11 @@ export default function DailyTrialScreen({ onExit, onExitHome }) {
 
   function handleDeclineGreeting() {
     setChoosingNext({ note: dailyPlayerDeclinedResponseLine() });
+    setMode("choose_next");
+  }
+
+  function handleAbortToChooseNext() {
+    setChoosingNext({ note: dailyChooseNextLine() });
     setMode("choose_next");
   }
 
@@ -206,188 +275,167 @@ export default function DailyTrialScreen({ onExit, onExitHome }) {
     enterGreeting(status, nextNpc);
   }
 
-  function handleAbortToChooseNext() {
-    setChoosingNext({ note: dailyChooseNextLine() });
-    setMode("choose_next");
-  }
-
   if (mode === "battle" && battleSeed) {
     return (
       <DailyTrialGameScreen
         playerRating={battleSeed.rating}
         linmoRating={battleSeed.linmoRating}
         streak={battleSeed.streak}
+        gamesPlayed={battleSeed.gamesPlayed}
         onFinish={handleBattleFinish}
         onAbort={handleAbortToChooseNext}
       />
     );
   }
 
-  return (
-    <div>
-      {!isInTelegram && ["loading", "no_stamina", "greeting", "choose_next", "error"].includes(mode) && (
-        <div className="room-topbar" style={{ marginBottom: 4 }}>
-          <button className="room-icon-btn" onClick={onExit} aria-label="返回">
-            <IconChevronLeft />
+  if (mode === "loading" || mode === "settling") {
+    return (
+      <div style={{ textAlign: "center", padding: 60 }}>
+        <div className="spinner" style={{ margin: "0 auto" }} />
+        {mode === "settling" && <p className="muted" style={{ marginTop: 12 }}>结算中…</p>}
+      </div>
+    );
+  }
+
+  if (mode === "error") {
+    return (
+      <div className="daily-trial-error">
+        <p>{errorMsg || "出错了"}</p>
+        <button className="btn-primary" onClick={loadStatus}>重试</button>
+      </div>
+    );
+  }
+
+  if (mode === "no_stamina") {
+    return (
+      <SceneShell npc={npc} status={status} onBack={onExit}>
+        <InviteBubble npc={npc} lines={["今天的体力好像不够了,明天再来吧。"]} />
+        <div className="linmo-actions-row linmo-invite-actions-row">
+          <button className="linmo-cta linmo-invite-cta" onClick={onExitHome}>
+            <span>返回首页</span>
+            <IconArrowRight size={16} />
           </button>
         </div>
-      )}
+      </SceneShell>
+    );
+  }
 
-      {(mode === "loading" || mode === "settling") && (
-        <div style={{ textAlign: "center", padding: 60 }}>
-          <div className="spinner" style={{ margin: "0 auto" }} />
-          {mode === "settling" && <p className="muted" style={{ marginTop: 12 }}>结算中…</p>}
+  if (mode === "greeting" && greetingContent) {
+    return (
+      <SceneShell npc={npc} status={status} onBack={onExit}>
+        <InviteBubble npc={npc} lines={[greetingContent.primary, greetingContent.secondary]} />
+        {errorMsg && <p className="linmo-error">{errorMsg}</p>}
+        <div className="linmo-actions-row linmo-invite-actions-row">
+          <button className="linmo-cta linmo-invite-cta" onClick={beginBattle} disabled={starting}>
+            <span>{starting ? "准备中…" : DAILY_ACCEPT_LABEL}</span>
+            {!starting && <IconArrowRight size={16} />}
+          </button>
+          <button className="btn-ghost linmo-invite-skip" onClick={handleDeclineGreeting} disabled={starting}>
+            {DAILY_DECLINE_LABEL}
+          </button>
         </div>
-      )}
+      </SceneShell>
+    );
+  }
 
-      {mode === "error" && (
-        <div className="daily-trial-error">
-          <p>{errorMsg || "出错了"}</p>
-          <button className="btn-primary" onClick={loadStatus}>重试</button>
+  if (mode === "result_reveal" && lastReward) {
+    return (
+      <div className="daily-trial-result fade-in-up">
+        <h2 className="pve-result-title" style={{ color: RESULT_COPY[lastReward.result].color }}>
+          {RESULT_COPY[lastReward.result].title}
+        </h2>
+        {lastReward.result === "win" ? (
+          <div className="daily-trial-reward-row">
+            <span className="daily-trial-reward-pill">+{lastReward.exp} 经验</span>
+            <span className="daily-trial-reward-pill"><IconGem size={13} /> +1 钻石</span>
+          </div>
+        ) : (
+          <p className="muted" style={{ textAlign: "center", fontSize: 13, marginTop: 4 }}>
+            再接再厉,状态说不定下一局就回来了。
+          </p>
+        )}
+        <div className="confirm-bar" style={{ marginTop: 24 }}>
+          <button className="btn-primary" style={{ flex: 1 }} onClick={() => setMode("review")}>继续</button>
         </div>
-      )}
+      </div>
+    );
+  }
 
-      {mode === "no_stamina" && (
-        <div className="daily-trial-lobby fade-in-up">
-          <ResourceBar status={status} />
-          <div className="daily-trial-npc-card">
-            <div className="daily-trial-npc-avatar">
-              <img src={npc?.portrait || "/linmo-portrait.webp"} alt={npc?.name || "林墨"} />
-            </div>
-            <div className="daily-trial-npc-name">{npc?.name || "林墨"}</div>
-          </div>
-          <div className="daily-trial-bubble">
-            <p className="daily-trial-bubble-line">今天的体力好像不够了,明天再来吧。</p>
-          </div>
-          <div className="confirm-bar" style={{ marginTop: 20 }}>
-            <button className="btn-primary" style={{ flex: 1 }} onClick={onExitHome}>返回首页</button>
-          </div>
-        </div>
-      )}
+  if (mode === "review" && reviewContent) {
+    return (
+      <SceneShell npc={npc} status={status} onBack={undefined}>
+        <InviteBubble npc={npc} lines={[reviewContent.comment, reviewContent.line2, reviewContent.line3]} />
 
-      {mode === "greeting" && greetingContent && (
-        <div className="daily-trial-lobby fade-in-up">
-          <ResourceBar status={status} />
-          <div className="daily-trial-npc-card">
-            <div className="daily-trial-npc-avatar">
-              <img src={npc?.portrait} alt={npc?.name} />
-            </div>
-            <div className="daily-trial-npc-name">{npc?.name}</div>
-          </div>
-          <div className="daily-trial-bubble">
-            <p className="daily-trial-bubble-line">{greetingContent.primary}</p>
-            {greetingContent.secondary && (
-              <p className="daily-trial-bubble-line daily-trial-bubble-line-secondary">{greetingContent.secondary}</p>
-            )}
-          </div>
-          {errorMsg && <p className="daily-trial-error-text">{errorMsg}</p>}
-          <div className="confirm-bar" style={{ marginTop: 20 }}>
-            <button className="btn-ghost" style={{ flex: 1 }} onClick={handleDeclineGreeting} disabled={starting}>
-              {DAILY_DECLINE_LABEL}
-            </button>
-            <button className="btn-primary" style={{ flex: 1 }} onClick={beginBattle} disabled={starting}>
-              {starting ? "准备中…" : DAILY_ACCEPT_LABEL}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {mode === "result_reveal" && lastReward && (
-        <div className="daily-trial-result fade-in-up">
-          <h2 className="pve-result-title" style={{ color: RESULT_COPY[lastReward.result].color }}>
-            {RESULT_COPY[lastReward.result].title}
-          </h2>
-          {lastReward.result === "win" ? (
-            <div className="daily-trial-reward-row">
-              <span className="daily-trial-reward-pill">+{lastReward.exp} 经验</span>
-              <span className="daily-trial-reward-pill"><IconGem size={13} /> +1 钻石</span>
-            </div>
-          ) : (
-            <p className="muted" style={{ textAlign: "center", fontSize: 13, marginTop: 4 }}>
-              再接再厉,状态说不定下一局就回来了。
-            </p>
-          )}
-          <div className="confirm-bar" style={{ marginTop: 24 }}>
-            <button className="btn-primary" style={{ flex: 1 }} onClick={() => setMode("review")}>继续</button>
-          </div>
-        </div>
-      )}
-
-      {mode === "review" && reviewContent && (
-        <div className="daily-trial-lobby fade-in-up">
-          <ResourceBar status={status} />
-          <div className="daily-trial-npc-card">
-            <div className="daily-trial-npc-avatar">
-              <img src={npc?.portrait} alt={npc?.name} />
-            </div>
-            <div className="daily-trial-npc-name">{npc?.name}</div>
-          </div>
-          <div className="daily-trial-bubble">
-            <p className="daily-trial-bubble-line">{reviewContent.comment}</p>
-            {reviewContent.line2 && <p className="daily-trial-bubble-line daily-trial-bubble-line-secondary">{reviewContent.line2}</p>}
-            {reviewContent.line3 && <p className="daily-trial-bubble-line daily-trial-bubble-line-secondary">{reviewContent.line3}</p>}
-          </div>
-
-          {reviewContent.phase === "stamina_exhausted" && (
-            <div className="confirm-bar" style={{ marginTop: 20 }}>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={onExitHome}>返回首页</button>
-            </div>
-          )}
-
-          {reviewContent.phase === "npc_offer" && (
-            <div className="confirm-bar" style={{ marginTop: 20 }}>
-              <button className="btn-ghost" style={{ flex: 1 }} onClick={handleRematchDecline} disabled={starting}>
-                {DAILY_REMATCH_DECLINE_LABEL}
-              </button>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={handleRematchAccept} disabled={starting}>
-                {starting ? "准备中…" : DAILY_REMATCH_ACCEPT_LABEL}
-              </button>
-            </div>
-          )}
-
-          {reviewContent.phase === "neutral" && (
-            <div className="confirm-bar" style={{ marginTop: 20 }}>
-              <button className="btn-ghost" style={{ flex: 1 }} onClick={handlePickOther}>
-                {DAILY_PICK_OTHER_LABEL}
-              </button>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={handlePlayerInvite}>
-                {DAILY_INVITE_NPC_LABEL}
-              </button>
-            </div>
-          )}
-
-          {reviewContent.phase === "player_invite_accepted" && (
-            <div className="confirm-bar" style={{ marginTop: 20 }}>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={handleRematchAccept} disabled={starting}>
-                {starting ? "准备中…" : "开始对局"}
-              </button>
-            </div>
-          )}
-
-          {reviewContent.phase === "player_invite_declined" && (
-            <div className="confirm-bar" style={{ marginTop: 20 }}>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={handlePickOther}>知道了</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {mode === "choose_next" && choosingNext && (
-        <div className="daily-trial-lobby fade-in-up">
-          <ResourceBar status={status} />
-          <div className="daily-trial-bubble" style={{ textAlign: "center" }}>
-            <p className="daily-trial-bubble-line">{choosingNext.note}</p>
-          </div>
-          <div className="confirm-bar" style={{ marginTop: 20 }}>
-            <button className="btn-ghost" style={{ flex: 1 }} onClick={onExitHome}>
-              {DAILY_BACK_HOME_LABEL}
-            </button>
-            <button className="btn-primary" style={{ flex: 1 }} onClick={handleMatchNext}>
-              {DAILY_MATCH_NEXT_LABEL}
+        {reviewContent.phase === "stamina_exhausted" && (
+          <div className="linmo-actions-row linmo-invite-actions-row">
+            <button className="linmo-cta linmo-invite-cta" onClick={onExitHome}>
+              <span>返回首页</span>
+              <IconArrowRight size={16} />
             </button>
           </div>
+        )}
+
+        {reviewContent.phase === "npc_offer" && (
+          <div className="linmo-actions-row linmo-invite-actions-row">
+            <button className="linmo-cta linmo-invite-cta" onClick={handleRematchAccept} disabled={starting}>
+              <span>{starting ? "准备中…" : DAILY_REMATCH_ACCEPT_LABEL}</span>
+              {!starting && <IconArrowRight size={16} />}
+            </button>
+            <button className="btn-ghost linmo-invite-skip" onClick={handleRematchDecline} disabled={starting}>
+              {DAILY_REMATCH_DECLINE_LABEL}
+            </button>
+          </div>
+        )}
+
+        {reviewContent.phase === "neutral" && (
+          <div className="linmo-actions-row linmo-invite-actions-row">
+            <button className="linmo-cta linmo-invite-cta" onClick={handlePlayerInvite}>
+              <span>{DAILY_INVITE_NPC_LABEL}</span>
+              <IconArrowRight size={16} />
+            </button>
+            <button className="btn-ghost linmo-invite-skip" onClick={handlePickOther}>
+              {DAILY_PICK_OTHER_LABEL}
+            </button>
+          </div>
+        )}
+
+        {reviewContent.phase === "player_invite_accepted" && (
+          <div className="linmo-actions-row linmo-invite-actions-row">
+            <button className="linmo-cta linmo-invite-cta" onClick={handleRematchAccept} disabled={starting}>
+              <span>{starting ? "准备中…" : "开始对局"}</span>
+              {!starting && <IconArrowRight size={16} />}
+            </button>
+          </div>
+        )}
+
+        {reviewContent.phase === "player_invite_declined" && (
+          <div className="linmo-actions-row linmo-invite-actions-row">
+            <button className="linmo-cta linmo-invite-cta" onClick={handlePickOther}>
+              <span>知道了</span>
+              <IconArrowRight size={16} />
+            </button>
+          </div>
+        )}
+      </SceneShell>
+    );
+  }
+
+  if (mode === "choose_next" && choosingNext) {
+    return (
+      <SceneShell npc={npc} status={status} onBack={onExit}>
+        <InviteBubble npc={npc} lines={[choosingNext.note]} />
+        <div className="linmo-actions-row linmo-invite-actions-row">
+          <button className="linmo-cta linmo-invite-cta" onClick={handleMatchNext}>
+            <span>{DAILY_MATCH_NEXT_LABEL}</span>
+            <IconArrowRight size={16} />
+          </button>
+          <button className="btn-ghost linmo-invite-skip" onClick={onExitHome}>
+            {DAILY_BACK_HOME_LABEL}
+          </button>
         </div>
-      )}
-    </div>
-  );
+      </SceneShell>
+    );
+  }
+
+  return null;
 }

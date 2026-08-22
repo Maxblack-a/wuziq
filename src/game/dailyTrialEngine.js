@@ -60,8 +60,15 @@ function clampRating(v) {
 }
 
 function clampDial(v) {
-  return Math.max(5, Math.min(97, v));
+  return Math.max(5, Math.min(85, v)); // 上限从 97 降到 85——玩家默认有一点基础,
+  // 顶格的对抗强度要给强玩家留一点找破绽的空间,不搞到几乎不可能翻盘
 }
+
+// 软启动:每日试炼里跟某位 NPC 打的头几局,不管评分差距算出来多大,
+// 强度都封顶在一个温和区间——玩家有基础不等于一上来就该扛住评分系统
+// 刚收敛前(比如棋力测试分偏高)可能出现的偏难开局体验,给几局适应期。
+export const SOFT_START_GAMES = 3;
+export const SOFT_START_DIAL_CAP = 60;
 
 // 基础强度旋钮(0-100 的连续值,不是三档):由"林墨分 - 玩家分"的差距
 // 决定——林墨比玩家强得越多,旋钮越靠近 100(几乎不留情面);玩家比
@@ -94,10 +101,13 @@ function flowAdjustment(board, aiColor, humanColor) {
  * 算出"这一步"该用的强度旋钮。之所以不是算一次用一整局,是因为
  * flowAdjustment 要跟着局面实时变——每次轮到林墨走之前都应该重新算。
  */
-export function computeSkillDial({ playerRating, linmoRating, streak, board, aiColor = LINMO_COLOR, humanColor = PLAYER_COLOR }) {
+export function computeSkillDial({ playerRating, linmoRating, streak, board, aiColor = LINMO_COLOR, humanColor = PLAYER_COLOR, gamesPlayed = Infinity }) {
   const base = baseDial(playerRating, linmoRating);
-  const adjusted = base + streakAdjustment(streak) + flowAdjustment(board, aiColor, humanColor);
-  return clampDial(Math.round(adjusted));
+  const dial = clampDial(Math.round(base + streakAdjustment(streak) + flowAdjustment(board, aiColor, humanColor)));
+  if (gamesPlayed < SOFT_START_GAMES) {
+    return Math.min(dial, SOFT_START_DIAL_CAP);
+  }
+  return dial;
 }
 
 // 简单档:纯静态评估 + 加权随机(跟 ai.js 的 pickEasy 等价,单独写一份
@@ -176,7 +186,19 @@ export function getAdaptiveMove(board, aiPlayer, humanPlayer, dial) {
   return pickByDialLow(pool);
 }
 
-// ---- 赛后"要不要再来一局"的邀请概率 ----
+// 首页展示体力用。profiles.stamina 这个字段只有玩家真的点开过一次
+// 每日试炼(触发服务器那边的 ensure_daily_reset)才会被刷新成"今天该
+// 有的样子"——如果玩家今天还没点开每日试炼,数据库里存的可能还是
+// 昨天用剩的数字。首页只是让玩家瞟一眼,不值得为了这一个数字专门发
+// 一次网络请求去刷新,所以在客户端用同一条"日期变了就当满体力"规则
+// 兜底展示;等玩家真的点进每日试炼,服务器会做一次权威的、真正写库
+// 的重置。两边判断逻辑必须一致,所以都用 UTC 自然日。
+export function getDisplayStamina(stamina, staminaDate) {
+  if (typeof stamina !== "number") return DAILY_STAMINA_CAP;
+  if (!staminaDate) return stamina;
+  const today = new Date().toISOString().slice(0, 10);
+  return staminaDate === today ? stamina : DAILY_STAMINA_CAP;
+}
 // 见 App 层 DailyTrialScreen 的对话流程:一局结束后,可能是林墨主动
 // 邀请玩家再战,也可能是玩家主动邀请林墨——两种邀请各自的"接受率"
 // 分开设:

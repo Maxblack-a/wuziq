@@ -18,6 +18,7 @@ import SkillTestScreen from "./components/SkillTestScreen";
 import SkillTestResultScreen from "./components/SkillTestResultScreen";
 import SkillTestReviewScreen from "./components/SkillTestReviewScreen";
 import { RESULT_INTRO_LINE_RETAKE } from "./lib/linmoDialogue";
+import { getDisplayStamina } from "./game/dailyTrialEngine";
 import WebAuthScreen from "./components/WebAuthScreen";
 import {
   supabase, loginWithTelegram, loginAnonymously, getExistingUserId,
@@ -69,6 +70,11 @@ export default function App() {
   // 进入当前页面的那个页面",而不是不管三七二十一直接回首页。
   // 用 ref 不用 state——这东西不需要参与渲染,只是记录轨迹供 goBack 读取。
   const historyRef = useRef([]);
+  // 首页体力/钻石徽章要做"从旧值滚到新值"的动画,但 MainMenu 每次离开
+  // 首页再回来都是重新挂载的(没有组件内部状态能记住"上次首页显示的
+  // 是多少"),所以离开首页那一刻,把当时的值存这里当"起点"——等回到
+  // 首页,MainMenu 拿这个起点跟最新的 profile 值一比,该多少就滚多少。
+  const homeBaselineRef = useRef({ stamina: undefined, diamonds: undefined });
 
   // routeAfterLogin 定义在下面的 useEffect 里(跟 boot 共享一份逻辑),
   // 用 ref 存一份引用,好在"确认昵称"完成之后从组件方法里调用它。
@@ -411,6 +417,12 @@ export default function App() {
   // 从一个页面主动跳去另一个页面时调这个,而不是直接 setScreen——
   // 会先把"跳转前我在哪"记一笔到历史栈里,goBack 才有地方可退。
   function navigate(nextScreen) {
+    if (screen === "menu") {
+      homeBaselineRef.current = {
+        stamina: getDisplayStamina(profile?.stamina, profile?.stamina_date),
+        diamonds: profile?.diamonds,
+      };
+    }
     historyRef.current.push({ screen, roomId });
     setScreen(nextScreen);
   }
@@ -654,7 +666,17 @@ export default function App() {
   return (
     <div className={`app-shell${screen === "menu" ? " app-shell-menu" : ""}`}>
       {screen === "menu" && (
-        <MainMenu onSelect={navigate} playerName={profile?.display_name} exp={profile?.exp} avatarUrl={profile?.avatar_url} />
+        <MainMenu
+          onSelect={navigate}
+          playerName={profile?.display_name}
+          exp={profile?.exp}
+          avatarUrl={profile?.avatar_url}
+          stamina={profile?.stamina}
+          staminaDate={profile?.stamina_date}
+          diamonds={profile?.diamonds}
+          staminaFrom={homeBaselineRef.current.stamina}
+          diamondsFrom={homeBaselineRef.current.diamonds}
+        />
       )}
       {screen === "pve" && <PveScreen onExit={goBack} onExitHome={goMenu} />}
       {screen === "daily" && <DailyTrialScreen onExit={goBack} onExitHome={goMenu} />}

@@ -1,14 +1,21 @@
 import { useState } from "react";
 import RulesModal from "./RulesModal";
-import { IconRules, IconRobot, IconCalendarStar, IconArrowRight, IconAvatarFallback } from "./Icons";
+import StatBadge from "./StatBadge";
+import { IconRules, IconRobot, IconCalendarStar, IconArrowRight, IconAvatarFallback, IconBolt, IconGem } from "./Icons";
 import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
+import { getDisplayStamina } from "../game/dailyTrialEngine";
 
-export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
+export default function MainMenu({
+  onSelect, playerName, exp, avatarUrl,
+  stamina, staminaDate, diamonds,
+  staminaFrom, diamondsFrom,
+}) {
   const [showRules, setShowRules] = useState(false);
   const level = levelForExp(exp);
   const title = titleForExp(exp ?? 0);
   // 当前阶内的进度,用于顶栏身份牌下方的小进度条
   const progressPct = Math.min(95, Math.max(8, progressPctForExp(exp)));
+  const displayStamina = getDisplayStamina(stamina, staminaDate);
 
   return (
     <div>
@@ -73,6 +80,8 @@ export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
             </div>
 
             <nav className="top-nav-light">
+              <StatBadge icon={<IconBolt size={13} />} value={displayStamina} fromValue={staminaFrom} />
+              <StatBadge icon={<IconGem size={13} />} value={diamonds ?? 0} fromValue={diamondsFrom} />
               <button className="nav-icon-btn" onClick={() => setShowRules(true)}>
                 <IconRules />
                 <span>规则</span>

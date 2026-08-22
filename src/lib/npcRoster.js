@@ -11,6 +11,8 @@ export const NPC_LIST = [
     id: "linmo",
     name: "林墨",
     portrait: "/linmo-portrait.webp",
+    scene: "/linmo-scene.jpg",
+    sceneWebp: "/linmo-scene.webp",
   },
 ];
 

@@ -1504,9 +1504,10 @@ $$;
 --   + 这一局的过程质量分(40%权重)"混合出来的——赢得很勉强(质量分低)
 --   涨分会比"赢得干净利落"更少,反过来,虽败犹荣(质量分高)也能比
 --   "一败涂地"多回一点血,不是纯粹的赌输赢。
--- - 林墨分不直接等于玩家新分,而是朝着"玩家新分 + 3"这个目标走 30%
---   的差距——+3 是让林墨长期来看略微"棋高一手"、保持一点压迫感,
---   而不是打成完全的镜像。
+-- - 林墨分不直接等于玩家新分,而是朝着"玩家新分"这个目标走 30% 的
+--   差距(不是瞬间拉平)——之前这里给目标加过 +3 的"棋高一手"常数,
+--   后来发现这会让长期均衡胜率略低于设计目标的 55%-65% 区间,已经
+--   去掉,目标就是玩家当前分本身。
 -- - quality 由客户端算好传过来,但服务器强制 clamp 到 [0,1],不完全
 --   信任这个数字本身,只把它当"锦上添花"的一个输入,不是决定性因素
 --   (核心的 60% 权重仍然来自服务器自己判定的 result)。
@@ -1552,7 +1553,7 @@ begin
   v_new_rating := round(v_row.daily_trial_rating + 6 * (v_actual - v_expected));
   v_new_rating := greatest(0, least(100, v_new_rating));
 
-  v_new_linmo := round(v_row.linmo_rating + 0.3 * ((v_new_rating + 3) - v_row.linmo_rating));
+  v_new_linmo := round(v_row.linmo_rating + 0.3 * (v_new_rating - v_row.linmo_rating));
   v_new_linmo := greatest(0, least(100, v_new_linmo));
 
   if p_result = 'win' then

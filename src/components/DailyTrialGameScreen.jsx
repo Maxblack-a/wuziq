@@ -29,7 +29,7 @@ function pickAmbientLine() {
 // 网络请求,棋盘逻辑和结算逻辑分开,便于以后加别的 NPC 时复用这个组件。
 // 见面寒暄/邀请已经在进入这个组件之前的对话界面里说完了,这里开局只需要
 // 一句轻量的"开始了"式台词,不需要外部传入。
-export default function DailyTrialGameScreen({ playerRating, linmoRating, streak, onFinish, onAbort }) {
+export default function DailyTrialGameScreen({ playerRating, linmoRating, streak, gamesPlayed, onFinish, onAbort }) {
   useTelegramBackButton(() => handleExitClick());
 
   const [board, setBoard] = useState(createEmptyBoard());
@@ -79,7 +79,7 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
       if (moveTokenRef.current !== token) return;
 
       const dial = computeSkillDial({
-        playerRating, linmoRating, streak,
+        playerRating, linmoRating, streak, gamesPlayed,
         board: currentBoard, aiColor: LINMO_COLOR, humanColor: PLAYER_COLOR,
       });
       const move = getAdaptiveMove(currentBoard, LINMO_COLOR, PLAYER_COLOR, dial);
