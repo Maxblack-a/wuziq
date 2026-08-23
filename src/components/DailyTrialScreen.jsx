@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import DailyTrialGameScreen from "./DailyTrialGameScreen";
+import DailyTrialResultReveal from "./DailyTrialResultReveal";
 import { IconChevronLeft, IconBolt, IconGem, IconFlame, IconArrowRight, IconSparkle } from "./Icons";
 import { getDailyTrialStatus, startDailyTrial, finishDailyTrial } from "../lib/dailyTrial";
 import { pickRandomNpc } from "../lib/npcRoster";
@@ -13,12 +14,6 @@ import {
 } from "../lib/linmoDialogue";
 import { isInTelegram, useTelegramBackButton } from "../lib/telegram";
 import { STAMINA_COST, DAILY_STAMINA_CAP, rollNpcInvitesRematch, rollNpcAcceptsPlayerInvite } from "../game/dailyTrialEngine";
-
-const RESULT_COPY = {
-  win: { title: "胜局", color: "var(--wood)" },
-  lose: { title: "败局", color: "var(--gold)" },
-  draw: { title: "和棋", color: "var(--fg)" },
-};
 
 // 每日试炼的见面邀请/点评续约/换对手/体力不足这几步,跟填昵称、邀请
 // 棋力测试是同一场戏的延续,所以沿用完全同一套"图片背景 + 信笺气泡 +
@@ -115,7 +110,7 @@ function InviteBubble({ npc, lines }) {
 //   review -> battle(续约成功) | choose_next(续约没谈成) | no_stamina(体力耗尽还想继续)
 //   choose_next -[匹配下一位棋手]-> greeting(新 NPC) | no_stamina
 //   choose_next -[返回首页]-> 退出
-export default function DailyTrialScreen({ onExit, onExitHome }) {
+export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp }) {
   const [mode, setMode] = useState("loading");
   const [status, setStatus] = useState(null);
   const [npc, setNpc] = useState(null);
@@ -124,9 +119,18 @@ export default function DailyTrialScreen({ onExit, onExitHome }) {
 
   const [greetingContent, setGreetingContent] = useState(null); // { primary, secondary }
   const [battleSeed, setBattleSeed] = useState(null);
-  const [lastReward, setLastReward] = useState(null); // { result, exp, diamonds }
+  const [battleBaseline, setBattleBaseline] = useState(null); // { staminaBefore, diamondsBefore, expBefore } —— 结算揭晓页动画要从这几个"开打前的值"起飞/起数
+  const [lastReward, setLastReward] = useState(null); // 见 handleBattleFinish,喂给 DailyTrialResultReveal 的完整数据
   const [reviewContent, setReviewContent] = useState(null); // { comment, phase, line2, line3 }
   const [choosingNext, setChoosingNext] = useState(null); // { note }
+  // 本次每日试炼会话里"目前已知的经验值"——只在组件挂载时用 App 层传下来
+  // 的 exp 做一次初始化(useState 的初值只在首次渲染生效),之后完全靠
+  // 每局结算返回的新总值本地更新。之所以不能一直用 exp 这个 prop,是因为
+  // App.jsx 只有在回到首页那一刻才会重新拉 profile——如果玩家在这个
+  // 会话里连续打了好几局(点评页的"再来一局"循环),prop 早就是过时的
+  // 数字了,拿它当每一局的"开打前经验值"会导致后面几局的经验条动画
+  // 起点算错。
+  const [localExp, setLocalExp] = useState(exp ?? 0);
 
   // 只在这几个"停下来等玩家选择"的状态里把 Telegram 原生返回键交给
   // 自己处理;对局中(battle)交给 DailyTrialGameScreen 自己接管,
@@ -171,6 +175,15 @@ export default function DailyTrialScreen({ onExit, onExitHome }) {
     if (starting) return;
     setStarting(true);
     setErrorMsg("");
+    // 结算揭晓页要做"体力倒数/钻石飞入/经验条填充"这些动画,起点必须是
+    // "这局开打前"的真实值——服务器一 RPC 回来体力就已经扣完了,所以
+    // 得在发请求之前把这一刻的快照存下来,不然动画起点和终点会是同一个
+    // 数字,等于没有动画。
+    setBattleBaseline({
+      staminaBefore: status?.stamina ?? 0,
+      diamondsBefore: status?.diamonds ?? 0,
+      expBefore: localExp,
+    });
     try {
       const started = await startDailyTrial();
       setStatus((prev) => ({ ...prev, ...started }));
@@ -203,7 +216,7 @@ export default function DailyTrialScreen({ onExit, onExitHome }) {
     setMode("choose_next");
   }
 
-  async function handleBattleFinish(result, quality) {
+  async function handleBattleFinish(result, quality, meta) {
     setMode("settling");
     try {
       const reward = await finishDailyTrial(result, quality);
@@ -218,7 +231,27 @@ export default function DailyTrialScreen({ onExit, onExitHome }) {
         wins: (status?.wins ?? 0) + (result === "win" ? 1 : 0),
       };
       setStatus(nextStatus);
-      setLastReward({ result, exp: reward.exp, diamonds: reward.diamonds });
+
+      // finishDailyTrial 返回的 exp/diamonds 都是"结算之后的新总值"(服务器
+      // 那边就是这么定义返回值的),不是这一局赚了多少——真正要展示/播动画
+      // 的"+N"和"从哪滚到哪",得拿这份新总值减掉 beginBattle 那一刻存的
+      // 快照自己算差值,不能直接把总值当成"奖励数量"显示出来。
+      const staminaBefore = battleBaseline?.staminaBefore ?? nextStatus.stamina;
+      const diamondsBefore = battleBaseline?.diamondsBefore ?? reward.diamonds;
+      const expBefore = battleBaseline?.expBefore ?? localExp;
+      setLastReward({
+        result,
+        meta,
+        staminaBefore,
+        staminaAfter: nextStatus.stamina,
+        diamondsBefore,
+        diamondsAfter: reward.diamonds,
+        diamondsDelta: reward.diamonds - diamondsBefore,
+        expBefore,
+        expAfter: reward.exp,
+        expDelta: reward.exp - expBefore,
+      });
+      setLocalExp(reward.exp);
       setMode("result_reveal");
       // reviewContent 提前算好,点"继续"那一刻直接展示,不用再等一次
       // 网络请求或者计算——续约要不要邀请只取决于概率 + 当前体力,
@@ -340,24 +373,20 @@ export default function DailyTrialScreen({ onExit, onExitHome }) {
 
   if (mode === "result_reveal" && lastReward) {
     return (
-      <div className="daily-trial-result fade-in-up">
-        <h2 className="pve-result-title" style={{ color: RESULT_COPY[lastReward.result].color }}>
-          {RESULT_COPY[lastReward.result].title}
-        </h2>
-        {lastReward.result === "win" ? (
-          <div className="daily-trial-reward-row">
-            <span className="daily-trial-reward-pill">+{lastReward.exp} 经验</span>
-            <span className="daily-trial-reward-pill"><IconGem size={13} /> +1 钻石</span>
-          </div>
-        ) : (
-          <p className="muted" style={{ textAlign: "center", fontSize: 13, marginTop: 4 }}>
-            再接再厉,状态说不定下一局就回来了。
-          </p>
-        )}
-        <div className="confirm-bar" style={{ marginTop: 24 }}>
-          <button className="btn-primary" style={{ flex: 1 }} onClick={() => setMode("review")}>继续</button>
-        </div>
-      </div>
+      <DailyTrialResultReveal
+        result={lastReward.result}
+        avatarUrl={avatarUrl}
+        staminaBefore={lastReward.staminaBefore}
+        staminaAfter={lastReward.staminaAfter}
+        diamondsBefore={lastReward.diamondsBefore}
+        diamondsAfter={lastReward.diamondsAfter}
+        diamondsDelta={lastReward.diamondsDelta}
+        expBefore={lastReward.expBefore}
+        expAfter={lastReward.expAfter}
+        expDelta={lastReward.expDelta}
+        meta={lastReward.meta}
+        onContinue={() => setMode("review")}
+      />
     );
   }
 

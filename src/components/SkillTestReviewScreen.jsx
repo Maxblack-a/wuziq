@@ -12,30 +12,14 @@ import { TYPE_DEFS } from "../lib/skillProfile";
 export default function SkillTestReviewScreen({ myId, onExit, onRetake }) {
   useTelegramBackButton(onExit);
   const [profile, setProfile] = useState(null);
-  const [priorHistory, setPriorHistory] = useState([]);
 
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("skill_test_status, skill_test_dims, skill_test_type, skill_test_completed_at")
+      .select("skill_test_status, skill_test_dims, skill_test_type")
       .eq("id", myId)
       .single()
-      .then(async ({ data }) => {
-        setProfile(data);
-        // 当前这份快照本身也在 skill_test_history 里留了一行(测完那次
-        // 顺手插入的),查历史时要用 completed_at 卡掉"不早于这次"的行,
-        // 不然"上次"会查到自己,变成拿这次结果跟这次结果比
-        if (data?.skill_test_completed_at) {
-          const { data: rows } = await supabase
-            .from("skill_test_history")
-            .select("dims, type, completed_at")
-            .eq("profile_id", myId)
-            .lt("completed_at", data.skill_test_completed_at)
-            .order("completed_at", { ascending: false })
-            .limit(5);
-          setPriorHistory((rows || []).map((r) => ({ dims: r.dims, type: r.type, completedAt: r.completed_at })));
-        }
-      });
+      .then(({ data }) => setProfile(data));
   }, [myId]);
 
   if (!profile) {
@@ -59,7 +43,6 @@ export default function SkillTestReviewScreen({ myId, onExit, onRetake }) {
         <>
           <SkillTestResultScreen
             profile={{ dims: profile.skill_test_dims, type: profile.skill_test_type, typeInfo }}
-            priorHistory={priorHistory}
             onContinue={onRetake}
             continueLabel="重新测一次"
           />
@@ -69,7 +52,7 @@ export default function SkillTestReviewScreen({ myId, onExit, onRetake }) {
         </>
       ) : (
         <div style={{ padding: "40px var(--space-2)", textAlign: "center" }}>
-          <p className="muted" style={{ marginBottom: 20 }}>还没有棋风测试记录</p>
+          <p className="muted" style={{ marginBottom: 20 }}>还没有棋力测试记录</p>
           <button className="btn-primary" onClick={onRetake}>去测一下</button>
         </div>
       )}

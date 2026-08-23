@@ -4,15 +4,9 @@
 //
 // 1. 玩家固定执黑先手,林墨固定执白——测试局不提供选边,省掉一次无意义的
 //    选择,也让"你先来"成为林墨待客的一部分(叙事上说得通)。
-// 2. 结束条件是"胜负驱动",不是"关卡驱动":这是一整盘完整的棋,不是测完
-//    三个关卡就可以掐断的问卷——关卡(防守/全局/进攻)只是在这盘棋进行
-//    过程中顺带做的观察,关卡测完之后棋照样要下,一直下到真正分出胜负
-//    (五连、或者棋盘下满真和棋)才结束。测完关卡这件事唯一的直接影响是
-//    "林墨从这一刻起不用再保持克制,可以拿出真本事下棋了"(见下面第 5
-//    条),不是"游戏可以停了"。
-//    ⚠️ 修订记录:关卡顺序从"防守 -> 进攻 -> 全局"改成了"防守 -> 全局
-//    -> 进攻",原因见下面第 7 条——这不是随便调的,顺序本身就是防止
-//    关卡漏测的关键手段。
+// 2. 结束条件是"关卡驱动",不是"胜负驱动":真正五连分出胜负当然直接结束
+//    (林墨的底线防守逻辑始终在,不会被这套测试逻辑绕过),但正常情况下
+//    测试目标是把三个关卡(防守/进攻/全局)走一遍,而不是分出输赢。
 // 3. 三个关卡(防守/进攻/全局)不管前一关测得怎么样都会走完,不再有
 //    "某一关表现差就跳过后面"的分层降级——之前这个设计的本意是"没必要
 //    在明显很弱的玩家身上继续测更难的能力",但代价是很多玩家只是这一次
@@ -22,31 +16,13 @@
 //    拖延的情况;每个阶段的催化窗口按"进入这个阶段之后过了几步"算,
 //    不是整局的绝对步数——不然前面阶段拖久了,后面阶段的催化时机会
 //    被顺移打乱。
-// 5. 步数硬顶 MAX_MOVES_PER_SIDE:不管关卡进度如何,到了就强制进入
-//    closing、林墨切换成真本事下棋——这不是"游戏在这里结束",只是保证
-//    "如果关卡一直没测完,林墨最晚也会在这个步数之后开始认真下",游戏
-//    本身仍然要一路下到真正分出胜负才结束。
-//    同时有一个步数下限 MIN_MOVES_PER_SIDE:就算关卡提前都测完了,林墨
-//    也不会立刻拿出真本事——在到达下限之前,仍然保持克制(不下真正的
-//    杀棋),避免出现"一两分钟就被真杀棋结束"这种显得敷衍的情况。
+// 5. 步数硬顶 MAX_MOVES_PER_SIDE:不管关卡进度如何,到了就收官。
+//    同时有一个步数下限 MIN_MOVES_PER_SIDE:就算关卡提前都测完了,也
+//    不能立刻收官——在到达下限之前,林墨仍然保持克制(不下真正的杀棋),
+//    避免出现"一两分钟就结束"这种显得敷衍的情况。
 // 6. 记录的是原始信号(逐步棋谱 + 关卡事件),不是直接算好的分数——分数
 //    在 lib/skillProfile.js 里从这些原始信号派生,这样以后要调权重/加维度
 //    不用重新设计埋点。
-// 7. "进攻"(offense_watch)这一关本质上跟另外两关不一样:它故意考验玩家
-//    能不能下出双活三——而双活三在五子棋规则里就是无解的必胜棋型(林墨
-//    一步只能挡一条线,另一条线下一手就直接连成五)。这意味着"进攻"关卡
-//    一旦真的测出"命中",整局棋很可能在接下来一两步内就实打实地分出
-//    胜负、真正结束,不是引擎能"防住"的。如果这一关排在防守/全局观
-//    前面或中间,就会出现"进攻关卡刚测完,棋已经赢了,后面的关卡再也
-//    没机会测"的情况——这正是六维图里"全局观 · 这局没测出"的根源。
-//    所以现在固定让"进攻"排在最后一个:防守和全局观这两关,回合数上
-//    也都定死了必然会在进入进攻关卡之前就催化触发、测出结果(见
-//    CATALYZE_WINDOW 的说明),不会被"进攻关卡提前结束整局"连累。
-//    同时,防守/全局观/开局这几个阶段,林墨的强制防守逻辑现在连"活三"
-//    这一档都会挡(见 findDefensiveForcedMove),不会让玩家在关卡还没
-//    测完的阶段里,靠一步没人管的活三就把棋提前赢下来——这一点只对
-//    "进攻"这一关网开一面,不然这一关想测的能力也没法被测出来了。
-
 import { BLACK, WHITE, checkWin, cloneBoard } from "./logic";
 import {
   SCORE,
@@ -67,8 +43,7 @@ const OPENING_SAMPLE_MOVES = 3; // 前几手算"开局采样",不触发任何关
 const OFFENSE_WINDOW = 3; // 进攻关卡:给玩家这么多手的窗口去抓机会
 const CATALYZE_WINDOW = 4; // 进入某个"看"阶段之后,最多这么多手内必须催化触发
 
-// 关卡阶段机器:opening -> defense_watch -> global_watch -> offense_watch -> closing
-// (进攻放在最后,原因见文件顶部第 7 条)
+// 关卡阶段机器:opening -> defense_watch -> offense_watch -> global_watch -> closing
 export function createTestState() {
   return {
     phase: "opening",
@@ -79,6 +54,8 @@ export function createTestState() {
     openingSamples: [], // 开局采样: { x, y, distToNearestOwn }
     pendingCheckpoint: null, // { type, referencePoint } 等待玩家下一步来判定
     closingBuffer: 0, // 进入 closing 阶段之后,双方各走了几手收官缓冲
+    finished: false,
+    finishReason: null, // 'checkpoints_done' | 'step_cap' | 'game_over'
   };
 }
 
@@ -182,10 +159,10 @@ function recordPlayerMove(board, testState, x, y) {
         detail: { playerDefend: mine.defend, bestDefend: pc.bestDefend }, catalyzed: pc.catalyzed,
       }];
       next.pendingCheckpoint = null;
-      // 不管这一关测得怎么样,都继续往下测全局观关卡——"进攻"排到最后
-      // 一个,原因见文件顶部第 7 条
-      next.phase = "global_watch";
+      // 不管这一关测得怎么样,都继续往下测进攻关卡——三个关卡尽量都测到
+      next.phase = "offense_watch";
       next.phaseEnteredAt = next.moveIndex;
+      next.offenseWindowStart = next.moveIndex;
     } else if (pc.type === "global") {
       const ratio = pc.bestCombined > 0 ? Math.max(mine.attack, mine.defend) / pc.bestCombined : 0;
       const result = ratio >= 0.9 ? "hit" : Math.max(mine.attack, mine.defend) >= SCORE.LIVE_THREE * 0.5 ? "partial" : "miss";
@@ -194,11 +171,7 @@ function recordPlayerMove(board, testState, x, y) {
         detail: { playerBest: Math.max(mine.attack, mine.defend), bestCombined: pc.bestCombined }, catalyzed: pc.catalyzed,
       }];
       next.pendingCheckpoint = null;
-      // 防守、全局观都测完了,这时候才放开进攻关卡——findDefensiveForcedMove
-      // 也是从这一刻起才不再拦活三
-      next.phase = "offense_watch";
-      next.phaseEnteredAt = next.moveIndex;
-      next.offenseWindowStart = next.moveIndex;
+      next.phase = "closing";
     }
   } else if (testState.phase === "offense_watch") {
     // 进攻关卡窗口期:每一步都看有没有抓住机会,不是只看某一步
@@ -216,10 +189,8 @@ function recordPlayerMove(board, testState, x, y) {
         type: "offense", triggeredAtMove: windowStart, result: "hit",
         detail: { move: [x, y] }, catalyzed: false,
       }];
-      // 进攻是最后一关,测完直接进收官——不再绕回别的关卡。这一关命中
-      // 意味着玩家已经下出了双活三,棋很可能接下来一两步就真的分出
-      // 胜负了,但这时候防守/全局观都已经测完,不会有任何关卡被连累
-      next.phase = "closing";
+      next.phase = "global_watch";
+      next.phaseEnteredAt = next.moveIndex;
     } else if (mine?.attack >= SCORE.LIVE_THREE) {
       // 拿到了单独的活三,但不是双活三——先记一手"部分命中"的候选,
       // 继续观察窗口剩余的手数看会不会进一步扩大成双活三
@@ -229,7 +200,8 @@ function recordPlayerMove(board, testState, x, y) {
           type: "offense", triggeredAtMove: windowStart, result: "partial",
           detail: { move: [x, y] }, catalyzed: false,
         }];
-        next.phase = "closing";
+        next.phase = "global_watch";
+        next.phaseEnteredAt = next.moveIndex;
       }
     } else if (windowUsed >= OFFENSE_WINDOW) {
       next.checkpoints = [...next.checkpoints, {
@@ -237,15 +209,15 @@ function recordPlayerMove(board, testState, x, y) {
         result: next.pendingOffensePartial ? "partial" : "miss",
         detail: {}, catalyzed: false,
       }];
-      next.phase = "closing";
+      // 不管这一关测得怎么样,都继续往下测全局关卡
+      next.phase = "global_watch";
+      next.phaseEnteredAt = next.moveIndex;
     }
   }
 
-  // 应变力信号:上一个关卡如果是 miss 或 partial(受挫程度不同,但都算
-  // 遇到了压力),顺手记一下"受挫后几步"的分数走势——原来只认 miss,
-  // 样本太薄,大多数局都测不出这个维度
+  // 应变力信号:如果上一个关卡是 miss,顺手记一下"失误后几步"的分数走势
   const lastCheckpoint = next.checkpoints[next.checkpoints.length - 1];
-  if (lastCheckpoint && (lastCheckpoint.result === "miss" || lastCheckpoint.result === "partial")) {
+  if (lastCheckpoint && lastCheckpoint.result === "miss") {
     const sinceMiss = next.moves.length - lastCheckpoint.triggeredAtMove;
     if (sinceMiss <= 3) {
       lastCheckpoint.recoveryTrend = [...(lastCheckpoint.recoveryTrend || []), moveEntry.attack + moveEntry.defend];
@@ -273,46 +245,13 @@ function recordPlayerMove(board, testState, x, y) {
 // 只处理"必须挡"的一半(不管进攻分多高,都不主动去完成它)——复用
 // ai.js 里同样的分级阈值,但只看 defend 这一侧。给"没到步数下限之前"
 // 这段时间用,保证林墨不会自己输,但也不会自己抢先把棋赢了。
-//
-// phase 参数:除了"进攻"(offense_watch)这个窗口期,其余所有阶段都要
-// 把"活三"也当成必须挡的一档——活三如果放着不管,玩家下一步就能把它
-// 长成活四(两端都空,必胜棋型),那时候已经没有任何一步棋能挡得住了。
-// 之前这里只挡到"冲四"这一档,活三级别完全放任,等于允许"防守/全局观
-// 这两关还没测完,玩家就已经靠一步没人管的活三直接把棋下赢了"——这正是
-// 结果页里"全局观 · 应变力 这局没测出"的根源:不是关卡没触发,是游戏
-// 在关卡触发之前就已经因为真的分出胜负而提前结束了。
-// "进攻"这一关本来就是故意要测"玩家能不能下出双活三"这个能力,所以
-// 只有这个阶段仍然放开活三不拦——但配合下面 recordPlayerMove 里调整过
-// 的阶段顺序(防守、全局观都排在进攻前面),真到了这个阶段,前两关早就
-// 已经测完了,就算因此提前结束也不会漏掉任何一项。
-// 还有一层更隐蔽的坑(靠模拟对局才找出来的):找到的这个"必须防守"的
-// 点,理论上只是用来挡玩家的,但如果棋盘下得够久、林墨自己的棋也逐渐
-// 攒出了不少子力,完全可能出现"这个点刚好同时也是林墨自己能连成五"的
-// 巧合——一挡就顺手把自己的棋下赢了。所以这里每一档都优先挑"不会顺带
-// 让林墨自己获胜"的候选,真的没得选(挡这一步就是唯一解)才退而求其次。
-function findDefensiveForcedMove(scored, phase) {
-  const pick = (predicate) => {
-    const matches = scored.filter(predicate);
-    if (!matches.length) return null;
-    // 一档一档往上试:先看有没有"完全不会推进林墨自己进攻分"的选项,
-    // 找不到再放宽到"至少不会顺手连成活四/冲四",最后才认"连成五"
-    // 这个真的没有别的选择的情况——目的是不让防守这一步,反而变成
-    // 林墨自己悄悄攒出一个"冲四/活四"的机会。
-    return matches.find((c) => c.attack < SCORE.FOUR)
-      || matches.find((c) => c.attack < SCORE.LIVE_FOUR)
-      || matches.find((c) => c.attack < SCORE.FIVE)
-      || matches[0];
-  };
-  const five = pick((c) => c.defend >= SCORE.FIVE);
+function findDefensiveForcedMove(scored) {
+  const five = scored.find((c) => c.defend >= SCORE.FIVE);
   if (five) return five;
-  const liveFour = pick((c) => c.defend >= SCORE.LIVE_FOUR);
+  const liveFour = scored.find((c) => c.defend >= SCORE.LIVE_FOUR);
   if (liveFour) return liveFour;
-  const four = pick((c) => c.defend >= SCORE.FOUR);
+  const four = scored.find((c) => c.defend >= SCORE.FOUR);
   if (four) return four;
-  if (phase !== "offense_watch") {
-    const liveThree = pick((c) => c.defend >= SCORE.LIVE_THREE);
-    if (liveThree) return liveThree;
-  }
   return null;
 }
 
@@ -336,29 +275,18 @@ function decideLinMoMove(board, testState) {
   // 只有步数够了、而且三个关卡都已经有结果(真正进入 closing 阶段)
   // 之后,才恢复成完整的必杀/必防判断。
   const stillTesting = testState.moveIndex < MIN_MOVES_PER_SIDE || testState.phase !== "closing";
-  const forced = stillTesting ? findDefensiveForcedMove(rawScored, testState.phase) : findForcedMove(rawScored);
+  const forced = stillTesting ? findDefensiveForcedMove(rawScored) : findForcedMove(rawScored);
   if (forced) return { move: forced, testState, dialogueKey: null };
 
   // 除了上面这层"必须应对"的判断,下面所有分支挑棋的候选池也要跟着
-  // 收紧——测试还没结束之前,不能让林墨自己的进攻分越攒越高。
-  // 阈值从"活四"收紧成"冲四"(SCORE.FOUR):模拟对局跑出来的真实教训——
-  // 门槛卡在"活四"的话,林墨在"冲四"这个区间(1000~9999)完全不受限制,
-  // 一整局慢慢攒下来,自己也会攒出一手接近获胜的棋。等真到了"这个点
-  // 必须用来挡玩家"的时候,棋盘凑巧了,同一个点刚好也是林墨自己能连成
-  // 五的点——防守的同时顺手就把自己的棋下赢了,整场测试因此提前结束。
-  // 收紧到"冲四"以下(< 1000)之后,林墨全程都够不到这个危险区间,
-  // 才是真正把"提前结束"这个概率降到最低,而不是每一步都在赌运气。
-  const scored = stillTesting ? rawScored.filter((c) => c.attack < SCORE.FOUR) : rawScored;
+  // 收紧——测试还没结束之前,直接把"进攻分已经到活四/五连"这种候选从
+  // 池子里砍掉,不给加权随机/关卡挑选任何机会不小心选中它们。真正进入
+  // 收官阶段,池子才恢复完整。
+  const scored = stillTesting ? rawScored.filter((c) => c.attack < SCORE.LIVE_FOUR) : rawScored;
   if (stillTesting && !scored.length) {
     // 极端情况:砍完之后候选池空了(比如棋盘已经被逼到只剩下能连成
-    // 活四的点)——退回宽松一点的候选池,但连成五(真正的赢棋)这个
-    // 底线不能破,不然就是"进攻/全局观还没测完,林墨自己一步棋把
-    // 玩家杀了"这种情况,跟findDefensiveForcedMove要防的问题是同一类,
-    // 只是这里是进攻侧、不是防守侧。真的连"连成五以外都选不出候选"这种
-    // 棋盘全满到只剩必胜点的极端情况,理论上不该出现(候选点来自
-    // scoreCandidates,本来就只覆盖空位附近),但还是加一层兜底。
-    const safer = rawScored.filter((c) => c.attack < SCORE.FIVE);
-    scored.push(...(safer.length ? safer : rawScored));
+    // 活四的点),退回未砍的池子,不能让林墨无棋可下
+    scored.push(...rawScored);
   }
 
   let dialogueKey = null;
@@ -416,7 +344,7 @@ function decideLinMoMove(board, testState) {
     const soft = scored.filter((c) => c.defend < SCORE.LIVE_THREE * 0.8);
     const pool = soft.length ? soft : scored;
     const move = weightedRandomPick(generalPool(pool, 0.55), (c) => Math.max(c.attack, c.defend * 0.3) + 1);
-    // 刚从"全局观"切进"诱导"阶段的第一手,给一句过渡台词——语气上要体现
+    // 刚从"控场"切进"诱导"阶段的第一手,给一句过渡台词——语气上要体现
     // "我先松一松,看你敢不敢"这个态度上的转变,不然玩家只会觉得林墨
     // 突然变弱了,却不知道这是故意的
     const enteringEntice = testState.moveIndex === testState.phaseEnteredAt;
@@ -470,7 +398,7 @@ function decideLinMoMove(board, testState) {
     }
 
     const move = weightedRandomPick(generalPool(scored, 0.65), (c) => Math.max(c.attack, c.defend));
-    // 没触发本轮的"收网"考验,但如果这是刚从"控场"切进来的第一手,
+    // 没触发本轮的"收网"考验,但如果这是刚从"诱导"切进来的第一手,
     // 仍然给一句过渡台词,提醒玩家棋盘不止一处——不然这个阶段切换
     // 可能完全悄无声息地过去
     const enteringNet = testState.moveIndex === testState.phaseEnteredAt;
@@ -480,7 +408,7 @@ function decideLinMoMove(board, testState) {
   // closing:关卡都测完了。如果还没到最低步数门槛,继续保持克制——不下
   // 真正的杀棋,避免测试提前结束、显得敷衍(这里的 scored 已经是上面
   // 砍掉活四/五连候选之后的池子了);到了门槛之后才正常发挥收官。
-  // 刚从"诱导"切进"收官"的第一手,给一句收尾过渡台词——closingBuffer
+  // 刚从"收网"切进"收官"的第一手,给一句收尾过渡台词——closingBuffer
   // 只在真正进入 closing 之后才会被 recordLinMoMove 递增,这里读到的
   // 还是"这一手之前"的值,等于 0 就说明是这个阶段的第一手。
   const enteringClosing = testState.phase === "closing" && testState.closingBuffer === 0;
@@ -507,9 +435,21 @@ function recordLinMoMove(board, testState, x, y) {
   return next;
 }
 
+function isFinished(testState) {
+  if (testState.phase === "closing" && !testState.pendingCheckpoint) {
+    // closing 阶段里,如果关卡都已经有结果、且没有正等待判定的关卡,
+    // 还要同时满足两个条件才真正结束:①收官缓冲够了(2手)②达到最低
+    // 步数门槛——任何一条没满足,都不能收官,这是"不要一两分钟就结束"
+    // 这个要求的具体落地。
+    return testState.closingBuffer >= 2 && testState.moveIndex >= MIN_MOVES_PER_SIDE;
+  }
+  return false;
+}
+
 export const skillTestEngine = {
   createTestState,
   recordPlayerMove,
   decideLinMoMove,
   recordLinMoMove,
+  isFinished,
 };

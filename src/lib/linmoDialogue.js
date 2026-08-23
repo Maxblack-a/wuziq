@@ -3,8 +3,6 @@
 // 不自我介绍式地解释自己的设定——他的特点要通过对话行为体现,而不是
 // 直接告诉玩家"我很会观察"。
 
-import { DIM_LABELS as DIM_LABELS_FOR_TEXT } from "./skillProfile";
-
 export const GREETING_LINES = [
   "哎,你就是那个新来的棋手吧?",
 ];
@@ -67,7 +65,7 @@ const NAME_REACTION_LINES = {
 };
 
 const NAME_INVITE_FOLLOWUPS = [
-  "不过,我还挺好奇你下棋是什么风格——要不要和我下一局?",
+  "不过,我还挺好奇你的棋力怎么样——要不要和我下一局?",
   "正好棋馆现在没什么人,陪我下一局?我想看看你的棋。",
   "既然认识了,那我倒挺想看看你下棋是什么风格的。",
 ];
@@ -188,13 +186,11 @@ export const IN_GAME_LINES = {
     "光顾着这一块,恐怕不太够了。",
     "该看看你顾不顾得过来了。",
   ],
-  // 关卡都测完,进入收官:节奏收回来,暗示"复盘"即将开始——注意这不是
-  // "游戏要结束了",只是"林墨从这一手开始不用再保持克制、可以认真下",
-  // 棋还是要继续下到真正分出胜负才结束
+  // 关卡都测完,进入收官:节奏收回来,暗示"复盘"即将开始
   phase_closing: [
-    "大概齐,我心里有数了。接下来我认真下了。",
-    "行了,该看的也看得差不多了,剩下的就正常下吧。",
-    "心里有数了,后面这盘我不让了。",
+    "大概齐,我心里有数了。",
+    "行了,该看的也看得差不多了。",
+    "剩下这几手,随便下下就好。",
   ],
 };
 
@@ -223,56 +219,16 @@ export const RESULT_INTRO_LINE = "下完了。让我想想怎么说……";
 export const RESULT_INTRO_LINE_RETAKE = "又下完一局。有些地方跟我记得的不太一样了。";
 
 export const TYPE_COMMENT = {
-  attack: [
-    "你几乎每一步都在往前顶,棋盘上留给自己的退路不多——但也正因为这样,我没什么喘息的机会。",
-    "你的棋风就没打算跟我耗,一逮到机会就往前冲。",
-    "跟你下棋,我几乎没有能松口气的时候,你一直在找进攻的缝。",
-  ],
-  defense: [
-    "我好几次想往前冲,都被你不动声色地挡回来了。稳。",
-    "你不是那种会主动惹事的棋手,但真要防起来,一点漏洞都不给我。",
-    "我试探了你好几次,每次都被你不慌不忙地接住了。",
-  ],
-  vision: [
-    "你好像一直都知道棋盘上还有别的地方需要照看,没有只盯着眼前这一小块。",
-    "你看棋盘的方式跟大多数人不太一样——不是只盯着正在打的这一处。",
-    "我想在别处偷个空,你基本都能察觉到。",
-  ],
-  calc: [
-    "你选的点,大多数时候都是当时最好的那一个。",
-    "你下棋很少浪费步数,基本每一手都算得清楚。",
-    "你的落子几乎没有明显的失误手,挑不出太多毛病。",
-  ],
-  opening: [
-    "前面几手棋摆得挺讲究,棋子和棋子之间都能接得上,不是随便找地方下的。",
-    "你开局就有章法,不是想到哪下到哪那种。",
-    "从第一手开始,你的棋就有一条能看出来的思路。",
-  ],
-  adapt: [
-    "中间被我打乱过一次,你很快就调整回来了。",
-    "被我搅乱节奏之后,你没自乱阵脚,几步就找回了状态。",
-    "计划被打断了一下,但你没有慌,重新组织得很快。",
-  ],
-  attack_calc: [
-    "进攻的时候几乎不浪费步数,想清楚了才动手。",
-    "你的攻势不是硬冲,每一步都算得挺明白。",
-    "杀棋杀得很干净,不拖泥带水。",
-  ],
-  defense_adapt: [
-    "怎么搅都搅不乱,压力越大,你反而越沉得住气。",
-    "我几次想打乱你的节奏,你都扛住了,没崩。",
-    "你这种类型的棋手,越到后面越难对付。",
-  ],
-  vision_opening: [
-    "你更像是在经营一整盘棋,而不是在打一场一场的小仗。",
-    "你下棋有一种在铺局的感觉,不急着在某一处见输赢。",
-    "比起眼前这一手,你好像更在乎整盘棋的走向。",
-  ],
-  balanced: [
-    "各方面都还行,没有哪里明显是短板——这样的棋手,后面路子最宽。",
-    "你这盘棋挑不出明显的弱点,哪一项都过得去。",
-    "没有特别突出的一面,但也没有明显的漏洞,是那种很难被抓住破绽的类型。",
-  ],
+  attack: "你几乎每一步都在往前顶,棋盘上留给自己的退路不多——但也正因为这样,我没什么喘息的机会。",
+  defense: "我好几次想往前冲,都被你不动声色地挡回来了。稳。",
+  vision: "你好像一直都知道棋盘上还有别的地方需要照看,没有只盯着眼前这一小块。",
+  calc: "你选的点,大多数时候都是当时最好的那一个。",
+  opening: "前面几手棋摆得挺讲究,棋子和棋子之间都能接得上,不是随便找地方下的。",
+  adapt: "中间被我打乱过一次,你很快就调整回来了。",
+  attack_calc: "进攻的时候几乎不浪费步数,想清楚了才动手。",
+  defense_adapt: "怎么搅都搅不乱,压力越大,你反而越沉得住气。",
+  vision_opening: "你更像是在经营一整盘棋,而不是在打一场一场的小仗。",
+  balanced: "各方面都还行,没有哪里明显是短板——这样的棋手,后面路子最宽。",
 };
 
 // 每种类型再补一句"这一局专属"的引用——从这盘棋的原始信号(checkpoints/
@@ -284,129 +240,209 @@ function citationFor(typeKey, highlights) {
   if (!highlights) return null;
   const { defense: d, offense: o, global: g, calc: c, opening: op, adapt: ad, totalMoves } = highlights;
 
-  // 拆成"单维度引用"的字典,组合型人格(杀手型/磐石型/军师型)复用这
-  // 两个字典里各自的那一句拼起来,而不是只引用其中一个维度——不然
-  // 玩家两项数据都很亮眼,点评却只提了一半,浪费了另一半的真实细节。
-  const single = {
-    attack: () => {
+  switch (typeKey) {
+    case "attack":
+    case "attack_calc":
       if (o?.result === "hit" && o.turn) return `第 ${o.turn} 手你摆出双活三那下,我是真被将了一军。`;
       if (o?.result === "partial" && o.turn) return `第 ${o.turn} 手你抓到了一个活三,只是没扩成真正的杀棋,再往前一步就更好看了。`;
       return null;
-    },
-    defense: () => {
+    case "defense":
+    case "defense_adapt":
       if (d?.result === "hit" && d.turn) return `第 ${d.turn} 手我逼你应招的时候,你接的就是最稳的那个点,几乎没犹豫。`;
       if (d?.result === "partial" && d.turn) return `第 ${d.turn} 手你把我挡住了,不算最干净,但顶住了。`;
       return null;
-    },
-    vision: () => {
+    case "vision":
+    case "vision_opening":
       if (g?.result === "hit" && g.turn) return `第 ${g.turn} 手棋盘上同时有两处热闹,你两头都算进去了。`;
       if (g?.result === "partial" && g.turn) return `第 ${g.turn} 手棋盘分了两处,你先顾住了近的这头。`;
       return null;
-    },
-    calc: () => (c && c.total >= 3 ? `这一局 ${c.total} 步里有 ${c.near} 步都踩在当时最好的那个点上。` : null),
-    opening: () => (op ? `开局那几手,你几乎每次都紧贴着自己已有的棋子往外扩,没有另起炉灶。` : null),
-    adapt: () => (ad?.recovered ? `第 ${ad.missTurn} 手你被我趁虚而入,但没几步你就把节奏找回来了。` : null),
-    balanced: () => (totalMoves ? `这一局正正经经下了 ${totalMoves} 手,没有哪一段是明显的短板。` : null),
-  };
-
-  const comboParts = {
-    attack_calc: ["attack", "calc"],
-    defense_adapt: ["defense", "adapt"],
-    vision_opening: ["vision", "opening"],
-  }[typeKey];
-
-  if (comboParts) {
-    const parts = comboParts.map((k) => single[k]()).filter(Boolean);
-    return parts.length ? parts.join("") : null;
+    case "calc":
+      if (c && c.total >= 3) return `这一局 ${c.total} 步里有 ${c.near} 步都踩在当时最好的那个点上。`;
+      return null;
+    case "opening":
+      if (op) return `开局那几手,你几乎每次都紧贴着自己已有的棋子往外扩,没有另起炉灶。`;
+      return null;
+    case "adapt":
+      if (ad?.recovered) return `第 ${ad.missTurn} 手你被我趁虚而入,但没几步你就把节奏找回来了。`;
+      return null;
+    case "balanced":
+      if (totalMoves) return `这一局正正经经下了 ${totalMoves} 手,没有哪一段是明显的短板。`;
+      return null;
+    default:
+      return null;
   }
-
-  return single[typeKey] ? single[typeKey]() : null;
 }
 
 export function resultLine(typeKey, highlights) {
-  const pool = TYPE_COMMENT[typeKey] || TYPE_COMMENT.balanced;
-  const base = pool[Math.floor(Math.random() * pool.length)];
+  const base = TYPE_COMMENT[typeKey] || TYPE_COMMENT.balanced;
   const citation = citationFor(typeKey, highlights);
   return citation ? `${base}${citation}` : base;
 }
 
-// ---- 复测对比:跟上一次相比 / 最近这段时间 ----
-// priorHistory:按时间倒序(最近的在前)的历史记录数组,每项 { dims, type,
-// completedAt },来自 skill_test_history 表——这张表在每次测试完成时都会
-// 追加一行,不影响 profiles.skill_test_* 那几列(它们仍然只代表"最新一次"、
-// 给每日试炼这类功能读取,互不干扰)。priorHistory 可能是 undefined/空
-// 数组(第一次测试、或者调用方没查历史),这两种情况下面两个函数都直接
-// 返回 null,由结果页决定不渲染对比区块。
-const DIM_ORDER = ["attack", "defense", "vision", "calc", "opening", "adapt"];
-
-// 相比上一次:挑变化最大的 1-2 个维度说,不逐项念一遍六个数字——念完
-// 六个数字的涨跌,听起来像体检报告,不像一个人在跟你聊感受。
-export function compareToLastLine(dims, priorHistory) {
-  const last = priorHistory && priorHistory[0];
-  if (!last || !last.dims) return null;
-
-  const deltas = DIM_ORDER
-    .map((k) => ({ key: k, delta: (dims[k] ?? 0) - (last.dims[k] ?? 0) }))
-    .filter((d) => Math.abs(d.delta) >= 8) // 差距太小(棋局本身的随机波动)不值得拿出来说
-    .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
-
-  if (!deltas.length) {
-    return "跟上次比,整体感觉差不多,没什么明显变化。";
-  }
-
-  const top = deltas[0];
-  const label = DIM_LABELS_FOR_TEXT[top.key];
-  const risePhrases = [`这次${label}比上次明显好了不少。`, `${label}这一项,比上次沉稳/干净了不少。`];
-  const fallPhrases = [`不过这次${label}没有上次稳,像是有点分心。`, `${label}这一项,这次反而不如上次。`];
-  const primary = top.delta > 0
-    ? risePhrases[Math.floor(Math.random() * risePhrases.length)]
-    : fallPhrases[Math.floor(Math.random() * fallPhrases.length)];
-
-  if (deltas.length === 1 || Math.abs(deltas[1].delta) < 14) {
-    return primary;
-  }
-
-  // 有第二个也很明显的变化,而且方向跟第一个不一样,顺带提一句,让对比
-  // 显得更像"整体地聊了聊",而不是只挑一个数字
-  const second = deltas[1];
-  const secondLabel = DIM_LABELS_FOR_TEXT[second.key];
-  const secondClause = second.delta > 0
-    ? `,${secondLabel}倒是比上次更好了`
-    : `,倒是${secondLabel}这次弱了一点`;
-  return `${primary}${secondClause}。`;
-}
-
-// 最近这段时间:至少要有 3 次记录(算上这次)才谈得上"趋势",少于这个
-// 数量,"最近怎么样"这句话本身就没有底气说出口——宁可不说,也不要
-// 拿两个点硬编一条"趋势线"出来。
-export function recentTrendLine(dims, priorHistory) {
-  if (!priorHistory || priorHistory.length < 2) return null;
-
-  // 连同这一次在内最多取最近 4 次,按时间正序排(方便算"早->晚"的走势)
-  const recent = [...priorHistory].slice(0, 3).reverse();
-  const series = [...recent.map((h) => h.dims), dims];
-
-  const hiddenAvg = (d) => DIM_ORDER.reduce((s, k) => s + (d[k] ?? 0), 0) / DIM_ORDER.length;
-  const avgs = series.map(hiddenAvg);
-  const trendDelta = avgs[avgs.length - 1] - avgs[0];
-
-  // 找这几次里最稳定进步的单项(每一步都不比上一步差,且总体涨了不少)
-  const steadyDim = DIM_ORDER.find((k) => {
-    const vals = series.map((d) => d[k] ?? 0);
-    const monotonic = vals.every((v, i) => i === 0 || v >= vals[i - 1] - 5);
-    return monotonic && vals[vals.length - 1] - vals[0] >= 15;
-  });
-
-  if (steadyDim) {
-    return `这几次测下来,你的${DIM_LABELS_FOR_TEXT[steadyDim]}是一次比一次稳的,看得出来是真的在往这个方向练。`;
-  }
-  if (trendDelta >= 10) {
-    return "最近这几次感觉你整体状态是在往上走的,比刚认识你那会儿更沉得住气了。";
-  }
-  if (trendDelta <= -10) {
-    return "最近这几次跟前几次比,感觉你的状态有点起伏,不知道是不是最近比较忙。";
-  }
-  return "最近这几次下来,你的水平其实一直很稳定,没有太大起伏。";
-}
-
 export const RESULT_CONTINUE_LABEL = "继续";
+
+// ============================================================
+// 每日试炼:林墨作为固定 NPC 陪练时的台词。跟上面棋力测试那套台词
+// 语气一致(自然、克制),但场合不一样——不是"考官在观察你",是
+// "每天都会遇到的对手",所以更多体现"熟悉感"和"较量本身"。
+// ============================================================
+
+// 挑战前的招呼语,按连胜/连败状态给不同语气——这个语气变化本身就是
+// 一种"林墨在跟着你的状态走"的反馈,而不是每天点开都是同一句话。
+// 这一条专给"老朋友重逢"场景用(games_played > 0),第一次在每日试炼
+// 遇到林墨走的是下面 dailyFirstMeetingInviteLine,两者不共用。
+export function dailyReturnGreetingLine(streak) {
+  if (streak >= 3) {
+    const lines = [
+      "你最近状态不错啊,今天还要继续?",
+      "连着赢了好几回了,今天我可得认真点。",
+    ];
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+  if (streak <= -2) {
+    const lines = [
+      "别急,输几局很正常,再来一盘。",
+      "上次那盘是有点可惜,今天找回来?",
+    ];
+    return lines[Math.floor(Math.random() * lines.length)];
+  }
+  const lines = [
+    "来了?棋盘我都摆好了。",
+    "今天也来下一局?",
+    "正好,我也想活动一下手腕。",
+  ];
+  return lines[Math.floor(Math.random() * lines.length)];
+}
+
+// 兼容旧命名
+export const dailyGreetingLine = dailyReturnGreetingLine;
+
+// 第一次在"每日试炼"里遇到林墨(games_played === 0,不管之前有没有做过
+// 棋力测试,那是另一个场合)——要体现"我们认识,但还没正经交过手"这个
+// 关系上的细微差别,不能跟"老朋友重逢"用同一套话术。
+export const DAILY_FIRST_MEETING_LINES = [
+  "棋力测试那盘不算真的交手——今天要不要正经下一局?",
+  "早想跟你正经下一盘了,今天有空?",
+  "咱们还没真刀真枪下过一局呢,来试试?",
+];
+export function dailyFirstMeetingInviteLine() {
+  return DAILY_FIRST_MEETING_LINES[Math.floor(Math.random() * DAILY_FIRST_MEETING_LINES.length)];
+}
+
+// 日常闲聊——跟棋盘无关,纯粹让林墨显得像个有生活的人,而不是只会
+// 讲棋的对弈机器。邀请语之外附加展示的"第二句话"用这个池子,随机挑
+// 一条,不是每次都说同一句。
+export const DAILY_SMALL_TALK_LINES = [
+  "刚才路过巷口,那家面馆又在排队了。",
+  "今天棋院来了个新面孔,坐了一下午没走。",
+  "外面天挺好,下完这局你也该出去走走。",
+  "刚泡了壶茶,你要是不急,下完再聊两句。",
+  "窗边那盆兰花,这两天总算开了。",
+];
+export function pickSmallTalkLine() {
+  return DAILY_SMALL_TALK_LINES[Math.floor(Math.random() * DAILY_SMALL_TALK_LINES.length)];
+}
+
+export const DAILY_ACCEPT_LABEL = "好,来一局";
+export const DAILY_DECLINE_LABEL = "改天吧";
+
+// 玩家拒绝了林墨的邀请:不失落、不追问,给个体面的收尾。
+export const DAILY_PLAYER_DECLINE_RESPONSE_LINES = [
+  "行,那就改天。",
+  "没事,棋院一直都在。",
+  "好,那我先忙别的了。",
+];
+export function dailyPlayerDeclinedResponseLine() {
+  return DAILY_PLAYER_DECLINE_RESPONSE_LINES[Math.floor(Math.random() * DAILY_PLAYER_DECLINE_RESPONSE_LINES.length)];
+}
+
+export const DAILY_CHALLENGE_LABEL = "挑战林墨";
+export const DAILY_NO_STAMINA_LINE = "今天的体力好像不够了,明天再来吧。";
+
+export const DAILY_WIN_LINES = [
+  "这局我认了,你下得比我好。",
+  "嗯,这盘是你的。",
+  "被你赢了,下一局我不会这么松懈。",
+];
+export const DAILY_LOSE_LINES = [
+  "这局算我的,别灰心,再来一盘就找回来了。",
+  "刚才那几步你有点急,不然结果不一定是这样。",
+  "赢是赢了,不过你后面追得挺紧的。",
+];
+export const DAILY_DRAW_LINES = [
+  "打平了,谁都没让谁。",
+  "这盘算平局,下一局见分晓。",
+];
+
+export function dailyResultLine(result) {
+  const pool = result === "win" ? DAILY_WIN_LINES : result === "lose" ? DAILY_LOSE_LINES : DAILY_DRAW_LINES;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
+// ---- 赛后:林墨主动邀请 / 不主动邀请下一局 ----
+export const DAILY_REMATCH_INVITE_LINES = [
+  "要不要再来一局?我还没尽兴。",
+  "时间还早,再战一盘?",
+  "这盘不算完,再来一局找回场子?",
+];
+export function dailyRematchInviteLine() {
+  return DAILY_REMATCH_INVITE_LINES[Math.floor(Math.random() * DAILY_REMATCH_INVITE_LINES.length)];
+}
+export const DAILY_REMATCH_ACCEPT_LABEL = "好啊,再来一局";
+export const DAILY_REMATCH_DECLINE_LABEL = "今天先到这吧";
+
+// 林墨这次没主动邀请(不是冷场,只是恰好没提)——给一句中性的收尾,
+// 顺势把主动权交给玩家(玩家这边有"邀请TA"这个按钮)。
+export const DAILY_NO_REMATCH_OFFER_LINES = [
+  "今天先这样,你随时可以再来找我。",
+  "下次想下了,来棋院找我就行。",
+  "这盘先到这,我这边不勉强。",
+];
+export function dailyNoRematchOfferLine() {
+  return DAILY_NO_REMATCH_OFFER_LINES[Math.floor(Math.random() * DAILY_NO_REMATCH_OFFER_LINES.length)];
+}
+
+export const DAILY_INVITE_NPC_LABEL = "邀请TA再来一局";
+export const DAILY_PICK_OTHER_LABEL = "看看其他棋手";
+
+// 玩家主动邀请,林墨接受
+export const DAILY_ACCEPT_PLAYER_INVITE_LINES = [
+  "行,那就再来一局。",
+  "好,奉陪到底。",
+  "正合我意。",
+];
+export function dailyAcceptPlayerInviteLine() {
+  return DAILY_ACCEPT_PLAYER_INVITE_LINES[Math.floor(Math.random() * DAILY_ACCEPT_PLAYER_INVITE_LINES.length)];
+}
+
+// 玩家主动邀请,林墨拒绝——一定要给理由,且理由要"不冷场"(暗示下次
+// 还会见面,不是真的在回避玩家)。
+export const DAILY_PLAYER_INVITE_DECLINE_REASONS = [
+  "有点累了,让我歇会儿,下次再战。",
+  "我这边还有点事,晚点再说吧。",
+  "刚才那盘让我想了不少,先消化消化。",
+  "棋院这会儿有点吵,改天找个清静的时候再下。",
+];
+export function dailyPlayerInviteDeclineReason() {
+  return DAILY_PLAYER_INVITE_DECLINE_REASONS[Math.floor(Math.random() * DAILY_PLAYER_INVITE_DECLINE_REASONS.length)];
+}
+
+// 体力耗尽,没法再邀请下一局了
+export const DAILY_STAMINA_EXHAUSTED_LINES = [
+  "今天下得也不少了,养足精神明天再来。",
+  "先歇歇吧,明天棋盘还在。",
+];
+export function dailyStaminaExhaustedLine() {
+  return DAILY_STAMINA_EXHAUSTED_LINES[Math.floor(Math.random() * DAILY_STAMINA_EXHAUSTED_LINES.length)];
+}
+
+// "选择下一步"页面(换个对手 / 返回首页)顶部的过渡语
+export const DAILY_CHOOSE_NEXT_LINES = [
+  "要不再找别的棋手练练?",
+  "棋院里应该还有别人在。",
+];
+export function dailyChooseNextLine() {
+  return DAILY_CHOOSE_NEXT_LINES[Math.floor(Math.random() * DAILY_CHOOSE_NEXT_LINES.length)];
+}
+export const DAILY_MATCH_NEXT_LABEL = "匹配下一位棋手";
+export const DAILY_BACK_HOME_LABEL = "返回首页";

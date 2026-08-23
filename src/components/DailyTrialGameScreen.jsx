@@ -45,6 +45,8 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
   const revealTimerRef = useRef(null);
   const moveTokenRef = useRef(0);
   const finishedRef = useRef(false);
+  const startTimeRef = useRef(Date.now());
+  const moveCountRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -59,14 +61,29 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
     return next;
   }
 
+  // finalBoardRef/finalWinLineRef:落子发生在 setState 之后,但 finalize()
+  // 触发的那一刻 React 的 state 更新是异步的,直接读 board/winInfo 这两个
+  // state 变量拿到的可能还是上一帧的值——所以关键的"最终棋盘长什么样"
+  // 这份数据额外存一份 ref,落子的同时就更新,finalize 时读 ref 保证拿到
+  // 的是真正落子之后的那一刻,不会因为 state 异步而错位。结算页的棋盘
+  // 回顾缩略图就是拿这份数据画的,不是凭空造的假棋盘。
+  const finalBoardRef = useRef(board);
+  const finalWinLineRef = useRef(null);
+
   function finalize(result) {
     if (finishedRef.current) return;
     finishedRef.current = true;
     const quality = computeMatchQuality(moveLogRef.current);
+    const meta = {
+      board: finalBoardRef.current,
+      winLine: finalWinLineRef.current,
+      moveCount: moveCountRef.current,
+      durationSec: Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000)),
+    };
     const delay = result === "draw" ? DRAW_REVEAL_DELAY : WIN_REVEAL_DELAY;
     setRevealing(true);
     revealTimerRef.current = setTimeout(() => {
-      onFinish(result, quality);
+      onFinish(result, quality, meta);
     }, delay);
   }
 
@@ -92,6 +109,8 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
       const afterAi = applyMove(move.x, move.y, LINMO_COLOR, currentBoard);
       setBoard(afterAi);
       setLastMove([move.x, move.y]);
+      finalBoardRef.current = afterAi;
+      moveCountRef.current += 1;
       setThinking(false);
       if (Math.random() < 0.5) {
         const line = pickAmbientLine();
@@ -101,6 +120,7 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
       const aiWin = checkWin(afterAi, move.x, move.y);
       if (aiWin) {
         setWinInfo(aiWin.line);
+        finalWinLineRef.current = aiWin.line;
         hapticNotify("error");
         finalize("lose");
         return;
@@ -121,10 +141,13 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
     const afterBoard = applyMove(x, y, PLAYER_COLOR, beforeBoard);
     setBoard(afterBoard);
     setLastMove([x, y]);
+    finalBoardRef.current = afterBoard;
+    moveCountRef.current += 1;
 
     const win = checkWin(afterBoard, x, y);
     if (win) {
       setWinInfo(win.line);
+      finalWinLineRef.current = win.line;
       hapticNotify("success");
       finalize("win");
       return;
@@ -155,7 +178,13 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
     if (aiTimerRef.current) { clearTimeout(aiTimerRef.current); aiTimerRef.current = null; }
     finishedRef.current = true;
     const quality = computeMatchQuality(moveLogRef.current);
-    onFinish("lose", Math.min(quality, 0.4));
+    const meta = {
+      board: finalBoardRef.current,
+      winLine: null,
+      moveCount: moveCountRef.current,
+      durationSec: Math.max(1, Math.round((Date.now() - startTimeRef.current) / 1000)),
+    };
+    onFinish("lose", Math.min(quality, 0.4), meta);
   }
 
   return (
