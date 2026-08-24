@@ -1,5 +1,6 @@
 // 统一风格的线性图标,不用 emoji,不引入图标库依赖。
 // 全部用 currentColor,方便在导航默认态/激活态之间切换颜色。
+import { useId } from "react";
 
 export function IconFriends({ size = 20 }) {
   return (
@@ -88,11 +89,28 @@ export function IconBolt({ size = 16 }) {
 
 // 钻石货币:实心刻面宝石,跟 IconDiamondOutline(纯装饰用的小菱形章)
 // 区分开——这个是真正的"货币"图标,要能在数字旁边一眼认出来。
+// 钻石(硬通货)图标——10条线描出来的低多边形切割钻石:外轮廓6条边
+// (顶边被两个内侧点分成3段 + 左右两条上斜边 + 左右两条下斜边)、腰线、
+// 两条从顶边内侧点先往内收再折向底部尖点的"Z字形"对角线,浅蓝填充、
+// 深蓝描边。这个具体形状是照用户给的参考图逐像素量出来的坐标做的,
+// 不是随手画的钻石,改的时候不要简化掉那个 Z 字转折,不然就不是同一个
+// 图标了。
 export function IconGem({ size = 16 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round">
-      <path d="M6 3h12l4 6-10 12L2 9l4-6z" fill="currentColor" fillOpacity="0.18" />
-      <path d="M2 9h20M8.5 3 6 9l6 12 6-12-2.5-6M6 9l6 3.2L18 9" />
+    <svg width={size} height={size * (22 / 24)} viewBox="0 0 24 22">
+      <polygon points="4.8,1.5 19.2,1.5 23,6.8 12,21 1,7" fill="#A8D8F0" />
+      <g stroke="#1B5A8A" strokeWidth="0.9" strokeLinecap="round" fill="none">
+        <line x1="4.8" y1="1.5" x2="9" y2="1.5" />
+        <line x1="9" y1="1.5" x2="15" y2="1.5" />
+        <line x1="15" y1="1.5" x2="19.2" y2="1.5" />
+        <line x1="4.8" y1="1.5" x2="1" y2="7" />
+        <line x1="19.2" y1="1.5" x2="23" y2="6.8" />
+        <line x1="1" y1="7" x2="23" y2="6.8" />
+        <line x1="1" y1="7" x2="12" y2="21" />
+        <line x1="23" y1="6.8" x2="12" y2="21" />
+        <polyline points="9,1.5 7.3,7.2 12,21" />
+        <polyline points="15,1.5 16.9,6.4 12,21" />
+      </g>
     </svg>
   );
 }
@@ -123,6 +141,52 @@ export function IconListNumbers({ size = 16 }) {
       <path d="M9 6h11M9 12h11M9 18h11" />
       <path d="M4 5h1v3M4 8h2" />
       <path d="M4 13.5c0-.5.4-1 1-1s1 .5 1 1-.3.7-1 1.2-1 .8-1 1.3h2" />
+    </svg>
+  );
+}
+
+// 经验值/积分:五角星徽章(圆形底 + 星形),视觉上跟 IconGem 配对——
+// 一个代表"硬通货"(钻石),一个代表"成长值"(经验),两个图标风格
+// 呼应但形状/主色不同,一眼能区分开是哪种奖励。
+// 经验值:五角星徽章,渐变金色(浅金→深赭)+ 深色描边,比纯色版本更有
+// 刻面高光的质感,跟 IconGem 那种"浅填充+深描边"的宝石感风格呼应。
+// 渐变 id 用 useId 生成,避免这个图标在同一页面出现多次(比如结算页
+// 顶栏和奖励区都会用到)时,重复的 <linearGradient id="..."> 互相冲突。
+export function IconExpStar({ size = 16 }) {
+  const gradId = useId();
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#FCEAB0" />
+          <stop offset="55%" stopColor="#D9A94A" />
+          <stop offset="100%" stopColor="#9E6E22" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M12 3.5l2.35 4.9 5.35.6-3.95 3.75 1.05 5.35L12 15.5l-4.8 2.6 1.05-5.35L4.3 9l5.35-.6z"
+        fill={`url(#${gradId})`}
+        stroke="#9E6E22"
+        strokeWidth="0.4"
+      />
+    </svg>
+  );
+}
+
+// 展开/查看完整内容:结算页回顾棋盘的"点击查看完整对局"提示用
+export function IconMaximize({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" />
+    </svg>
+  );
+}
+
+// 关闭:通用叉号,浮层/弹窗关闭按钮用
+export function IconX({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   );
 }

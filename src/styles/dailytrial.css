@@ -154,7 +154,8 @@
 .result-exp-track {
   height: 6px;
   border-radius: 3px;
-  background: var(--wood-soft);
+  background: #E7DCC5;
+  border: 0.5px solid var(--border-token);
   overflow: hidden;
   position: relative;
 }
@@ -222,16 +223,33 @@
 .result-reward-chip-top {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   font-size: 19px;
   font-weight: 700;
   font-family: var(--font-mono);
 }
+.result-reward-chip-icon-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.result-reward-chip.diamond .result-reward-chip-icon-badge { background: #DCEEFB; }
+.result-reward-chip.exp .result-reward-chip-icon-badge { background: #F1E7D8; }
 .result-reward-chip.diamond .result-reward-chip-top { color: #1E6FB0; }
 .result-reward-chip.exp .result-reward-chip-top { color: var(--wood); }
 .result-reward-chip-label {
   font-size: 11px;
   color: var(--fg-muted);
+}
+.result-reward-divider {
+  width: 0.5px;
+  background: var(--border-token);
+  align-self: stretch;
+  margin: 2px 0;
 }
 .result-no-reward-chip {
   display: flex;
@@ -259,11 +277,6 @@
   font-size: 14px;
   font-weight: 600;
   color: var(--ink-token);
-}
-.result-recap-board-wrap {
-  display: flex;
-  justify-content: center;
-  margin-top: var(--space-2);
 }
 .result-recap-divider {
   display: flex;
@@ -316,6 +329,93 @@
   max-width: 360px;
   margin: 0 auto;
   display: block;
+}
+/* 这个继续按钮是这一局最后的"高光收尾",跟 --gold 变量注释里说的
+   "只用于胜负连线、积分数字这类高光时刻"对上号,专门给这一个按钮开
+   渐变的例外,项目里其它按钮仍然保持扁平色,不要把这段抄到别处去。 */
+.result-reveal-footer .btn-primary {
+  background: linear-gradient(180deg, #D4B276 0%, #B8894A 55%, #8A6231 100%);
+  border: none;
+}
+.result-reveal-footer .btn-primary:active {
+  filter: brightness(0.96);
+}
+
+/* ---- 回顾棋盘的"点击查看完整对局"提示 + 展开图标 ---- */
+.result-recap-board-wrap {
+  position: relative;
+  display: inline-flex;
+  margin-top: var(--space-2);
+  cursor: pointer;
+}
+.result-recap-expand-hint {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(23, 19, 16, 0.55);
+  color: #F5F0E6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.result-recap-tap-caption {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 6px;
+}
+
+/* ---- 完整对局回放浮层 ---- */
+.recap-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(23, 19, 16, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+.recap-modal-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--bg, #F4EEE1);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.recap-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.recap-modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-token);
+}
+.recap-modal-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: var(--wood-soft);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.recap-modal-close:active { filter: brightness(0.95); }
+.recap-modal-footer-text {
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: var(--space-3);
 }
 
 /* ---- 飞行动画层 ---- */

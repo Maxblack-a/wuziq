@@ -1,7 +1,22 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import MatchRecapBoard from "./MatchRecapBoard";
-import { IconBolt, IconGem, IconClock, IconListNumbers } from "./Icons";
+import Board from "./Board";
+import { IconBolt, IconGem, IconExpStar, IconClock, IconListNumbers, IconMaximize, IconX } from "./Icons";
 import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
+
+// 飞行克隆用的钻石图标——跟 Icons.jsx 里 IconGem 是同一份 10 条线描边的
+// 设计,这里单独存一份原始 SVG 字符串,是因为飞行克隆走的是原生 DOM
+// (innerHTML 注入),不经过 React 渲染,没法直接塞一个 React 组件进去。
+// 改 IconGem 形状的时候记得这份也要跟着改,不然结算页里"静止的钻石"
+// 和"飞起来的钻石"会变成两个不一样的图标。
+const DIAMOND_FLY_SVG = `<svg width="22" height="20" viewBox="0 0 24 22">
+<polygon points="4.8,1.5 19.2,1.5 23,6.8 12,21 1,7" fill="#A8D8F0"/>
+<g stroke="#1B5A8A" stroke-width="0.9" stroke-linecap="round" fill="none">
+<line x1="4.8" y1="1.5" x2="9" y2="1.5"/><line x1="9" y1="1.5" x2="15" y2="1.5"/><line x1="15" y1="1.5" x2="19.2" y2="1.5"/>
+<line x1="4.8" y1="1.5" x2="1" y2="7"/><line x1="19.2" y1="1.5" x2="23" y2="6.8"/><line x1="1" y1="7" x2="23" y2="6.8"/>
+<line x1="1" y1="7" x2="12" y2="21"/><line x1="23" y1="6.8" x2="12" y2="21"/>
+<polyline points="9,1.5 7.3,7.2 12,21"/><polyline points="15,1.5 16.9,6.4 12,21"/>
+</g></svg>`;
 
 // 结算揭晓页:胜/负/和棋 + 体力/钻石/经验的"飞行入账"动画。
 // 设计上特意不跟"点评对话"(下一步)混在一起——这一屏只负责"数字层面
@@ -125,6 +140,7 @@ export default function DailyTrialResultReveal({
   const expChipRef = useRef(null);
   const rafRefs = useRef([]);
   const timeoutRefs = useRef([]);
+  const [showFullBoard, setShowFullBoard] = useState(false);
 
   const isWin = result === "win";
   const recapTitle = describeRecapTitle(result, meta?.winLine);
@@ -170,7 +186,7 @@ export default function DailyTrialResultReveal({
         targetEl: diamondIconRef.current,
         size: 22,
         endSize: diamondIconRef.current.getBoundingClientRect().width,
-        content: '<svg width="22" height="22" viewBox="0 0 24 24"><polygon points="9,3 15,3 21,9 12,22 3,9" fill="#6FC3F0"/><polygon points="10,3 14,3 12,7" fill="#F4FBFF" opacity="0.9"/></svg>',
+        content: DIAMOND_FLY_SVG,
         delay: 0,
         onLanded: () => {
           const raf2 = { current: null };
@@ -283,13 +299,17 @@ export default function DailyTrialResultReveal({
             <div className="result-reward-row">
               <div className="result-reward-chip diamond" ref={diamondChipRef}>
                 <div className="result-reward-chip-top">
-                  <span ref={diamondChipIconRef}><IconGem size={18} /></span>
+                  <span className="result-reward-chip-icon-badge" ref={diamondChipIconRef}><IconGem size={16} /></span>
                   +{diamondsDelta}
                 </div>
                 <div className="result-reward-chip-label">钻石奖励</div>
               </div>
+              <div className="result-reward-divider" />
               <div className="result-reward-chip exp" ref={expChipRef}>
-                <div className="result-reward-chip-top">+{expDelta}</div>
+                <div className="result-reward-chip-top">
+                  <span className="result-reward-chip-icon-badge"><IconExpStar size={15} /></span>
+                  +{expDelta}
+                </div>
                 <div className="result-reward-chip-label">经验奖励</div>
               </div>
             </div>
@@ -301,9 +321,24 @@ export default function DailyTrialResultReveal({
 
           <div className="result-recap-card">
             <div className="result-recap-title">{recapTitle}</div>
-            <div className="result-recap-board-wrap">
-              <MatchRecapBoard board={meta?.board} winLine={meta?.winLine} />
-            </div>
+            {meta?.winLine ? (
+              <div
+                className="result-recap-board-wrap"
+                onClick={() => setShowFullBoard(true)}
+                role="button"
+                tabIndex={0}
+                aria-label="查看完整对局"
+                onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setShowFullBoard(true); }}
+              >
+                <MatchRecapBoard board={meta?.board} winLine={meta?.winLine} />
+                <span className="result-recap-expand-hint"><IconMaximize size={13} /></span>
+              </div>
+            ) : (
+              <div className="result-recap-board-wrap">
+                <MatchRecapBoard board={meta?.board} winLine={meta?.winLine} />
+              </div>
+            )}
+            {meta?.winLine && <div className="result-recap-tap-caption">点击查看完整对局</div>}
             <div className="result-recap-divider">
               <span className="result-recap-divider-line" />
               <span className="result-recap-divider-dot" />
@@ -335,6 +370,23 @@ export default function DailyTrialResultReveal({
       <div className="result-reveal-footer">
         <button className="btn-primary" onClick={onContinue}>继续</button>
       </div>
+
+      {showFullBoard && meta?.board && (
+        <div className="recap-modal-overlay" onClick={() => setShowFullBoard(false)}>
+          <div className="recap-modal-card" onClick={(e) => e.stopPropagation()}>
+            <div className="recap-modal-header">
+              <div className="recap-modal-title">完整对局回放</div>
+              <button className="recap-modal-close" onClick={() => setShowFullBoard(false)} aria-label="关闭">
+                <IconX size={15} />
+              </button>
+            </div>
+            <Board board={meta.board} winLine={meta.winLine} locked onCellClick={() => {}} />
+            <div className="recap-modal-footer-text">
+              共 {meta.moveCount ?? 0} 手 · {formatDuration(meta.durationSec ?? 0)}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
