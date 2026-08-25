@@ -189,65 +189,6 @@
   transform: scale(0.94);
 }
 
-/* ---- 首页顶栏的体力/钻石徽章:数字变化时平滑滚动过渡 + 一次性的
-   "+N/-N"浮动提示 + 图标轻微弹跳,参考大部分手游对经验/货币/体力这类
-   资源变化的标准反馈处理,而不是让数字悄无声息地直接跳到新值。
-   跟"规则"用同一行 top-nav-light、同一套配色(var(--text-secondary)),
-   在这张明亮的首页背景图上能看清,不需要单独再调一套深色方案。 ---- */
-.stat-badge {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  font-family: var(--font-mono);
-}
-.stat-badge-icon {
-  display: flex;
-  align-items: center;
-  color: var(--wood);
-}
-.stat-badge-value {
-  min-width: 1.2em;
-  text-align: left;
-}
-
-@keyframes stat-pop-up {
-  0% { transform: scale(1); color: var(--wood); }
-  35% { transform: scale(1.4); color: var(--gold); }
-  100% { transform: scale(1); color: var(--wood); }
-}
-@keyframes stat-pop-down {
-  0% { transform: scale(1); }
-  35% { transform: scale(0.78); }
-  100% { transform: scale(1); }
-}
-.stat-pop-up { animation: stat-pop-up 0.5s ease; }
-.stat-pop-down { animation: stat-pop-down 0.4s ease; }
-
-.stat-badge-float {
-  position: absolute;
-  left: 50%;
-  top: -2px;
-  transform: translateX(-50%);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-  pointer-events: none;
-  animation: stat-float-up 0.9s ease forwards;
-}
-.stat-badge-float.positive { color: var(--gold); }
-.stat-badge-float.negative { color: var(--text-secondary); }
-
-@keyframes stat-float-up {
-  0% { opacity: 0; transform: translate(-50%, 4px) scale(0.85); }
-  15% { opacity: 1; transform: translate(-50%, 0) scale(1); }
-  75% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -14px) scale(0.92); }
-}
-
 .brand-hero {
   position: relative;
   z-index: 1;

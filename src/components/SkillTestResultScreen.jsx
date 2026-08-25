@@ -1,8 +1,12 @@
 import { useEffect, useState } from "react";
 import { DIM_KEYS, DIM_LABELS } from "../lib/skillProfile";
-import { RESULT_INTRO_LINE, resultLine, RESULT_CONTINUE_LABEL, pickIncompleteNote } from "../lib/linmoDialogue";
+import {
+  RESULT_INTRO_LINE, resultLine, RESULT_CONTINUE_LABEL,
+  compareToLastLine, recentTrendLine,
+} from "../lib/linmoDialogue";
 
 const THINKING_PAUSE = 1100; // "让我想想怎么说……"之后停顿多久再把点评说出来
+const COMPARE_PAUSE = 900; // 点评说完,再停一下才接着聊"跟上次比"/"最近怎么样"
 
 const SIZE = 220;
 const CENTER = SIZE / 2;
@@ -63,23 +67,34 @@ function RadarChart({ dims }) {
 // profile: computeSkillProfile 的返回值。onContinue: 揭晓看完,继续原来该走的路由。
 // continueLabel: 按钮文案,测完当场揭晓用"继续"(默认),从"我的"页面回看
 // 历史结果时外部会传"返回"进来,复用同一个组件不用另外再画一份。
-export default function SkillTestResultScreen({ profile, onContinue, continueLabel, introLine }) {
-  const { dims, typeInfo, type, highlights, completeness } = profile;
+export default function SkillTestResultScreen({ profile, priorHistory, onContinue, continueLabel, introLine }) {
+  const { dims, typeInfo, type, highlights } = profile;
 
   // "下完了。让我想想怎么说……"之后先停顿一下再把点评说出来——现实中
   // 复盘一盘棋不会脱口而出,这个停顿本身就是"他真的在想"的一部分。
   // 停顿期间只露出雷达图/类型标签这些"数据类"的内容,点评这句"话"
-  // 延后出现;incompleteNote(关卡没测全的坦白)跟点评一起延后,免得
-  // 玩家还没看到点评就先看到"这局没测全",顺序上显得奇怪。
+  // 延后出现。
+  //
+  // "跟上次比""最近这段时间"这两句再往后错一拍——像是林墨说完这局的
+  // 点评之后,又想起来点别的,顺嘴接了一句,而不是把所有话一口气倒出来。
+  // 只有 priorHistory 真的有数据时才会算出内容,没有历史记录(比如第一次
+  // 测试)这一拍就什么都不显示,不占位置。
   const [revealed, setRevealed] = useState(false);
-  const [incompleteNote] = useState(() => (
-    completeness && completeness.checkpointsTriggered < 3 ? pickIncompleteNote() : null
-  ));
+  const [compareRevealed, setCompareRevealed] = useState(false);
+  const [compareText] = useState(() => compareToLastLine(dims, priorHistory));
+  const [trendText] = useState(() => recentTrendLine(dims, priorHistory));
+  // resultLine 内部用 Math.random() 从候选池里挑一条,必须只算一次存起来——
+  // 不然 compareRevealed 这类 state 变化触发重渲染时,resultLine 会被
+  // 重新调用,点评文字可能在玩家眼皮底下悄悄换成另一条候选,像是林墨
+  // 说话说到一半换了一句话
+  const [comment] = useState(() => resultLine(type, highlights));
 
   useEffect(() => {
     setRevealed(false);
-    const timer = setTimeout(() => setRevealed(true), THINKING_PAUSE);
-    return () => clearTimeout(timer);
+    setCompareRevealed(false);
+    const t1 = setTimeout(() => setRevealed(true), THINKING_PAUSE);
+    const t2 = setTimeout(() => setCompareRevealed(true), THINKING_PAUSE + COMPARE_PAUSE);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [profile]);
 
   return (
@@ -95,10 +110,13 @@ export default function SkillTestResultScreen({ profile, onContinue, continueLab
           </p>
           {revealed && (
             <div className="result-comment-reveal">
-              <p>{resultLine(type, highlights)}</p>
-              {incompleteNote && (
-                <p style={{ marginTop: 6, color: "var(--fg-muted)", fontSize: 12 }}>{incompleteNote}</p>
-              )}
+              <p>{comment}</p>
+            </div>
+          )}
+          {revealed && compareRevealed && (compareText || trendText) && (
+            <div className="result-comment-reveal" style={{ marginTop: 8 }}>
+              {compareText && <p>{compareText}</p>}
+              {trendText && <p style={{ marginTop: 4 }}>{trendText}</p>}
             </div>
           )}
         </div>

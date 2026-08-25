@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import MainMenu from "./components/MainMenu";
 import PveScreen from "./components/PveScreen";
-import DailyTrialScreen from "./components/DailyTrialScreen";
 import MatchmakingScreen from "./components/MatchmakingScreen";
 import InviteScreen from "./components/InviteScreen";
 import RoomScreen from "./components/RoomScreen";
@@ -18,7 +17,6 @@ import SkillTestScreen from "./components/SkillTestScreen";
 import SkillTestResultScreen from "./components/SkillTestResultScreen";
 import SkillTestReviewScreen from "./components/SkillTestReviewScreen";
 import { RESULT_INTRO_LINE_RETAKE } from "./lib/linmoDialogue";
-import { getDisplayStamina } from "./game/dailyTrialEngine";
 import WebAuthScreen from "./components/WebAuthScreen";
 import {
   supabase, loginWithTelegram, loginAnonymously, getExistingUserId,
@@ -35,8 +33,9 @@ const DEBUG_ALWAYS_SHOW_LINMO = true;
 export default function App() {
   const [myId, setMyId] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [screen, setScreen] = useState("loading"); // loading | nickname | skilltest | skilltest_result | skilltest_retake | skilltest_view | menu | pve | daily | matchmaking | invite | room | game | friends | leaderboard | profile | history
+  const [screen, setScreen] = useState("loading"); // loading | nickname | skilltest | skilltest_result | skilltest_retake | skilltest_view | menu | pve | matchmaking | invite | room | game | friends | leaderboard | profile | history
   const [skillTestProfile, setSkillTestProfile] = useState(null); // 棋力测试结果(揭晓页要用),测完/看完就不需要再留着
+  const [skillTestPriorHistory, setSkillTestPriorHistory] = useState([]); // 这次测试之前的历史记录(倒序),给结果页做"跟上次比/最近怎么样"
   // 'onboarding':新用户第一次见面那次触发的测试,结束后要接回登录后原本
   // 该走的路由;'retake':从"我的"页面主动发起的复测,结束后应该退回
   // 到发起测试之前所在的页面(靠 goBack),两种模式结束时的路由不一样,
@@ -70,11 +69,6 @@ export default function App() {
   // 进入当前页面的那个页面",而不是不管三七二十一直接回首页。
   // 用 ref 不用 state——这东西不需要参与渲染,只是记录轨迹供 goBack 读取。
   const historyRef = useRef([]);
-  // 首页体力/钻石徽章要做"从旧值滚到新值"的动画,但 MainMenu 每次离开
-  // 首页再回来都是重新挂载的(没有组件内部状态能记住"上次首页显示的
-  // 是多少"),所以离开首页那一刻,把当时的值存这里当"起点"——等回到
-  // 首页,MainMenu 拿这个起点跟最新的 profile 值一比,该多少就滚多少。
-  const homeBaselineRef = useRef({ stamina: undefined, diamonds: undefined });
 
   // routeAfterLogin 定义在下面的 useEffect 里(跟 boot 共享一份逻辑),
   // 用 ref 存一份引用,好在"确认昵称"完成之后从组件方法里调用它。
@@ -199,7 +193,20 @@ export default function App() {
   // 把六维风格分/隐藏水平分/原始数据写库,再进结果揭晓页——揭晓页看完
   // 点"继续"才会真正往下路由,不在这里直接走。
   async function handleSkillTestFinish(profile, testState) {
+    let priorHistory = [];
     if (myId) {
+      // 写入这次结果之前,先把"这次之前"的历史记录取出来,给结果页做
+      // "跟上次比""最近这段时间"这两句用——顺序很重要,如果先插入
+      // 这次的记录再查,会把这次自己也查出来,变成"跟自己比"。
+      const { data: historyRows, error: historyError } = await supabase
+        .from("skill_test_history")
+        .select("dims, type, completed_at")
+        .eq("profile_id", myId)
+        .order("completed_at", { ascending: false })
+        .limit(5);
+      if (historyError) console.error("读取棋力测试历史失败", historyError);
+      priorHistory = (historyRows || []).map((r) => ({ dims: r.dims, type: r.type, completedAt: r.completed_at }));
+
       const { error } = await supabase.from("profiles").update({
         skill_test_status: "completed",
         skill_test_dims: profile.dims,
@@ -214,8 +221,20 @@ export default function App() {
         skill_test_completed_at: new Date().toISOString(),
       }).eq("id", myId);
       if (error) console.error("保存棋力测试结果失败", error);
+
+      // 追加历史行,不覆盖 profiles 上的快照(那一列继续只代表"最新一次",
+      // 每日试炼那类功能读它不用关心历史表的存在)
+      const { error: historyInsertError } = await supabase.from("skill_test_history").insert({
+        profile_id: myId,
+        dims: profile.dims,
+        type: profile.type,
+        hidden_score: profile.hiddenScore,
+        confidence: profile.confidence,
+      });
+      if (historyInsertError) console.error("记录棋力测试历史失败", historyInsertError);
     }
     setSkillTestProfile(profile);
+    setSkillTestPriorHistory(priorHistory);
     setScreen("skilltest_result");
   }
 
@@ -417,12 +436,6 @@ export default function App() {
   // 从一个页面主动跳去另一个页面时调这个,而不是直接 setScreen——
   // 会先把"跳转前我在哪"记一笔到历史栈里,goBack 才有地方可退。
   function navigate(nextScreen) {
-    if (screen === "menu") {
-      homeBaselineRef.current = {
-        stamina: getDisplayStamina(profile?.stamina, profile?.stamina_date),
-        diamonds: profile?.diamonds,
-      };
-    }
     historyRef.current.push({ screen, roomId });
     setScreen(nextScreen);
   }
@@ -642,6 +655,7 @@ export default function App() {
       <div className="app-shell">
         <SkillTestResultScreen
           profile={skillTestProfile}
+          priorHistory={skillTestPriorHistory}
           onContinue={continueAfterSkillTest}
           introLine={skillTestMode === "retake" ? RESULT_INTRO_LINE_RETAKE : undefined}
         />
@@ -666,20 +680,9 @@ export default function App() {
   return (
     <div className={`app-shell${screen === "menu" ? " app-shell-menu" : ""}`}>
       {screen === "menu" && (
-        <MainMenu
-          onSelect={navigate}
-          playerName={profile?.display_name}
-          exp={profile?.exp}
-          avatarUrl={profile?.avatar_url}
-          stamina={profile?.stamina}
-          staminaDate={profile?.stamina_date}
-          diamonds={profile?.diamonds}
-          staminaFrom={homeBaselineRef.current.stamina}
-          diamondsFrom={homeBaselineRef.current.diamonds}
-        />
+        <MainMenu onSelect={navigate} playerName={profile?.display_name} exp={profile?.exp} avatarUrl={profile?.avatar_url} />
       )}
       {screen === "pve" && <PveScreen onExit={goBack} onExitHome={goMenu} />}
-      {screen === "daily" && <DailyTrialScreen onExit={goBack} onExitHome={goMenu} avatarUrl={profile?.avatar_url} exp={profile?.exp} />}
       {screen === "matchmaking" && (
         <MatchmakingScreen
           myId={myId}

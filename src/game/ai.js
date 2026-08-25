@@ -290,4 +290,5 @@ export {
   countLiveThreeThreats,
   generalPool,
   weightedRandomPick,
+  pickHard,
 };

@@ -17,12 +17,34 @@ const DIM_LABELS = {
 // (0 分在雷达图上会画出一个尖角戳到圆心,视觉上很突兀,而且"没测到"
 // 跟"测到了但是很差"应该有区别,后者才该是 0 附近)
 const CHECKPOINT_SCORE = { hit: 92, partial: 58, miss: 22 };
-const NOT_TRIGGERED_SCORE = 50; // 关卡因为分层降级被跳过,没有数据,给个中性分,不拉低也不拉高
 
-function checkpointScore(checkpoints, type) {
+// 这一局里玩家整体落子质量的均值(0~1)——跟"计算力"用的是同一份数据,
+// 单独抽出来是因为好几个维度在关卡没有真正触发时都要用它做兜底估算。
+function overallQualityRatio(moves) {
+  const relevant = moves.filter((m) => m.player === "human" && m.bestAvailable > 0);
+  if (!relevant.length) return null;
+  const sum = relevant.reduce((s, m) => s + Math.min(1, Math.max(m.attack, m.defend) / m.bestAvailable), 0);
+  return sum / relevant.length;
+}
+
+// 某一关这局没有真正触发,通常是因为棋在关卡触发之前就真的分出了胜负
+// (双活三这类五子棋规则本身决定的必胜棋型,不是引擎能完全防住的)。
+// 遇到这种情况不再留一个孤零零的、跟这局实际表现毫无关系的中性 50 分——
+// 用这局里其实已经采集到的"整体落子质量"做一个有依据的估算,保证每一项
+// 都有一个站得住脚、从这局真实数据算出来的数字,而不是一片空白。
+// confidence 仍然区分 natural/assisted/estimated,供内部诊断使用,但
+// 不会再拿"estimated"去反过来在界面上标"这局没测出"这类否定性的话——
+// 玩家看到的应该始终是一份完整的结果。
+function checkpointScore(checkpoints, type, moves) {
   const cp = checkpoints.find((c) => c.type === type);
-  if (!cp) return { score: NOT_TRIGGERED_SCORE, confidence: "none" };
-  return { score: CHECKPOINT_SCORE[cp.result] ?? NOT_TRIGGERED_SCORE, confidence: cp.catalyzed ? "assisted" : "natural" };
+  if (cp) {
+    return { score: CHECKPOINT_SCORE[cp.result] ?? 50, confidence: cp.catalyzed ? "assisted" : "natural" };
+  }
+  const ratio = overallQualityRatio(moves);
+  if (ratio != null) {
+    return { score: Math.round(ratio * 100), confidence: "estimated" };
+  }
+  return { score: 50, confidence: "estimated" };
 }
 
 // 计算力:每一步实际落点分值 跟 当时局面理论最高分之间的差距,差距越小分越高。
@@ -48,18 +70,46 @@ function openingScore(samples) {
   return Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 }
 
-// 应变力:关卡 miss 之后紧接着几步的表现有没有明显滑坡。用"失误后的分数
-// 走势是持平/回升"还是"越来越差"来判断,没有 miss 过的话给中性分——
-// 不代表应变力不行,只是没有数据能看出来(小分放在 checklist 的置信度里体现)。
-function adaptScore(checkpoints) {
-  const missed = checkpoints.filter((c) => c.result === "miss" && c.recoveryTrend?.length >= 2);
-  if (!missed.length) return NOT_TRIGGERED_SCORE;
-  const trends = missed.map((c) => {
-    const t = c.recoveryTrend;
-    const rising = t[t.length - 1] >= t[0];
-    return rising ? 75 : 35;
-  });
-  return Math.round(trends.reduce((a, b) => a + b, 0) / trends.length);
+// 应变力:关卡 miss 或 partial 之后紧接着几步的表现有没有明显滑坡。用
+// "受挫后的分数走势是持平/回升"还是"越来越差"来判断——miss 是更硬的
+// 挫折信号,partial(没做到最优但也不算彻底失手)压力更轻,回升/下滑
+// 给的分差也相应收窄,避免"partial 之后随便走两步"就跟"miss 之后真扛
+// 住了"混到同一档分数。
+// 之前这里只认 miss,没出现过 miss 的话直接给中性分——但这局面站得住
+// (棋下得越稳越测不出应变力)也站不住(玩家会以为自己应变力一般,实际
+// 只是这局没给他机会犯错)。所以返回值除了分数,还带一个 measured 标记,
+// 没有真实数据时消费方(结果页)可以选择不把这个分数当真实测量值展示。
+// 应变力:优先信号是关卡 miss/partial 之后紧接着几步的走势——这是最
+// 直接的"受挫之后稳不稳"的证据,有就优先用。
+// 备用信号:游戏现在会一直下到真正分出胜负,不会再半路掐断,所以只要
+// 这一局棋够长,就算玩家全程没有明显失误(压根没有 miss/partial 可看),
+// 依然可以从"前半程和后半程下棋质量有没有掉线"这个更宏观的指标里,
+// 看出他一整盘棋下不下得稳——不然"应变力"会变成一个必须先犯错才能
+// 被测出来的维度,对下得好的玩家反而不公平,而且是"这局没测出"最常见
+// 的来源(不是判定逻辑漏了,是这条维度的定义本身对多数正常发挥的对局
+// 都没有数据)。
+function adaptScore(checkpoints, moves) {
+  const withTrend = checkpoints.filter((c) => (c.result === "miss" || c.result === "partial") && c.recoveryTrend?.length >= 2);
+  if (withTrend.length) {
+    const trends = withTrend.map((c) => {
+      const t = c.recoveryTrend;
+      const rising = t[t.length - 1] >= t[0];
+      const swing = c.result === "miss" ? 20 : 10;
+      return rising ? 55 + swing : 55 - swing;
+    });
+    const score = Math.round(trends.reduce((a, b) => a + b, 0) / trends.length);
+    return { score, measured: true };
+  }
+
+  const relevant = moves.filter((m) => m.player === "human" && m.bestAvailable > 0);
+  if (relevant.length < 8) return { score: 50, measured: false };
+  const mid = Math.floor(relevant.length / 2);
+  const avgRatio = (list) => list.reduce((s, m) => s + Math.max(m.attack, m.defend) / m.bestAvailable, 0) / list.length;
+  const delta = avgRatio(relevant.slice(mid)) - avgRatio(relevant.slice(0, mid));
+  // delta 是前后两段"落子质量比例"的差,本身落在 -1~1 之间,乘 40 映射
+  // 到跟其他维度同量级的浮动区间,55 分是"前后没有明显变化"时的基准
+  const score = Math.round(Math.max(20, Math.min(90, 55 + delta * 40)));
+  return { score, measured: true };
 }
 
 // 从原始信号里挑几个"这一局专属"的具体细节,给 lib/linmoDialogue.js 的
@@ -77,7 +127,7 @@ function buildHighlights(testState) {
   const relevant = moves.filter((m) => m.player === "human" && m.bestAvailable > 0);
   const near = relevant.filter((m) => Math.max(m.attack, m.defend) / m.bestAvailable >= 0.95);
 
-  const recoveredMiss = checkpoints.find((c) => c.result === "miss" && c.recoveryTrend?.length >= 2
+  const recoveredSetback = checkpoints.find((c) => (c.result === "miss" || c.result === "partial") && c.recoveryTrend?.length >= 2
     && c.recoveryTrend[c.recoveryTrend.length - 1] >= c.recoveryTrend[0]);
 
   return {
@@ -86,7 +136,7 @@ function buildHighlights(testState) {
     global: globalCp ? { result: globalCp.result, turn: globalCp.triggeredAtMove } : null,
     calc: relevant.length ? { total: relevant.length, near: near.length } : null,
     opening: openingScore(testState.openingSamples) >= 60,
-    adapt: recoveredMiss ? { recovered: true, missTurn: recoveredMiss.triggeredAtMove } : null,
+    adapt: recoveredSetback ? { recovered: true, missTurn: recoveredSetback.triggeredAtMove } : null,
     totalMoves: moves.length,
   };
 }
@@ -94,9 +144,10 @@ function buildHighlights(testState) {
 export function computeSkillProfile(testState) {
   const { checkpoints, moves, openingSamples } = testState;
 
-  const defenseR = checkpointScore(checkpoints, "defense");
-  const offenseR = checkpointScore(checkpoints, "offense");
-  const globalR = checkpointScore(checkpoints, "global");
+  const defenseR = checkpointScore(checkpoints, "defense", moves);
+  const offenseR = checkpointScore(checkpoints, "offense", moves);
+  const globalR = checkpointScore(checkpoints, "global", moves);
+  const adaptR = adaptScore(checkpoints, moves);
 
   const dims = {
     attack: offenseR.score,
@@ -104,7 +155,20 @@ export function computeSkillProfile(testState) {
     vision: globalR.score,
     calc: calcScore(moves),
     opening: openingScore(openingSamples),
-    adapt: adaptScore(checkpoints),
+    adapt: adaptR.score,
+  };
+
+  // 每个维度是不是"这一局真正实测出来的",而不是关卡没触发时用整体
+  // 落子质量估算出来的——这个字段只做内部记录/诊断用,不再驱动结果页
+  // 的展示(不管是不是估算出来的,玩家看到的都应该是一份完整、正常呈现
+  // 的结果,不再标"这局没测出"这类否定性的话)。
+  const dimsMeasured = {
+    attack: offenseR.confidence !== "estimated",
+    defense: defenseR.confidence !== "estimated",
+    vision: globalR.confidence !== "estimated",
+    calc: moves.some((m) => m.player === "human" && m.bestAvailable > 0),
+    opening: openingSamples.some((s) => s.distToNearestOwn != null),
+    adapt: adaptR.measured,
   };
 
   // 隐藏综合水平分(0-100,不展示):关卡命中率 + 计算精度加权,是每日
@@ -121,6 +185,7 @@ export function computeSkillProfile(testState) {
   return {
     dims,
     dimLabels: DIM_LABELS,
+    dimsMeasured,
     hiddenScore,
     confidence,
     type: type.key,
