@@ -1,14 +1,21 @@
 import { useState } from "react";
 import RulesModal from "./RulesModal";
-import { IconRules, IconRobot, IconArrowRight, IconAvatarFallback } from "./Icons";
+import StatBadge from "./StatBadge";
+import { IconRules, IconRobot, IconCalendarStar, IconArrowRight, IconAvatarFallback, IconBolt, IconGem } from "./Icons";
 import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
+import { getDisplayStamina } from "../game/dailyTrialEngine";
 
-export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
+export default function MainMenu({
+  onSelect, playerName, exp, avatarUrl,
+  stamina, staminaDate, diamonds,
+  staminaFrom, diamondsFrom,
+}) {
   const [showRules, setShowRules] = useState(false);
   const level = levelForExp(exp);
   const title = titleForExp(exp ?? 0);
   // 当前阶内的进度,用于顶栏身份牌下方的小进度条
   const progressPct = Math.min(95, Math.max(8, progressPctForExp(exp)));
+  const displayStamina = getDisplayStamina(stamina, staminaDate);
 
   return (
     <div>
@@ -73,6 +80,8 @@ export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
             </div>
 
             <nav className="top-nav-light">
+              <StatBadge icon={<IconBolt size={13} />} value={displayStamina} fromValue={staminaFrom} />
+              <StatBadge icon={<IconGem size={13} />} value={diamonds ?? 0} fromValue={diamondsFrom} />
               <button className="nav-icon-btn" onClick={() => setShowRules(true)}>
                 <IconRules />
                 <span>规则</span>
@@ -116,13 +125,18 @@ export default function MainMenu({ onSelect, playerName, exp, avatarUrl }) {
         <span className="cta-primary-arrow"><IconArrowRight /></span>
       </button>
 
-      {/* 次级入口:人机挑战。"邀请好友"已经并入上面的主 CTA 流程,
-          这里不再重复放一个入口 */}
+      {/* 次级入口:人机挑战 + 每日试炼,并排展示。"邀请好友"已经并入
+          上面的主 CTA 流程,这里不再重复放一个入口 */}
       <div className="secondary-row fade-in-up" style={{ animationDelay: "200ms" }}>
         <button className="secondary-card" onClick={() => onSelect("pve")}>
           <div className="secondary-card-icon"><IconRobot /></div>
           <div className="secondary-card-title">人机挑战</div>
           <div className="secondary-card-sub">AI MATCH</div>
+        </button>
+        <button className="secondary-card" onClick={() => onSelect("daily")}>
+          <div className="secondary-card-icon"><IconCalendarStar /></div>
+          <div className="secondary-card-title">每日试炼</div>
+          <div className="secondary-card-sub">DAILY QUEST</div>
         </button>
       </div>
 

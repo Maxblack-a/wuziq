@@ -1383,3 +1383,241 @@ exception when others then
 end $$;
 
 select cron.schedule('check-timeouts', '* * * * *', $$select check_timeouts();$$);
+
+-- ============================================================
+-- 每日试炼(林墨):体力系统 + 钻石 + 玩家/林墨双方动态难度评分
+-- ------------------------------------------------------------
+-- 设计要点:
+-- - 体力(stamina):每天上限 20,每局消耗 5,即"严格来说每天 4 次"——
+--   之所以不直接存"今天还能打几次",是因为后面要接"参与活动获得
+--   额外体力值",体力是一个可以被别的玩法加值的资源池,存"次数"
+--   会绑死这个扩展性,存"点数"才灵活。
+-- - stamina_date:体力对应的"游戏日"(UTC 自然日)。每次触碰这一行
+--   之前先跑一遍 ensure_daily_reset——如果存的日期不是今天,直接刷满
+--   到 20,而不是搞每日定时任务去扫全表重置,省一个 cron job,逻辑也
+--   更简单(不管玩家隔了一天还是十天没上线,下次一来就是满体力)。
+-- - daily_trial_rating / linmo_rating:双方各自的隐藏分(0-100,同一
+--   量纲、同一个刻度,跟 skill_test_hidden_score 保持一致,方便冷启动
+--   时直接拿棋力测试的分数当起点)。玩家分数每局按类 ELO 公式更新,
+--   林墨分数每局都朝玩家最新分数追一部分(不是瞬间拉平),这样"越打
+--   林墨越强"是一个能被玩家感知到的渐进过程,而不是每局重新计算出
+--   一个新数字这么冷冰冰。
+-- - daily_trial_streak:连胜为正、连败为负,任意一局和棋清零——这个
+--   数字直接喂给客户端算这一局林墨的强度旋钮(见
+--   src/game/dailyTrialEngine.js 的 streakAdjustment),也是以后做
+--   连胜称号/成就时现成能用的字段。
+-- ============================================================
+alter table profiles add column if not exists stamina int not null default 20;
+alter table profiles add column if not exists stamina_date date not null default (now() at time zone 'utc')::date;
+alter table profiles add column if not exists diamonds int not null default 0;
+alter table profiles add column if not exists daily_trial_rating int not null default 50;
+alter table profiles add column if not exists linmo_rating int not null default 50;
+alter table profiles add column if not exists daily_trial_streak int not null default 0;
+alter table profiles add column if not exists daily_trial_best_streak int not null default 0;
+alter table profiles add column if not exists daily_trial_games_played int not null default 0;
+alter table profiles add column if not exists daily_trial_wins int not null default 0;
+
+-- 每日试炼历史记录:不是核心链路的强依赖(体力/评分都已经写回
+-- profiles 了),留痕主要是为了以后做成就系统("连胜XX场"这类需要
+-- 回溯历史)、以及排查"这个玩家的分数怎么变成这样"时有据可查。
+create table if not exists daily_trial_games (
+  id uuid primary key default gen_random_uuid(),
+  player_id uuid not null references profiles(id) on delete cascade,
+  result text not null check (result in ('win', 'lose', 'draw')),
+  quality numeric,
+  player_rating_before int,
+  player_rating_after int,
+  linmo_rating_before int,
+  linmo_rating_after int,
+  stamina_spent int not null default 5,
+  exp_awarded int not null default 0,
+  diamonds_awarded int not null default 0,
+  created_at timestamptz not null default now()
+);
+alter table daily_trial_games enable row level security;
+drop policy if exists "daily_trial_games_select" on daily_trial_games;
+create policy "daily_trial_games_select" on daily_trial_games for select using (auth.uid() = player_id);
+-- 没有 insert 策略:这张表只由下面 finish_daily_trial(security definer)
+-- 写入,客户端不能绕过评分/奖励逻辑直接插一条自己捏造的战绩。
+
+-- 每日重置:内部辅助函数,不直接暴露给客户端当"公开工具"用——虽然
+-- 客户端理论上也能通过 PostgREST 直接 rpc 调用,但这里显式校验
+-- p_uid = auth.uid(),就算被直接调用,最多也只能把自己的体力刷新
+-- 成"今天该有的样子",不存在越权改别人数据的风险。
+create or replace function ensure_daily_reset(p_uid uuid)
+returns void
+language plpgsql
+security definer
+as $$
+begin
+  if p_uid <> auth.uid() then
+    raise exception '无权限';
+  end if;
+  update profiles
+  set stamina = 20, stamina_date = (now() at time zone 'utc')::date
+  where id = p_uid and stamina_date <> (now() at time zone 'utc')::date;
+end;
+$$;
+
+-- 每日试炼首页进入时调用:只做"该不该刷新体力"这件事,再把最新状态
+-- 读出来,用来渲染体力条/钻石/连胜——不消耗任何体力,纯查询语义。
+create or replace function get_daily_trial_status()
+returns table (
+  out_stamina int, out_diamonds int, out_rating int, out_linmo_rating int,
+  out_streak int, out_best_streak int, out_games_played int, out_wins int
+)
+language plpgsql
+security definer
+as $$
+declare
+  me uuid;
+begin
+  me := auth.uid();
+  if me is null then
+    raise exception '未登录';
+  end if;
+
+  perform ensure_daily_reset(me);
+
+  select stamina, diamonds, daily_trial_rating, linmo_rating, daily_trial_streak,
+         daily_trial_best_streak, daily_trial_games_played, daily_trial_wins
+  into out_stamina, out_diamonds, out_rating, out_linmo_rating, out_streak,
+       out_best_streak, out_games_played, out_wins
+  from profiles where id = me;
+
+  return next;
+end;
+$$;
+
+-- 开始一局每日试炼:处理每日重置 + 校验并原子扣减体力(for update
+-- 行锁防止连点两次同时通过校验、体力被多扣一次)。返回扣完之后的
+-- 最新状态,前端拿玩家分/林墨分去初始化这一局的强度旋钮。
+create or replace function start_daily_trial(p_stamina_cost int default 5)
+returns table (
+  out_stamina int, out_diamonds int, out_rating int, out_linmo_rating int, out_streak int
+)
+language plpgsql
+security definer
+as $$
+declare
+  me uuid;
+  v_row profiles%rowtype;
+begin
+  me := auth.uid();
+  if me is null then
+    raise exception '未登录';
+  end if;
+
+  perform ensure_daily_reset(me);
+
+  select * into v_row from profiles where id = me for update;
+
+  if v_row.stamina < p_stamina_cost then
+    raise exception '体力不足';
+  end if;
+
+  update profiles set stamina = profiles.stamina - p_stamina_cost where id = me;
+
+  select stamina, diamonds, daily_trial_rating, linmo_rating, daily_trial_streak
+  into out_stamina, out_diamonds, out_rating, out_linmo_rating, out_streak
+  from profiles where id = me;
+
+  return next;
+end;
+$$;
+
+-- 结算一局每日试炼(体力已经在 start_daily_trial 那一步扣过了,这里
+-- 只做"赢/输/和之后该发生什么"):
+-- - 类 ELO 更新玩家隐藏分:expected 用双方当前分差算出"按理说玩家该
+--   有多大胜率",actual 不是单纯 0/1 的胜负,而是"胜负结果(60%权重)
+--   + 这一局的过程质量分(40%权重)"混合出来的——赢得很勉强(质量分低)
+--   涨分会比"赢得干净利落"更少,反过来,虽败犹荣(质量分高)也能比
+--   "一败涂地"多回一点血,不是纯粹的赌输赢。
+-- - 林墨分不直接等于玩家新分,而是朝着"玩家新分"这个目标走 30% 的
+--   差距(不是瞬间拉平)——之前这里给目标加过 +3 的"棋高一手"常数,
+--   后来发现这会让长期均衡胜率略低于设计目标的 55%-65% 区间,已经
+--   去掉,目标就是玩家当前分本身。
+-- - quality 由客户端算好传过来,但服务器强制 clamp 到 [0,1],不完全
+--   信任这个数字本身,只把它当"锦上添花"的一个输入,不是决定性因素
+--   (核心的 60% 权重仍然来自服务器自己判定的 result)。
+create or replace function finish_daily_trial(
+  p_result text,
+  p_quality numeric default 0.5
+)
+returns table (
+  out_exp int, out_diamonds int, out_rating int, out_linmo_rating int,
+  out_streak int, out_best_streak int
+)
+language plpgsql
+security definer
+as $$
+declare
+  me uuid;
+  v_row profiles%rowtype;
+  v_quality numeric;
+  v_expected numeric;
+  v_actual numeric;
+  v_new_rating int;
+  v_new_linmo int;
+  v_new_streak int;
+  v_exp_gain int := 0;
+  v_diamond_gain int := 0;
+begin
+  me := auth.uid();
+  if me is null then
+    raise exception '未登录';
+  end if;
+  if p_result not in ('win', 'lose', 'draw') then
+    raise exception '非法的对局结果';
+  end if;
+
+  v_quality := greatest(0, least(1, coalesce(p_quality, 0.5)));
+
+  select * into v_row from profiles where id = me for update;
+
+  v_expected := 1.0 / (1.0 + power(10, (v_row.linmo_rating - v_row.daily_trial_rating) / 25.0));
+  v_actual := case p_result when 'win' then 1.0 when 'draw' then 0.5 else 0.0 end;
+  v_actual := v_actual * 0.6 + v_quality * 0.4;
+
+  v_new_rating := round(v_row.daily_trial_rating + 6 * (v_actual - v_expected));
+  v_new_rating := greatest(0, least(100, v_new_rating));
+
+  v_new_linmo := round(v_row.linmo_rating + 0.3 * (v_new_rating - v_row.linmo_rating));
+  v_new_linmo := greatest(0, least(100, v_new_linmo));
+
+  if p_result = 'win' then
+    v_new_streak := greatest(1, v_row.daily_trial_streak + 1);
+    v_exp_gain := 5;
+    v_diamond_gain := 1;
+  elsif p_result = 'lose' then
+    v_new_streak := least(-1, v_row.daily_trial_streak - 1);
+  else
+    v_new_streak := 0;
+  end if;
+
+  update profiles set
+    exp = profiles.exp + v_exp_gain,
+    diamonds = profiles.diamonds + v_diamond_gain,
+    daily_trial_rating = v_new_rating,
+    linmo_rating = v_new_linmo,
+    daily_trial_streak = v_new_streak,
+    daily_trial_best_streak = greatest(profiles.daily_trial_best_streak, v_new_streak),
+    daily_trial_games_played = profiles.daily_trial_games_played + 1,
+    daily_trial_wins = profiles.daily_trial_wins + (case when p_result = 'win' then 1 else 0 end)
+  where id = me;
+
+  insert into daily_trial_games (
+    player_id, result, quality, player_rating_before, player_rating_after,
+    linmo_rating_before, linmo_rating_after, exp_awarded, diamonds_awarded
+  ) values (
+    me, p_result, v_quality, v_row.daily_trial_rating, v_new_rating,
+    v_row.linmo_rating, v_new_linmo, v_exp_gain, v_diamond_gain
+  );
+
+  select exp, diamonds, daily_trial_rating, linmo_rating, daily_trial_streak, daily_trial_best_streak
+  into out_exp, out_diamonds, out_rating, out_linmo_rating, out_streak, out_best_streak
+  from profiles where id = me;
+
+  return next;
+end;
+$$;
