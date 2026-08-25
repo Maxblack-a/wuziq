@@ -87,6 +87,16 @@
    position:fixed 在部分移动端浏览器里跟软键盘/安全区打架的老问题)。
    ============================================================ */
 .result-reveal-screen {
+  /* 撑满 .app-shell 的左右 padding(16px)——这一页背景色跟 .app-shell
+     自己的底色很接近但不是同一个颜色,不撑满的话四周会露出一圈
+     .app-shell 的颜色,看上去像"贴图贴上去的"。写法跟 linmo.css 里
+     .linmo-scene 撑满同一个容器的负边距技巧完全一致,复用同一个思路。
+     上下也用同样的负边距抵掉 .app-shell 的 safe-area-inset padding——
+     否则在有安全区(比如刘海屏)的设备上,.result-reveal-screen 自己
+     算的 100dvh 高度会跟 .app-shell 的上下 padding 叠加,总高度超出
+     一屏,顶部同样会露色差。 */
+  width: calc(100% + var(--space-4) * 2);
+  margin: calc(-1 * env(safe-area-inset-top)) calc(-1 * var(--space-4)) calc(-1 * env(safe-area-inset-bottom));
   height: var(--app-height, 100dvh);
   display: flex;
   flex-direction: column;
@@ -299,7 +309,7 @@
 .result-stat-cell + .result-stat-cell {
   border-left: 0.5px solid var(--border-token);
 }
-.result-stat-cell-icon { color: var(--wood); }
+.result-stat-cell-icon { color: var(--gold); }
 .result-stat-cell-value {
   font-size: 13px;
   font-weight: 600;
@@ -344,8 +354,9 @@
 /* ---- 回顾棋盘的"点击查看完整对局"提示 + 展开图标 ---- */
 .result-recap-board-wrap {
   position: relative;
-  display: inline-flex;
-  margin-top: var(--space-2);
+  display: flex;
+  width: fit-content;
+  margin: var(--space-2) auto 0;
   cursor: pointer;
 }
 .result-recap-expand-hint {

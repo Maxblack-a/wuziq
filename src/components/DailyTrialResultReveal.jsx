@@ -3,6 +3,7 @@ import MatchRecapBoard from "./MatchRecapBoard";
 import Board from "./Board";
 import { IconBolt, IconGem, IconExpStar, IconClock, IconListNumbers, IconMaximize, IconX } from "./Icons";
 import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
+import { DAILY_STAMINA_CAP } from "../game/dailyTrialEngine";
 
 // 飞行克隆用的钻石图标——跟 Icons.jsx 里 IconGem 是同一份 10 条线描边的
 // 设计,这里单独存一份原始 SVG 字符串,是因为飞行克隆走的是原生 DOM
@@ -259,7 +260,7 @@ export default function DailyTrialResultReveal({
             <div className="result-resource-group">
               <div className="result-resource-item stamina">
                 <IconBolt size={17} />
-                <span ref={staminaValueRef}>{staminaBefore}</span>
+                <span ref={staminaValueRef}>{staminaBefore}</span>/{DAILY_STAMINA_CAP}
               </div>
               <div className="result-resource-item diamond">
                 <span ref={diamondIconRef}><IconGem size={17} /></span>
