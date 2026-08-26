@@ -41,10 +41,10 @@ export default function MainMenu({
             不应该走浏览器默认的"图片按需/低优先级加载"策略——那样反而
             会等 JS、字体这些资源先加载完才轮到它,延迟感更明显。 */}
         <picture>
-          <source srcSet="/hero-scene.webp" type="image/webp" />
+          <source srcSet="/hero-scene-v2.webp" type="image/webp" />
           <img
             className="hero-scene-bg"
-            src="/hero-scene.jpg"
+            src="/hero-scene-v2.jpg"
             width="793"
             height="1981"
             alt=""
