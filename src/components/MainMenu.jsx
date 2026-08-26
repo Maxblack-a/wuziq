@@ -25,28 +25,24 @@ export default function MainMenu({
           和页面其他内容对齐的左右边距,这样文字/图标位置不变,只有
           背景图本身是通到屏幕两侧的。 */}
       <div className="hero-full-bleed">
-        {/* 原图是没压缩过的 PNG(793×1981),每次进首页都要重新拉这么
-            大一张图,弱网/首次打开时会有明显的空白/延迟。换成体积小的
-            WebP(大多数 Telegram 内置浏览器和现代手机浏览器都支持),
-            jpg 作为极少数不支持 webp 的老 webview 兜底,两者视觉观感
-            跟原图基本无差别。width/height 写死原图像素比例,让浏览器
+        {/* 原图是没压缩过的 2MB PNG(1024×1535),每次进首页都要重新拉这么
+            大一张图,弱网/首次打开时会有明显的空白/延迟。换成体积小两个
+            数量级的 WebP(~27KB,大多数 Telegram 内置浏览器和现代手机
+            浏览器都支持),jpg 作为极少数不支持 webp 的老 webview 兜底,
+            两者视觉观感跟原图基本无差别(整张图本身就是柔焦水墨风格,
+            对轻度压缩不敏感)。width/height 写死原图像素比例,让浏览器
             在图片真正下载完之前就能预留出正确的空间,不会因为图片加载
             完成才知道高度而"跳一下"(布局抖动)。
-            这张图本身就是完整构图(棋盘+大段留白桌面渐暗到底),不再
-            像之前那张小图一样需要靠 CSS 渐变去"接"出下面缺的一截——
-            width/height/aspect-ratio 都改成跟这张新图完全一致的
-            793:1981,object-fit: cover 在比例相同的情况下就是完整显示
-            整张图,不裁剪。
             eager + high 优先级:这张图是首页视觉主体、一进来就看得见,
             不应该走浏览器默认的"图片按需/低优先级加载"策略——那样反而
             会等 JS、字体这些资源先加载完才轮到它,延迟感更明显。 */}
         <picture>
-          <source srcSet="/hero-scene-v2.webp" type="image/webp" />
+          <source srcSet="/hero-scene.webp" type="image/webp" />
           <img
             className="hero-scene-bg"
-            src="/hero-scene-v2.jpg"
-            width="793"
-            height="1981"
+            src="/hero-scene.jpg"
+            width="1024"
+            height="1535"
             alt=""
             aria-hidden="true"
             loading="eager"
