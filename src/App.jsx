@@ -7,17 +7,17 @@ import InviteScreen from "./components/InviteScreen";
 import RoomScreen from "./components/RoomScreen";
 import IncomingInviteModal from "./components/IncomingInviteModal";
 import IncomingFriendRequestModal from "./components/IncomingFriendRequestModal";
+import DailyTrialGateModal from "./components/DailyTrialGateModal";
 import OnlineGame from "./components/OnlineGame";
 import FriendsScreen from "./components/FriendsScreen";
 import LeaderboardScreen from "./components/LeaderboardScreen";
 import ProfileScreen from "./components/ProfileScreen";
 import MatchHistoryScreen from "./components/MatchHistoryScreen";
 import LinMoIntroScreen from "./components/LinMoIntroScreen";
-import LinMoRetakeIntroScreen from "./components/LinMoRetakeIntroScreen";
 import SkillTestScreen from "./components/SkillTestScreen";
 import SkillTestResultScreen from "./components/SkillTestResultScreen";
+import SkillTestEvaluationScreen from "./components/SkillTestEvaluationScreen";
 import SkillTestReviewScreen from "./components/SkillTestReviewScreen";
-import { RESULT_INTRO_LINE_RETAKE } from "./lib/linmoDialogue";
 import { getDisplayStamina } from "./game/dailyTrialEngine";
 import WebAuthScreen from "./components/WebAuthScreen";
 import {
@@ -35,14 +35,22 @@ const DEBUG_ALWAYS_SHOW_LINMO = true;
 export default function App() {
   const [myId, setMyId] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [screen, setScreen] = useState("loading"); // loading | nickname | skilltest | skilltest_result | skilltest_retake | skilltest_view | menu | pve | daily | matchmaking | invite | room | game | friends | leaderboard | profile | history
+  const [screen, setScreen] = useState("loading"); // loading | nickname | skilltest | skilltest_result | skilltest_evaluation | skilltest_view | menu | pve | daily | matchmaking | invite | room | game | friends | leaderboard | profile | history
   const [skillTestProfile, setSkillTestProfile] = useState(null); // 棋力测试结果(揭晓页要用),测完/看完就不需要再留着
-  const [skillTestPriorHistory, setSkillTestPriorHistory] = useState([]); // 这次测试之前的历史记录(倒序),给结果页做"跟上次比/最近怎么样"
+  const [skillTestPriorHistory, setSkillTestPriorHistory] = useState([]); // 这次测试之前的历史记录(倒序),给结果页做"跟上次比/最近怎么样"——
+    // 复测功能去掉之后,应用内已经没有任何入口能让一个 status='completed'
+    // 的玩家回到这个屏幕,所以这份数据在实践中基本总是空数组(只有
+    // "第一次做测试"这一种路径能走到这里,自然没有"上一次"可比)。
+    // 留着这套机制不删,是因为它本身没坏、也不是这次要处理的范围。
   // 'onboarding':新用户第一次见面那次触发的测试,结束后要接回登录后原本
-  // 该走的路由;'retake':从"我的"页面主动发起的复测,结束后应该退回
-  // 到发起测试之前所在的页面(靠 goBack),两种模式结束时的路由不一样,
-  // 所以测试流程本身(SkillTestScreen)不需要关心,靠这个标记来分流。
+  // 该走的路由;'standalone':从应用内其他地方单独发起的测试(见
+  // handleStartSkillTestStandalone),结束后应该退回到发起测试之前所在
+  // 的页面(靠 goBack),两种模式结束时的路由不一样,所以测试流程本身
+  // (SkillTestScreen)不需要关心,靠这个标记来分流。
   const [skillTestMode, setSkillTestMode] = useState("onboarding");
+  // 点"每日试炼"但棋风测试还没做完(status 不是 completed)时弹出的
+  // 门槛提示,见 navigate() 里的拦截逻辑。
+  const [showDailyTrialGate, setShowDailyTrialGate] = useState(false);
   // 见面场景从哪一步开始:'name' 要问名字(Telegram/访客新用户),'invite'
   // 跳过问名字、直接邀请测试(网页版注册账号已经有名字了,或者是老账号
   // 第一次遇到这个新功能)。见 afterLogin 里的判断。
@@ -157,19 +165,30 @@ export default function App() {
     setScreen("skilltest");
   }
 
-  // 从"我的"页面主动发起的复测:打完招呼直接开始,不走昵称/见面那一套
-  function handleRetakeStart() {
-    setSkillTestMode("retake");
+  // 从应用内某个地方(不是新用户见面那套流程)单独发起棋风测试——目前
+  // 两处会用到:"我的"页面里"还没测过"的引导入口、每日试炼门槛弹窗里
+  // "去测一测"。都是玩家第一次做这个测试,不是"复测"(复测/重新测这个
+  // 功能已经去掉了——棋风测试完成之后 status 会锁定成 completed,应用内
+  // 不再有任何入口能回到这个屏幕,所以下面 continueAfterSkillTest /
+  // handleSkillTestSkip 里的 priorHistory 比较逻辑,对这次改动之后的
+  // 新用户来说其实永远不会有"上一次"可比——这是移除复测的直接后果,
+  // 保留 compareToLastLine/recentTrendLine 这两处调用只是不去动它,
+  // 不代表还指望它们派上用场)。
+  //
+  // 调用方自己负责把"发起测试之前所在的页面"压进历史栈(参考
+  // navigate() 的写法),这里只管切换模式和屏幕。
+  function handleStartSkillTestStandalone() {
+    setSkillTestMode("standalone");
     setScreen("skilltest");
   }
 
   // 棋力测试路由完成之后(测完看完揭晓页 / 跳过 / 中途放弃)统一走这里。
   // onboarding 模式:继续原来登录成功后该走的路由(深链接/断线续局/回首页)。
-  // retake 模式:哪来的回哪去——用 goBack() 退回发起复测之前所在的页面
-  // (一般是"我的"),不能碰 routeAfterLoginRef,那是专属登录流程的东西。
+  // standalone 模式:哪来的回哪去——用 goBack() 退回发起测试之前所在的
+  // 页面,不能碰 routeAfterLoginRef,那是专属登录流程的东西。
   async function continueAfterSkillTest() {
     setSkillTestProfile(null);
-    if (skillTestMode === "retake") {
+    if (skillTestMode === "standalone") {
       setSkillTestMode("onboarding");
       goBack();
       return;
@@ -182,10 +201,9 @@ export default function App() {
   }
 
   // 邀请时点"改天吧",或者对局中途点"先不测了":onboarding 模式下当作
-  // 跳过处理并继续登录路由;retake 模式下不写库(不能让一次复测中途
-  // 放弃,就把之前测出来的正式结果状态覆盖成"skipped"),直接退回原页面。
+  // 跳过处理并继续登录路由;standalone 模式下不写库,直接退回原页面。
   async function handleSkillTestSkip() {
-    if (skillTestMode === "retake") {
+    if (skillTestMode === "standalone") {
       goBack();
       return;
     }
@@ -442,7 +460,19 @@ export default function App() {
 
   // 从一个页面主动跳去另一个页面时调这个,而不是直接 setScreen——
   // 会先把"跳转前我在哪"记一笔到历史栈里,goBack 才有地方可退。
+  //
+  // "daily" 这个目标单独拦一道:每日试炼现在要求必须先做完棋风测试
+  // (status === 'completed')才能进,没做完(null / pending / skipped
+  // 都算)就不放行,弹一个门槛提示,让玩家自己选"去测一测"还是
+  // "先不测了"。拦在这个统一入口而不是 MainMenu 按钮的 onClick 里,
+  // 是因为 navigate("daily") 不一定只会从主菜单那一个按钮触发——
+  // 以后不管哪个页面想跳每日试炼,都会经过这一道检查,不用每个调用方
+  // 各自记得判断一遍。
   function navigate(nextScreen) {
+    if (nextScreen === "daily" && profile?.skill_test_status !== "completed") {
+      setShowDailyTrialGate(true);
+      return;
+    }
     if (screen === "menu") {
       homeBaselineRef.current = {
         stamina: getDisplayStamina(profile?.stamina, profile?.stamina_date),
@@ -451,6 +481,17 @@ export default function App() {
     }
     historyRef.current.push({ screen, roomId });
     setScreen(nextScreen);
+  }
+
+  // 门槛弹窗里点"去测一测":复用 handleStartSkillTestStandalone(standalone
+  // 模式测完/中途放弃时都是简单地 goBack() 退回来处的页面,不会去碰
+  // routeAfterLoginRef,也不会因为"放弃"就强制把状态写成 skipped——
+  // 这些语义正好是"半路想起来去测一下"该有的行为)。手动做一次
+  // navigate() 本来会做的历史入栈,因为这里没有经过 navigate()。
+  function handleDailyTrialGateStartTest() {
+    setShowDailyTrialGate(false);
+    historyRef.current.push({ screen, roomId });
+    handleStartSkillTestStandalone();
   }
 
   // 返回上一页:弹出历史栈最近的一条,回到"进入当前页面之前所在的
@@ -668,23 +709,19 @@ export default function App() {
       <div className="app-shell">
         <SkillTestResultScreen
           profile={skillTestProfile}
-          priorHistory={skillTestPriorHistory}
-          onContinue={continueAfterSkillTest}
-          introLine={skillTestMode === "retake" ? RESULT_INTRO_LINE_RETAKE : undefined}
+          onContinue={() => setScreen("skilltest_evaluation")}
         />
       </div>
     );
   }
 
-  if (screen === "skilltest_retake") {
+  if (screen === "skilltest_evaluation" && skillTestProfile) {
     return (
       <div className="app-shell">
-        <LinMoRetakeIntroScreen
-          displayName={profile?.display_name}
-          exp={profile?.exp}
-          avatarUrl={profile?.avatar_url}
-          onStart={handleRetakeStart}
-          onCancel={goBack}
+        <SkillTestEvaluationScreen
+          profile={skillTestProfile}
+          priorHistory={skillTestPriorHistory}
+          onContinue={continueAfterSkillTest}
         />
       </div>
     );
@@ -736,7 +773,11 @@ export default function App() {
       {screen === "leaderboard" && <LeaderboardScreen myId={myId} onExit={goBack} />}
       {screen === "profile" && <ProfileScreen myId={myId} onExit={goBack} onNavigate={navigate} />}
       {screen === "skilltest_view" && (
-        <SkillTestReviewScreen myId={myId} onExit={goBack} onRetake={() => navigate("skilltest_retake")} />
+        <SkillTestReviewScreen
+          myId={myId}
+          onExit={goBack}
+          onStartTest={() => { historyRef.current.push({ screen, roomId }); handleStartSkillTestStandalone(); }}
+        />
       )}
       {screen === "history" && <MatchHistoryScreen myId={myId} onExit={goBack} />}
       {screen === "game" && <OnlineGame roomId={roomId} myId={myId} onExit={goMenu} onMatched={handleMatched} />}
@@ -755,6 +796,12 @@ export default function App() {
           busy={notifBusy}
           onAccept={() => handleRespondFriendRequest(true)}
           onDecline={() => handleRespondFriendRequest(false)}
+        />
+      )}
+      {showDailyTrialGate && (
+        <DailyTrialGateModal
+          onStartTest={handleDailyTrialGateStartTest}
+          onClose={() => setShowDailyTrialGate(false)}
         />
       )}
     </div>

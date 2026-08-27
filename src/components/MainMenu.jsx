@@ -75,7 +75,7 @@ export default function MainMenu({
           </div>
 
           <nav className="top-nav-light">
-            <StatBadge icon={<IconBolt size={13} />} value={displayStamina} fromValue={staminaFrom} />
+            <StatBadge className="stat-badge-energy" icon={<IconBolt size={13} />} value={displayStamina} fromValue={staminaFrom} />
             <StatBadge icon={<IconGem size={13} />} value={diamonds ?? 0} fromValue={diamondsFrom} />
             <button className="nav-icon-btn" onClick={() => setShowRules(true)}>
               <IconRules />

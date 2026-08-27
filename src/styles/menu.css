@@ -125,7 +125,9 @@
      小屏统一缩到大屏的 87.5%。 */
   font-size: clamp(11.5px, calc(8.5px + 0.9375vw), 13px);
   font-weight: 600;
-  color: var(--ink-token);
+  /* 从原来的墨色(--ink-token)改成参考截图取样的暖米金色,只改颜色,
+     字号/字重/布局都不动。 */
+  color: var(--topbar-accent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -152,7 +154,7 @@
   font-family: var(--font-mono);
   font-size: clamp(8px, calc(6px + 0.625vw), 9px);
   letter-spacing: 0.02em;
-  color: var(--text-secondary);
+  color: var(--topbar-accent);
 }
 
 .top-nav-light {
@@ -168,7 +170,7 @@
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  color: var(--text-secondary);
+  color: var(--topbar-accent);
   font-size: clamp(9.5px, calc(6.5px + 0.9375vw), 11px);
   letter-spacing: 0.02em;
   transition: color 0.15s ease, transform 0.15s ease;
@@ -198,15 +200,27 @@
   align-items: center;
   color: var(--wood);
 }
+
+/* 体力值专属的颜色覆盖——StatBadge 组件本身是体力值/钻石共用的,
+   直接改 .stat-badge / .stat-badge-icon 会连钻石也一起改掉。这里
+   借组件已经支持的 className 透传,只给体力值这一个实例单独加一层
+   更高优先级的颜色规则(选择器比基础规则更具体,自然覆盖,不用
+   !important),钻石完全不受影响,还是原来的蓝色。 */
+.stat-badge-energy {
+  color: var(--topbar-accent);
+}
+.stat-badge-energy .stat-badge-icon {
+  color: var(--topbar-accent);
+}
 .stat-badge-value {
   min-width: 1.2em;
   text-align: left;
 }
 
 @keyframes stat-pop-up {
-  0% { transform: scale(1); color: var(--wood); }
+  0% { transform: scale(1); color: var(--topbar-accent); }
   35% { transform: scale(1.4); color: var(--gold); }
-  100% { transform: scale(1); color: var(--wood); }
+  100% { transform: scale(1); color: var(--topbar-accent); }
 }
 @keyframes stat-pop-down {
   0% { transform: scale(1); }

@@ -12,22 +12,6 @@ export const GREETING_LINES = [
 export const NAME_PROMPT_LINE = "你好,我叫林墨。你叫什么名字啊?";
 export const NAME_HINT = "林墨会记住这个名字";
 
-// 复测(从"我的"页面主动发起,不是新用户见面那一次)用的招呼语——不用
-// 再问名字,林墨已经认识你了,语气上要体现"认识"和"再来一次"这两点,
-// 跟第一次见面的陌生感区分开。
-export function retakeGreetingLine(name) {
-  const n = name ? name : "";
-  const variants = [
-    `${n}又来啦?这次让我再看看你的棋。`,
-    `想再测一次?行啊,${n},来吧。`,
-    `${n},好久没在棋盘前见你了——要不要再下一局?`,
-  ];
-  return variants[Math.floor(Math.random() * variants.length)];
-}
-
-export const RETAKE_ACCEPT_LABEL = "开始";
-export const RETAKE_CANCEL_LABEL = "再想想";
-
 // 邀请下第一局测试局:按玩家昵称的"感觉"给一句克制、自然的反馈,
 // 再顺势带出"想看看你的棋"这个邀请——目标是让玩家觉得"林墨对我这个
 // 人有点兴趣,想跟我下一局",而不是"系统提示我去完成一个棋力测试
@@ -205,9 +189,10 @@ export function pickInGameLine(key) {
 }
 
 // 结果揭晓:开场白 + 每种类型对应一句"点评"(不是解释规则,是像真的在
-// 复盘这盘棋一样说一句有信息量的话)
+// 复盘这盘棋一样说一句有信息量的话)。开场白不再区分"第一次/复测"两个
+// 版本——复测功能去掉之后,能走到这句台词的都是第一次测试,不存在
+// "又下完一局"这种预设了"上一次"的语境。
 export const RESULT_INTRO_LINE = "下完了。让我想想怎么说……";
-export const RESULT_INTRO_LINE_RETAKE = "又下完一局。有些地方跟我记得的不太一样了。";
 
 export const TYPE_COMMENT = {
   attack: [
@@ -317,13 +302,16 @@ export function resultLine(typeKey, highlights) {
   return citation ? `${base}${citation}` : base;
 }
 
-// ---- 复测对比:跟上一次相比 / 最近这段时间 ----
+// ---- 跟上一次相比 / 最近这段时间 ----
 // priorHistory:按时间倒序(最近的在前)的历史记录数组,每项 { dims, type,
 // completedAt },来自 skill_test_history 表——这张表在每次测试完成时都会
 // 追加一行,不影响 profiles.skill_test_* 那几列(它们仍然只代表"最新一次"、
 // 给每日试炼这类功能读取,互不干扰)。priorHistory 可能是 undefined/空
-// 数组(第一次测试、或者调用方没查历史),这两种情况下面两个函数都直接
-// 返回 null,由结果页决定不渲染对比区块。
+// 数组,这两种情况下面两个函数都直接返回 null,由结果页决定不渲染对比
+// 区块——复测功能去掉之后,应用内已经没有任何入口能让同一个玩家做
+// 第二次测试,所以"空数组"(没有上一次可比)会是新用户唯一会遇到的
+// 情况,这两个函数在实践中基本总是返回 null。留着不删,是因为它们
+// 本身没坏,只是暂时没有能触发到它们的场景。
 const DIM_ORDER = ["attack", "defense", "vision", "calc", "opening", "adapt"];
 
 // 相比上一次:挑变化最大的 1-2 个维度说,不逐项念一遍六个数字——念完
@@ -398,168 +386,6 @@ export function recentTrendLine(dims, priorHistory) {
 
 export const RESULT_CONTINUE_LABEL = "继续";
 
-// ============================================================
-// 每日试炼:林墨作为固定 NPC 陪练时的台词。跟上面棋力测试那套台词
-// 语气一致(自然、克制),但场合不一样——不是"考官在观察你",是
-// "每天都会遇到的对手",所以更多体现"熟悉感"和"较量本身"。
-// ============================================================
-
-// 挑战前的招呼语,按连胜/连败状态给不同语气——这个语气变化本身就是
-// 一种"林墨在跟着你的状态走"的反馈,而不是每天点开都是同一句话。
-// 这一条专给"老朋友重逢"场景用(games_played > 0),第一次在每日试炼
-// 遇到林墨走的是下面 dailyFirstMeetingInviteLine,两者不共用。
-export function dailyReturnGreetingLine(streak) {
-  if (streak >= 3) {
-    const lines = [
-      "你最近状态不错啊,今天还要继续?",
-      "连着赢了好几回了,今天我可得认真点。",
-    ];
-    return lines[Math.floor(Math.random() * lines.length)];
-  }
-  if (streak <= -2) {
-    const lines = [
-      "别急,输几局很正常,再来一盘。",
-      "上次那盘是有点可惜,今天找回来?",
-    ];
-    return lines[Math.floor(Math.random() * lines.length)];
-  }
-  const lines = [
-    "来了?棋盘我都摆好了。",
-    "今天也来下一局?",
-    "正好,我也想活动一下手腕。",
-  ];
-  return lines[Math.floor(Math.random() * lines.length)];
-}
-
-// 兼容旧命名
-export const dailyGreetingLine = dailyReturnGreetingLine;
-
-// 第一次在"每日试炼"里遇到林墨(games_played === 0,不管之前有没有做过
-// 棋力测试,那是另一个场合)——要体现"我们认识,但还没正经交过手"这个
-// 关系上的细微差别,不能跟"老朋友重逢"用同一套话术。
-export const DAILY_FIRST_MEETING_LINES = [
-  "棋风测试那盘不算真的交手——今天要不要正经下一局?",
-  "早想跟你正经下一盘了,今天有空?",
-  "咱们还没真刀真枪下过一局呢,来试试?",
-];
-export function dailyFirstMeetingInviteLine() {
-  return DAILY_FIRST_MEETING_LINES[Math.floor(Math.random() * DAILY_FIRST_MEETING_LINES.length)];
-}
-
-// 日常闲聊——跟棋盘无关,纯粹让林墨显得像个有生活的人,而不是只会
-// 讲棋的对弈机器。邀请语之外附加展示的"第二句话"用这个池子,随机挑
-// 一条,不是每次都说同一句。
-export const DAILY_SMALL_TALK_LINES = [
-  "刚才路过巷口,那家面馆又在排队了。",
-  "今天棋院来了个新面孔,坐了一下午没走。",
-  "外面天挺好,下完这局你也该出去走走。",
-  "刚泡了壶茶,你要是不急,下完再聊两句。",
-  "窗边那盆兰花,这两天总算开了。",
-];
-export function pickSmallTalkLine() {
-  return DAILY_SMALL_TALK_LINES[Math.floor(Math.random() * DAILY_SMALL_TALK_LINES.length)];
-}
-
-export const DAILY_ACCEPT_LABEL = "好,来一局";
-export const DAILY_DECLINE_LABEL = "改天吧";
-
-// 玩家拒绝了林墨的邀请:不失落、不追问,给个体面的收尾。
-export const DAILY_PLAYER_DECLINE_RESPONSE_LINES = [
-  "行,那就改天。",
-  "没事,棋院一直都在。",
-  "好,那我先忙别的了。",
-];
-export function dailyPlayerDeclinedResponseLine() {
-  return DAILY_PLAYER_DECLINE_RESPONSE_LINES[Math.floor(Math.random() * DAILY_PLAYER_DECLINE_RESPONSE_LINES.length)];
-}
-
-export const DAILY_CHALLENGE_LABEL = "挑战林墨";
-export const DAILY_NO_STAMINA_LINE = "今天的体力好像不够了,明天再来吧。";
-
-export const DAILY_WIN_LINES = [
-  "这局我认了,你下得比我好。",
-  "嗯,这盘是你的。",
-  "被你赢了,下一局我不会这么松懈。",
-];
-export const DAILY_LOSE_LINES = [
-  "这局算我的,别灰心,再来一盘就找回来了。",
-  "刚才那几步你有点急,不然结果不一定是这样。",
-  "赢是赢了,不过你后面追得挺紧的。",
-];
-export const DAILY_DRAW_LINES = [
-  "打平了,谁都没让谁。",
-  "这盘算平局,下一局见分晓。",
-];
-
-export function dailyResultLine(result) {
-  const pool = result === "win" ? DAILY_WIN_LINES : result === "lose" ? DAILY_LOSE_LINES : DAILY_DRAW_LINES;
-  return pool[Math.floor(Math.random() * pool.length)];
-}
-
-// ---- 赛后:林墨主动邀请 / 不主动邀请下一局 ----
-export const DAILY_REMATCH_INVITE_LINES = [
-  "要不要再来一局?我还没尽兴。",
-  "时间还早,再战一盘?",
-  "这盘不算完,再来一局找回场子?",
-];
-export function dailyRematchInviteLine() {
-  return DAILY_REMATCH_INVITE_LINES[Math.floor(Math.random() * DAILY_REMATCH_INVITE_LINES.length)];
-}
-export const DAILY_REMATCH_ACCEPT_LABEL = "好啊,再来一局";
-export const DAILY_REMATCH_DECLINE_LABEL = "今天先到这吧";
-
-// 林墨这次没主动邀请(不是冷场,只是恰好没提)——给一句中性的收尾,
-// 顺势把主动权交给玩家(玩家这边有"邀请TA"这个按钮)。
-export const DAILY_NO_REMATCH_OFFER_LINES = [
-  "今天先这样,你随时可以再来找我。",
-  "下次想下了,来棋院找我就行。",
-  "这盘先到这,我这边不勉强。",
-];
-export function dailyNoRematchOfferLine() {
-  return DAILY_NO_REMATCH_OFFER_LINES[Math.floor(Math.random() * DAILY_NO_REMATCH_OFFER_LINES.length)];
-}
-
-export const DAILY_INVITE_NPC_LABEL = "邀请TA再来一局";
-export const DAILY_PICK_OTHER_LABEL = "看看其他棋手";
-
-// 玩家主动邀请,林墨接受
-export const DAILY_ACCEPT_PLAYER_INVITE_LINES = [
-  "行,那就再来一局。",
-  "好,奉陪到底。",
-  "正合我意。",
-];
-export function dailyAcceptPlayerInviteLine() {
-  return DAILY_ACCEPT_PLAYER_INVITE_LINES[Math.floor(Math.random() * DAILY_ACCEPT_PLAYER_INVITE_LINES.length)];
-}
-
-// 玩家主动邀请,林墨拒绝——一定要给理由,且理由要"不冷场"(暗示下次
-// 还会见面,不是真的在回避玩家)。
-export const DAILY_PLAYER_INVITE_DECLINE_REASONS = [
-  "有点累了,让我歇会儿,下次再战。",
-  "我这边还有点事,晚点再说吧。",
-  "刚才那盘让我想了不少,先消化消化。",
-  "棋院这会儿有点吵,改天找个清静的时候再下。",
-];
-export function dailyPlayerInviteDeclineReason() {
-  return DAILY_PLAYER_INVITE_DECLINE_REASONS[Math.floor(Math.random() * DAILY_PLAYER_INVITE_DECLINE_REASONS.length)];
-}
-
-// 体力耗尽,没法再邀请下一局了
-export const DAILY_STAMINA_EXHAUSTED_LINES = [
-  "今天下得也不少了,养足精神明天再来。",
-  "先歇歇吧,明天棋盘还在。",
-];
-export function dailyStaminaExhaustedLine() {
-  return DAILY_STAMINA_EXHAUSTED_LINES[Math.floor(Math.random() * DAILY_STAMINA_EXHAUSTED_LINES.length)];
-}
-
-// "选择下一步"页面(换个对手 / 返回首页)顶部的过渡语
-export const DAILY_CHOOSE_NEXT_LINES = [
-  "要不再找别的棋手练练?",
-  "棋院里应该还有别人在。",
-];
-export function dailyChooseNextLine() {
-  return DAILY_CHOOSE_NEXT_LINES[Math.floor(Math.random() * DAILY_CHOOSE_NEXT_LINES.length)];
-}
-export const DAILY_MATCH_NEXT_LABEL = "匹配下一位棋手";
-export const DAILY_BACK_HOME_LABEL = "返回首页";
+// 每日试炼(林墨/苏晴等多位棋手轮流出场)的台词已经拆到
+// lib/dailyDialogue.js,按 npc.id 分桶配词——这个文件从此只保留"棋风
+// 测试"专属的内容(目前只有林墨会主持棋风测试)。

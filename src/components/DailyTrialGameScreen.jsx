@@ -6,22 +6,15 @@ import {
   PLAYER_COLOR, LINMO_COLOR,
   computeSkillDial, getAdaptiveMove,
   createMoveLog, recordPlayerMove, computeMatchQuality,
+  createOpponentStyleState, recordPlayerStyleSignal,
 } from "../game/dailyTrialEngine";
-import { pickInGameLine } from "../lib/linmoDialogue";
+import { dailyGameStartLine, pickDailyAmbientLine } from "../lib/dailyDialogue";
+import { getNpcById } from "../lib/npcRoster";
 import { isInTelegram, useTelegramBackButton, hapticNotify, confirmDialog } from "../lib/telegram";
 
 const THINKING_DELAY = 500;
 const WIN_REVEAL_DELAY = 1000;
 const DRAW_REVEAL_DELAY = 400;
-
-// 对局过程中的闲聊台词池——不跟棋力测试那套"关卡触发"逻辑挂钩(每日
-// 试炼没有关卡),纯粹是营造"对面坐着一个会说话的人"的氛围,林墨每走
-// 完一步有几率(不是每次都换,不然太吵)换一句场面话。
-const AMBIENT_LINE_KEYS = ["defense_trigger", "global_trigger"];
-function pickAmbientLine() {
-  const key = AMBIENT_LINE_KEYS[Math.floor(Math.random() * AMBIENT_LINE_KEYS.length)];
-  return pickInGameLine(key);
-}
 
 // onFinish(result, quality): 对局真正分出胜负/和棋,揭晓动画播完之后调用,
 // result 是 'win'|'lose'|'draw',quality 是这一局的过程表现分(0-1)——
@@ -29,8 +22,14 @@ function pickAmbientLine() {
 // 网络请求,棋盘逻辑和结算逻辑分开,便于以后加别的 NPC 时复用这个组件。
 // 见面寒暄/邀请已经在进入这个组件之前的对话界面里说完了,这里开局只需要
 // 一句轻量的"开始了"式台词,不需要外部传入。
-export default function DailyTrialGameScreen({ playerRating, linmoRating, streak, gamesPlayed, onFinish, onAbort }) {
+//
+// npc:上一屏(DailyTrialScreen)已经选好并传下来的对手信息,决定头像/
+// 名字和对局中的闲聊语气(见 lib/dailyDialogue.js)——这个组件本身不做
+// 任何"选谁当对手"的决策,纯粹按传入的 npc 渲染,加新棋手不需要改这里。
+export default function DailyTrialGameScreen({ npc, playerRating, linmoRating, streak, gamesPlayed, onFinish, onAbort }) {
   useTelegramBackButton(() => handleExitClick());
+
+  const activeNpc = npc || getNpcById("linmo");
 
   const [board, setBoard] = useState(createEmptyBoard());
   const [turn, setTurn] = useState(PLAYER_COLOR);
@@ -38,9 +37,14 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
   const [winInfo, setWinInfo] = useState(null);
   const [thinking, setThinking] = useState(false);
   const [revealing, setRevealing] = useState(false);
-  const [currentLine, setCurrentLine] = useState(() => pickInGameLine("game_start") || "你先来吧,我看看。");
+  const [currentLine, setCurrentLine] = useState(() => dailyGameStartLine(activeNpc.id));
 
   const moveLogRef = useRef(createMoveLog());
+  // 只有苏晴会读这份"对手风格"累计数据(见 dailyTrialEngine.js 的
+  // applyOpponentStyleReading),林墨的手感不受它影响——但统计本身对
+  // 每一局、每一位棋手都做,不因为对手是林墨就跳过,逻辑单纯一点,
+  // 以后如果再加一个"会读对手风格"的棋手,不用再补埋点。
+  const opponentStyleRef = useRef(createOpponentStyleState());
   const aiTimerRef = useRef(null);
   const revealTimerRef = useRef(null);
   const moveTokenRef = useRef(0);
@@ -98,8 +102,9 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
       const dial = computeSkillDial({
         playerRating, linmoRating, streak, gamesPlayed,
         board: currentBoard, aiColor: LINMO_COLOR, humanColor: PLAYER_COLOR,
+        npcId: activeNpc.id,
       });
-      const move = getAdaptiveMove(currentBoard, LINMO_COLOR, PLAYER_COLOR, dial);
+      const move = getAdaptiveMove(currentBoard, LINMO_COLOR, PLAYER_COLOR, dial, activeNpc.id, opponentStyleRef.current);
       if (!move) {
         setThinking(false);
         finalize("draw");
@@ -113,7 +118,7 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
       moveCountRef.current += 1;
       setThinking(false);
       if (Math.random() < 0.5) {
-        const line = pickAmbientLine();
+        const line = pickDailyAmbientLine(activeNpc.id);
         if (line) setCurrentLine(line);
       }
 
@@ -138,6 +143,7 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
 
     const beforeBoard = board;
     recordPlayerMove(moveLogRef.current, beforeBoard, x, y, PLAYER_COLOR, LINMO_COLOR);
+    recordPlayerStyleSignal(opponentStyleRef.current, beforeBoard, x, y, PLAYER_COLOR, LINMO_COLOR);
     const afterBoard = applyMove(x, y, PLAYER_COLOR, beforeBoard);
     setBoard(afterBoard);
     setLastMove([x, y]);
@@ -192,10 +198,10 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
       <div className="game-layout">
         <div className="skilltest-header">
           <div className="skilltest-avatar">
-            <img src="/linmo-portrait.webp" alt="林墨" />
+            <img src={activeNpc.portrait} alt={activeNpc.name} />
           </div>
           <div className="skilltest-header-text">
-            <div className="skilltest-name">林墨</div>
+            <div className="skilltest-name">{activeNpc.name}</div>
             <div className="skilltest-line">
               {currentLine}
               {thinking && <span className="skilltest-thinking-dots" aria-hidden="true">…</span>}
@@ -212,14 +218,14 @@ export default function DailyTrialGameScreen({ playerRating, linmoRating, streak
           <div className="pve-topbar-right">
             <div className="pve-turn-pill">
               {thinking ? (
-                <><div className="spinner" /> 林墨思考中</>
+                <><div className="spinner" /> {activeNpc.name}思考中</>
               ) : revealing ? (
                 <>{winInfo ? "五子连珠!" : "棋盘落满"}</>
               ) : (
                 <>
                   <div className={`turn-dot black${turn === PLAYER_COLOR ? " active" : ""}`} />
                   <div className={`turn-dot white${turn === LINMO_COLOR ? " active" : ""}`} />
-                  {turn === PLAYER_COLOR ? "轮到你" : "林墨回合"}
+                  {turn === PLAYER_COLOR ? "轮到你" : `${activeNpc.name}回合`}
                 </>
               )}
             </div>

@@ -528,40 +528,13 @@
 .skilltest-progress-dot.active { background: var(--wood); }
 
 /* ============================================================
-   结果揭晓页:林墨半身像 + 一句点评 + 六维雷达图 + 类型标签
+   结果揭晓页(数据部分):六维雷达图 + 类型标签——林墨的点评已经
+   拆到 SkillTestEvaluationScreen 那一屏,复用 .linmo-scene /
+   .linmo-invite-bubble(见 linmo.css 顶部林墨见面场景那一节),不在
+   这里。.result-thinking-dots / .result-comment-reveal 这两个动画类
+   也是给那一屏的气泡文字用的,定义留在这一节是历史原因,没有特殊
+   依赖关系,可以搬但没必要。
    ============================================================ */
-.result-linmo-row {
-  display: flex;
-  align-items: flex-start;
-  gap: var(--space-3);
-  margin-bottom: var(--space-4);
-}
-.result-linmo-portrait {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  overflow: hidden;
-  flex-shrink: 0;
-  border: 2px solid var(--gold);
-  box-shadow: var(--shadow-card);
-}
-.result-linmo-portrait img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: top center;
-}
-.result-linmo-bubble {
-  flex: 1;
-  background: var(--surface);
-  border: 1px solid var(--border-token);
-  border-radius: 4px var(--radius-md) var(--radius-md) var(--radius-md);
-  padding: var(--space-3) var(--space-4);
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--ink-token);
-  box-shadow: var(--shadow-card);
-}
 /* "让我想想怎么说……"后面跳动的省略号,停顿期间露出,点评揭晓后消失 */
 .result-thinking-dots {
   display: inline-block;

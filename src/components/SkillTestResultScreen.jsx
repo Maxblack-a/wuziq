@@ -1,12 +1,5 @@
-import { useEffect, useState } from "react";
 import { DIM_KEYS, DIM_LABELS } from "../lib/skillProfile";
-import {
-  RESULT_INTRO_LINE, resultLine, RESULT_CONTINUE_LABEL,
-  compareToLastLine, recentTrendLine,
-} from "../lib/linmoDialogue";
-
-const THINKING_PAUSE = 1100; // "让我想想怎么说……"之后停顿多久再把点评说出来
-const COMPARE_PAUSE = 900; // 点评说完,再停一下才接着聊"跟上次比"/"最近怎么样"
+import { RESULT_CONTINUE_LABEL } from "../lib/linmoDialogue";
 
 const SIZE = 220;
 const CENTER = SIZE / 2;
@@ -64,64 +57,22 @@ function RadarChart({ dims }) {
   );
 }
 
-// profile: computeSkillProfile 的返回值。onContinue: 揭晓看完,继续原来该走的路由。
-// continueLabel: 按钮文案,测完当场揭晓用"继续"(默认),从"我的"页面回看
-// 历史结果时外部会传"返回"进来,复用同一个组件不用另外再画一份。
-export default function SkillTestResultScreen({ profile, priorHistory, onContinue, continueLabel, introLine }) {
-  const { dims, typeInfo, type, highlights } = profile;
-
-  // "下完了。让我想想怎么说……"之后先停顿一下再把点评说出来——现实中
-  // 复盘一盘棋不会脱口而出,这个停顿本身就是"他真的在想"的一部分。
-  // 停顿期间只露出雷达图/类型标签这些"数据类"的内容,点评这句"话"
-  // 延后出现。
-  //
-  // "跟上次比""最近这段时间"这两句再往后错一拍——像是林墨说完这局的
-  // 点评之后,又想起来点别的,顺嘴接了一句,而不是把所有话一口气倒出来。
-  // 只有 priorHistory 真的有数据时才会算出内容,没有历史记录(比如第一次
-  // 测试)这一拍就什么都不显示,不占位置。
-  const [revealed, setRevealed] = useState(false);
-  const [compareRevealed, setCompareRevealed] = useState(false);
-  const [compareText] = useState(() => compareToLastLine(dims, priorHistory));
-  const [trendText] = useState(() => recentTrendLine(dims, priorHistory));
-  // resultLine 内部用 Math.random() 从候选池里挑一条,必须只算一次存起来——
-  // 不然 compareRevealed 这类 state 变化触发重渲染时,resultLine 会被
-  // 重新调用,点评文字可能在玩家眼皮底下悄悄换成另一条候选,像是林墨
-  // 说话说到一半换了一句话
-  const [comment] = useState(() => resultLine(type, highlights));
-
-  useEffect(() => {
-    setRevealed(false);
-    setCompareRevealed(false);
-    const t1 = setTimeout(() => setRevealed(true), THINKING_PAUSE);
-    const t2 = setTimeout(() => setCompareRevealed(true), THINKING_PAUSE + COMPARE_PAUSE);
-    return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [profile]);
+// profile: computeSkillProfile 的返回值。onContinue: 看完数据,继续往下走
+// (正常流程会接到 SkillTestEvaluationScreen 听林墨怎么说;从"我的"页面
+// 回看历史结果时,外部会把它接到"返回"上——已经测过就不再提供重新测
+// 的入口了,continueLabel 也会跟着换成"返回")。
+//
+// 这一屏现在只负责"数字层面的客观反馈"(类型/雷达图/六维分数),不带
+// 任何林墨的点评对话——原来两者是揉在一起的,拆开之后有两个好处:
+// 一是跟每日试炼结算页(DailyTrialResultReveal)的"数字先、点评后"
+// 保持同一套产品语言;二是从"我的"页面回看历史结果时,只需要看数据,
+// 不用每次都重新演一遍"让我想想怎么说"的停顿动画——点评/态度层面的
+// 反馈交给 SkillTestEvaluationScreen,只在"刚测完"这条路径上出现。
+export default function SkillTestResultScreen({ profile, onContinue, continueLabel }) {
+  const { dims, typeInfo } = profile;
 
   return (
     <div style={{ padding: "var(--space-2) 0 var(--space-4)" }}>
-      <div className="result-linmo-row">
-        <div className="result-linmo-portrait">
-          <img src="/linmo-portrait.webp" alt="林墨" />
-        </div>
-        <div className="result-linmo-bubble">
-          <p style={{ marginBottom: 4, color: "var(--fg-muted)", fontSize: 12 }}>
-            {introLine || RESULT_INTRO_LINE}
-            {!revealed && <span className="result-thinking-dots" aria-hidden="true">…</span>}
-          </p>
-          {revealed && (
-            <div className="result-comment-reveal">
-              <p>{comment}</p>
-            </div>
-          )}
-          {revealed && compareRevealed && (compareText || trendText) && (
-            <div className="result-comment-reveal" style={{ marginTop: 8 }}>
-              {compareText && <p>{compareText}</p>}
-              {trendText && <p style={{ marginTop: 4 }}>{trendText}</p>}
-            </div>
-          )}
-        </div>
-      </div>
-
       <div className="result-type-badge">
         <div className="result-type-name">{typeInfo.name}</div>
         <div className="result-type-summary">{typeInfo.summary}</div>

@@ -11,17 +11,17 @@ import {
   dailyNoRematchOfferLine, DAILY_INVITE_NPC_LABEL, DAILY_PICK_OTHER_LABEL,
   dailyAcceptPlayerInviteLine, dailyPlayerInviteDeclineReason, dailyStaminaExhaustedLine,
   dailyChooseNextLine, DAILY_MATCH_NEXT_LABEL, DAILY_BACK_HOME_LABEL,
-} from "../lib/linmoDialogue";
+} from "../lib/dailyDialogue";
 import { isInTelegram, useTelegramBackButton } from "../lib/telegram";
 import { STAMINA_COST, DAILY_STAMINA_CAP, rollNpcInvitesRematch, rollNpcAcceptsPlayerInvite } from "../game/dailyTrialEngine";
 
 // 每日试炼的见面邀请/点评续约/换对手/体力不足这几步,跟填昵称、邀请
 // 棋力测试是同一场戏的延续,所以沿用完全同一套"图片背景 + 信笺气泡 +
 // 胶囊按钮"视觉(.linmo-scene 系统,定义在 linmo.css),不重新发明一套
-// 卡片式 UI。这个 SceneShell 就是把 LinMoIntroScreen / LinMoRetakeIntroScreen
-// 里那段背景图+品牌区的骨架抽出来复用,每日试炼比那两个场景多两样
-// 东西:左上角的返回按钮(填昵称/棋力测试邀请是没有退出口的强制流程,
-// 每日试炼是可以随时退出的可选玩法)、右上角的体力/钻石/连胜状态条。
+// 卡片式 UI。这个 SceneShell 就是把 LinMoIntroScreen 里那段背景图+
+// 品牌区的骨架抽出来复用,每日试炼比那个场景多两样东西:左上角的
+// 返回按钮(填昵称/棋力测试邀请是没有退出口的强制流程,每日试炼是
+// 可以随时退出的可选玩法)、右上角的体力/钻石/连胜状态条。
 function SceneShell({ npc, status, onBack, children }) {
   return (
     <div className="linmo-scene">
@@ -139,18 +139,23 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
   const backHandled = ["loading", "no_stamina", "greeting", "choose_next", "error"].includes(mode);
   useTelegramBackButton(backHandled ? onExit : undefined);
 
-  useEffect(() => { loadStatus(); }, []);
+  useEffect(() => { loadStatus(npc || pickRandomNpc()); }, []);
 
-  async function loadStatus() {
+  // 这次改动之前,状态是"账号级别"的,先拉状态、再随便挑一个 NPC 展示
+  // 都行,顺序无所谓。现在评分按棋手分开存了,必须先知道要跟谁打,
+  // 才能问服务器"我跟这位棋手打得怎么样"——所以改成先选 NPC(chosenNpc
+  // 参数),再拿着这位棋手的 id 去查状态,状态查询和"是谁"这件事绑死了。
+  async function loadStatus(chosenNpc) {
     setMode("loading");
     setErrorMsg("");
+    setNpc(chosenNpc);
     try {
-      const s = await getDailyTrialStatus();
+      const s = await getDailyTrialStatus(chosenNpc.id);
       setStatus(s);
       if (s.stamina < STAMINA_COST) {
         setMode("no_stamina");
       } else {
-        enterGreeting(s, npc || pickRandomNpc());
+        enterGreeting(s, chosenNpc);
       }
     } catch (e) {
       console.error("加载每日试炼状态失败", e);
@@ -162,8 +167,8 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
   function enterGreeting(currentStatus, chosenNpc) {
     setNpc(chosenNpc);
     const isFirst = !currentStatus || currentStatus.gamesPlayed === 0;
-    const primary = isFirst ? dailyFirstMeetingInviteLine() : dailyReturnGreetingLine(currentStatus.streak);
-    const secondary = isFirst ? null : pickSmallTalkLine();
+    const primary = isFirst ? dailyFirstMeetingInviteLine(chosenNpc.id) : dailyReturnGreetingLine(chosenNpc.id, currentStatus.streak);
+    const secondary = isFirst ? null : pickSmallTalkLine(chosenNpc.id);
     setGreetingContent({ primary, secondary });
     setMode("greeting");
   }
@@ -185,7 +190,7 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
       expBefore: localExp,
     });
     try {
-      const started = await startDailyTrial();
+      const started = await startDailyTrial(npc.id);
       setStatus((prev) => ({ ...prev, ...started }));
       setBattleSeed({
         rating: started.rating,
@@ -207,19 +212,19 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
   }
 
   function handleDeclineGreeting() {
-    setChoosingNext({ note: dailyPlayerDeclinedResponseLine() });
+    setChoosingNext({ note: dailyPlayerDeclinedResponseLine(npc?.id) });
     setMode("choose_next");
   }
 
   function handleAbortToChooseNext() {
-    setChoosingNext({ note: dailyChooseNextLine() });
+    setChoosingNext({ note: dailyChooseNextLine(npc?.id) });
     setMode("choose_next");
   }
 
   async function handleBattleFinish(result, quality, meta) {
     setMode("settling");
     try {
-      const reward = await finishDailyTrial(result, quality);
+      const reward = await finishDailyTrial(npc.id, result, quality);
       const nextStatus = {
         stamina: status?.stamina ?? 0, // battle 开始时已经扣过体力,settle 不改体力,这里沿用当前值
         diamonds: reward.diamonds,
@@ -265,15 +270,15 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
   }
 
   function prepareReview(currentStatus, result) {
-    const comment = dailyResultLine(result);
+    const comment = dailyResultLine(npc?.id, result);
     if (currentStatus.stamina < STAMINA_COST) {
-      setReviewContent({ comment, phase: "stamina_exhausted", line2: dailyStaminaExhaustedLine() });
+      setReviewContent({ comment, phase: "stamina_exhausted", line2: dailyStaminaExhaustedLine(npc?.id) });
       return;
     }
     if (rollNpcInvitesRematch()) {
-      setReviewContent({ comment, phase: "npc_offer", line2: dailyRematchInviteLine() });
+      setReviewContent({ comment, phase: "npc_offer", line2: dailyRematchInviteLine(npc?.id) });
     } else {
-      setReviewContent({ comment, phase: "neutral", line2: dailyNoRematchOfferLine() });
+      setReviewContent({ comment, phase: "neutral", line2: dailyNoRematchOfferLine(npc?.id) });
     }
   }
 
@@ -288,29 +293,34 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
 
   function handlePlayerInvite() {
     if (rollNpcAcceptsPlayerInvite()) {
-      setReviewContent((prev) => ({ ...prev, phase: "player_invite_accepted", line3: dailyAcceptPlayerInviteLine() }));
+      setReviewContent((prev) => ({ ...prev, phase: "player_invite_accepted", line3: dailyAcceptPlayerInviteLine(npc?.id) }));
     } else {
-      setReviewContent((prev) => ({ ...prev, phase: "player_invite_declined", line3: dailyPlayerInviteDeclineReason() }));
+      setReviewContent((prev) => ({ ...prev, phase: "player_invite_declined", line3: dailyPlayerInviteDeclineReason(npc?.id) }));
     }
   }
 
   function handlePickOther() {
-    setChoosingNext({ note: dailyChooseNextLine() });
+    setChoosingNext({ note: dailyChooseNextLine(npc?.id) });
     setMode("choose_next");
   }
 
-  function handleMatchNext() {
+  // 换一位棋手:评分/连胜现在按棋手分开存,不能直接拿旧棋手的 status
+  // 去初始化新棋手的见面寒暄(比如"连胜3场"这种台词,如果沿用旧棋手
+  // 的连胜数字,对新棋手来说是编造出来的战绩)——所以这里改成重新走
+  // 一遍 loadStatus,用新棋手的 id 去问服务器"我跟这位打得怎么样"。
+  async function handleMatchNext() {
     if (!status || status.stamina < STAMINA_COST) {
       setMode("no_stamina");
       return;
     }
     const nextNpc = pickRandomNpc(npc?.id);
-    enterGreeting(status, nextNpc);
+    await loadStatus(nextNpc);
   }
 
   if (mode === "battle" && battleSeed) {
     return (
       <DailyTrialGameScreen
+        npc={npc}
         playerRating={battleSeed.rating}
         linmoRating={battleSeed.linmoRating}
         streak={battleSeed.streak}
@@ -334,7 +344,7 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
     return (
       <div className="daily-trial-error">
         <p>{errorMsg || "出错了"}</p>
-        <button className="btn-primary" onClick={loadStatus}>重试</button>
+        <button className="btn-primary" onClick={() => loadStatus(npc || pickRandomNpc())}>重试</button>
       </div>
     );
   }

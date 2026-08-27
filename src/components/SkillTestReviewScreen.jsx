@@ -6,36 +6,28 @@ import SkillTestResultScreen from "./SkillTestResultScreen";
 import { TYPE_DEFS } from "../lib/skillProfile";
 
 // 从"我的"页面点"棋风"进来。两种状态:
-// - 已经测过:回看当初(或者最近一次重测)的六维图/类型,底部多一个
-//   "重新测一次"的入口。
-// - 从没测过 / 之前跳过了:没有数据可看,直接给一个引导去测的入口。
-export default function SkillTestReviewScreen({ myId, onExit, onRetake }) {
+// - 已经测过:回看当初测出来的六维图/类型——测完之后没有"重新测一次"
+//   这个入口了(复测功能已经去掉,理由跟每日试炼的评分体系有关:
+//   每日试炼那套按 NPC 存的持续对局数据,本身就是比"重新做一次结构化
+//   测试"更准、更不需要玩家专门花时间的水平画像,复测能做的事已经
+//   没剩多少了)。
+// - 从没测过 / 之前跳过了:引导去测一次,这不是"复测",是这个玩家
+//   第一次、也是唯一一次做这个测试。
+//
+// 只用 SkillTestResultScreen(纯数据那一屏),不会走到
+// SkillTestEvaluationScreen(林墨点评那一屏)——回看历史要的是数据
+// 本身,不需要每次都重新演一遍"让我想想怎么说"的停顿动画。
+export default function SkillTestReviewScreen({ myId, onExit, onStartTest }) {
   useTelegramBackButton(onExit);
   const [profile, setProfile] = useState(null);
-  const [priorHistory, setPriorHistory] = useState([]);
 
   useEffect(() => {
     supabase
       .from("profiles")
-      .select("skill_test_status, skill_test_dims, skill_test_type, skill_test_completed_at")
+      .select("skill_test_status, skill_test_dims, skill_test_type")
       .eq("id", myId)
       .single()
-      .then(async ({ data }) => {
-        setProfile(data);
-        // 当前这份快照本身也在 skill_test_history 里留了一行(测完那次
-        // 顺手插入的),查历史时要用 completed_at 卡掉"不早于这次"的行,
-        // 不然"上次"会查到自己,变成拿这次结果跟这次结果比
-        if (data?.skill_test_completed_at) {
-          const { data: rows } = await supabase
-            .from("skill_test_history")
-            .select("dims, type, completed_at")
-            .eq("profile_id", myId)
-            .lt("completed_at", data.skill_test_completed_at)
-            .order("completed_at", { ascending: false })
-            .limit(5);
-          setPriorHistory((rows || []).map((r) => ({ dims: r.dims, type: r.type, completedAt: r.completed_at })));
-        }
-      });
+      .then(({ data }) => setProfile(data));
   }, [myId]);
 
   if (!profile) {
@@ -59,18 +51,14 @@ export default function SkillTestReviewScreen({ myId, onExit, onRetake }) {
         <>
           <SkillTestResultScreen
             profile={{ dims: profile.skill_test_dims, type: profile.skill_test_type, typeInfo }}
-            priorHistory={priorHistory}
-            onContinue={onRetake}
-            continueLabel="重新测一次"
+            onContinue={onExit}
+            continueLabel="返回"
           />
-          <button className="btn-ghost" style={{ width: "100%", marginTop: 10 }} onClick={onExit}>
-            返回
-          </button>
         </>
       ) : (
         <div style={{ padding: "40px var(--space-2)", textAlign: "center" }}>
           <p className="muted" style={{ marginBottom: 20 }}>还没有棋风测试记录</p>
-          <button className="btn-primary" onClick={onRetake}>去测一下</button>
+          <button className="btn-primary" onClick={onStartTest}>去测一下</button>
         </div>
       )}
     </div>
