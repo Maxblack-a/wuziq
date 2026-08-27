@@ -1,11 +1,11 @@
-// 每日试炼的 NPC 名册。"系统随机匹配一个NPC"这件事本身写成通用的,
-// 不因为人数少就把逻辑写死——加新棋手只需要往这个列表里加一条、再在
-// lib/dailyDialogue.js 里给这个 id 配一套台词,不需要动 DailyTrialScreen
-// / DailyTrialGameScreen 里的状态机。
+// 每日试炼的 NPC 名册。目前只有林墨一个,但"系统随机匹配一个NPC"这件
+// 事本身要写成通用的,不要因为现在只有一个人就把逻辑写死——以后加新
+// 棋手,理想情况下只需要往这个列表里加一条、再给 linmoDialogue.js 那样
+// 配一套台词,不需要动 DailyTrialScreen 里的状态机。
 //
-// 每个 NPC 的 id 同时也是 lib/dailyDialogue.js 里台词表的 key(见该文件
-// DAILY_VOICES 的结构),两边的 id 必须一一对应——加新棋手时这两处要
-// 一起改,少配一处会导致台词退回默认语气。
+// portrait 用的是已经在用的林墨立绘,dialogueKey 用来找该 NPC 对应的
+// 台词模块(目前台词都在 lib/linmoDialogue.js 里,以后如果台词多到要
+// 拆文件,可以把这个字段换成指向具体模块的引用)。
 export const NPC_LIST = [
   {
     id: "linmo",
@@ -13,13 +13,6 @@ export const NPC_LIST = [
     portrait: "/linmo-portrait.webp",
     scene: "/linmo-scene.jpg",
     sceneWebp: "/linmo-scene.webp",
-  },
-  {
-    id: "suqing",
-    name: "苏晴",
-    portrait: "/suqing-portrait.webp",
-    scene: "/suqing-scene.jpg",
-    sceneWebp: "/suqing-scene.webp",
   },
 ];
 

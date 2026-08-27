@@ -1,94 +1,79 @@
 /* ============================================================
-   品牌区全出血:背景图是真正的背景,横向撑满整个屏幕宽度(打破
-   app-shell 左右 16px 的内边距),不是一张贴在页面中间、四周露出
-   底色边框的"照片卡片"。内部再用 padding 把顶栏和标题文字拉回
-   跟页面其它内容一致的左右边距。
-   容器高度按图片原始比例(1024:1535)撑开,object-fit: cover 在这
-   个比例下等于完整显示、不裁切。底部叠一层遮罩渐隐,让它跟下面
-   app-shell 自身的暖褐色渐变背景之间没有生硬的分界线。
+   全屏背景图:图片本身就是整个首页的背景,不是"顶部一块 hero banner
+   + 下面用 CSS 渐变接一段背景色"这种拼接结构。
+   .page-bg-image 是 .app-shell-menu 的直接子元素(不在 .menu-screen-
+   flex 内部,见 MainMenu.jsx 顶部注释),absolute + inset: 0 让它相对
+   .app-shell-menu 的整个内边距盒铺满——包括 app-shell 自己那圈左右
+   16px 的内边距区域也会被盖住,天然通到屏幕两侧,不需要再像以前那样
+   用 calc(100% + 32px) négative margin 手动把宽度撑出内边距。
+   宽高都是 100%,配合 object-fit: cover,不管屏幕比例多宽多窄多高
+   多矮,图片自己会裁剪填满整个屏幕去适应,不存在"图片盖不到、需要
+   CSS 颜色去填充"的空隙——.app-shell-menu 不再需要任何背景色/渐变
+   (见 global.css)。
    ============================================================ */
-.hero-full-bleed {
-  position: relative;
-  width: calc(100% + var(--space-4) * 2);
-  margin-left: calc(-1 * var(--space-4));
-  margin-right: calc(-1 * var(--space-4));
-  /* 图片必须完整展示,不裁剪、不拉伸——高度严格跟随图片原始比例
-     (1024:1535),不能用固定/vh/vw 压出一个跟原图比例不一致的高度,
-     那样 object-fit: cover 会把棋盘连同上面的棋子一起裁掉一截。 */
-  aspect-ratio: 1024 / 1535;
-  overflow: hidden;
-  /* 图片压缩到几十 KB 之后正常网络下已经很快,但极弱网/首次冷启动那
-     一瞬间还是会有图片还没下载完的空档——用从图片本身取样出来的
-     主色调铺一层渐变占位,这段空档看到的是跟图片基本同色系的底色,
-     而不是一块突兀的白/灰,图片加载完之后盖上去几乎看不出切换的
-     痕迹。
-     之前这里 100% 停在一个写死的十六进制颜色,想凑一个跟它正下方
-     .app-shell-menu 一样的颜色——但 .app-shell-menu 那层背景本身带
-     radial-gradient,颜色会随容器宽高比、内容长度变化,写死的颜色
-     只能保证在某一个特定尺寸下对得上,换个宽度(比如 Telegram 里
-     实测的 384px)就会对不上,而且就算数值对上了,两条曲线的走向
-     (一条在变亮、一条在变暗)在交界处相反,会形成一个"先亮后暗"的
-     尖峰,看着像两块背景硬接在一起。
-     这里改成在图片有效内容结束后(70% 左右,棋盘/文字/ONLINE 状态
-     都已经展示完)就淡出到完全透明,不再用任何颜色去"接" —— 这样
-     露出来的就是 .app-shell-menu 自己那层背景本身,不管它在哪个宽度
-     下是什么颜色、往哪个方向变化,衔接的都是同一层东西,不存在两条
-     曲线对不齐的问题。 */
-  background: linear-gradient(
-    180deg,
-    #EFE4D2 0%,
-    #D8C29E 55%,
-    rgba(216, 194, 158, 0) 78%
-  );
-}
-
-.hero-scene-bg {
+.page-bg-image {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* 顶部对齐:图片顶部(棋盘所在的位置)优先完整可见,裁剪只会发生在
+     底部那段本来就是空桌面的区域——这跟之前 hero 图单独一块时的
+     裁剪逻辑一致,只是现在裁剪范围是"整个屏幕高度减去图片顶部" */
   object-position: top center;
   z-index: 0;
   pointer-events: none;
   user-select: none;
-  /* 底部 10% 渐隐透明,融入下方 app-shell 的暖褐渐变,避免硬边——
-     只淡出图片本身最后一截,在线状态行叠在它上面的稳定色区,不受影响 */
-  mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
 }
 
-/* 见 MainMenu.jsx 里对应注释:压暗棋盘投影到按钮之间那段留白,把图片
-   自带的桌面高光收束成有意为之的"聚光"效果,不再是突兀的亮色块。
-   叠在图片之上、正文内容之下(DOM 顺序在 hero-scene-bg 之后、
-   hero-full-bleed-inner 之前,同为默认层叠顺序,后者盖住前者)。
-   注意:.hero-full-bleed 的盒子高度是按图片原始比例撑出来的,比"开始
-   对局"按钮还要往下多出一截(这一截会跟 .secondary-row 在几何上重叠,
-   secondary-row 那边已经单独给了更高的层级,这块本身不会再盖住卡片,
-   但卡片两侧露出来的缝隙还是能看到这一截的颜色)。所以这层渐变过了
-   按钮的位置之后必须转回透明,让缝隙里露出来的是 hero-full-bleed 自己
-   那层跟页面底色接近的占位色,而不是停在很暗的墨色上,跟卡片外的暖
-   褐色页面背景脱节。 */
-.hero-bottom-vignette {
+/* 文字/按钮现在直接叠在整张背景图上,不再局限于"棋盘下方那一小段
+   留白"——顶栏可能压在偏亮的窗户/墙面区域,底部标语可能压在偏暗的
+   桌面区域,所以这层压暗改成覆盖整个屏幕高度,而不是只覆盖以前
+   "hero 那一小块"。依然只是用来提升文字对比度的"聚光/压暗"效果,
+   不是拿颜色去填充图片没盖到的地方——图片本身已经 100% 覆盖了
+   整个屏幕,这层只是叠加在它上面的一层半透明暗色,不会露出任何
+   "图片之外"的颜色。 */
+.page-bg-scrim {
   position: absolute;
   inset: 0;
   z-index: 0;
   pointer-events: none;
+  /* 顶栏、品牌标题用的是深色文字(--ink-token 等),这套配色假设自己
+     叠在照片偏亮的区域上(照片顶部的墙面/窗户本来就是亮的)——这里
+     从上半部分保持完全透明,不去压暗它,不然反而会削弱深色文字需要
+     的"亮背景"对比度,好心办坏事。
+     "在线状态"那行浅色文字已经自带一个独立的深色背景块(见
+     .online-status 的注释),不需要这层遮罩额外照顾。
+     真正需要这层遮罩帮忙的只有最下面的"执黑驭白·棋道无尽"这行
+     标语——它是浅色文字、没有自己的背景块,直接叠在照片下半段的
+     桌面区域上。照片这一段本来就偏暗,这里只是再收一点尾,确保
+     不同屏幕高度/裁剪范围下这行字始终有稳定的深色打底,而不是让
+     每个人在自己设备上运气好坏各不相同。 */
   background: linear-gradient(
     to bottom,
     transparent 0%,
-    transparent 46%,
-    rgba(28, 20, 13, 0.22) 66%,
-    rgba(23, 23, 23, 0.55) 76%,
-    rgba(23, 23, 23, 0.4) 82%,
-    transparent 90%
+    transparent 55%,
+    rgba(20, 14, 9, 0.2) 78%,
+    rgba(20, 14, 9, 0.5) 100%
   );
 }
 
-.hero-full-bleed-inner {
+/* MainMenu 组件的正文内容——顶栏、标题、在线状态、开始对局按钮、
+   人机挑战/每日试炼、底部标语,全部作为普通流内容从上往下依次排列,
+   叠在背景图上面(z-index 靠 DOM 顺序天然高于 .page-bg-image/
+   .page-bg-scrim,不用显式写 z-index)。内容自然排完之后,下面剩多少
+   背景图就露多少,不强制撑满一屏。
+   height:100% + overflow-y:auto 只是一个保底:正常情况下这几块固定
+   内容加起来远小于一屏高度,用不上滚动;真遇到极端矮的屏幕内容才会
+   超出,这时候允许滚动,而不是把内容硬生生截断看不全。 */
+.menu-screen-flex {
   position: relative;
   z-index: 1;
-  padding: 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .top-bar {
@@ -134,7 +119,11 @@
 }
 
 .identity-level {
-  font-size: 13px;
+  /* 响应式字号:小屏(320px)到大屏(480px,含桌面网页版卡片模式的
+     封顶宽度)之间,字号从 11.5px 平滑过渡到原来的 13px,不再是一个
+     固定死数值。算法见文件顶部,所有首页专属字号统一用同一套公式,
+     小屏统一缩到大屏的 87.5%。 */
+  font-size: clamp(11.5px, calc(8.5px + 0.9375vw), 13px);
   font-weight: 600;
   color: var(--ink-token);
   white-space: nowrap;
@@ -161,7 +150,7 @@
    还差多少到下一阶,字号刻意压得很小,不跟等级文字抢视觉重量 */
 .identity-exp-text {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: clamp(8px, calc(6px + 0.625vw), 9px);
   letter-spacing: 0.02em;
   color: var(--text-secondary);
 }
@@ -180,7 +169,7 @@
   align-items: center;
   gap: 3px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: clamp(9.5px, calc(6.5px + 0.9375vw), 11px);
   letter-spacing: 0.02em;
   transition: color 0.15s ease, transform 0.15s ease;
 }
@@ -200,7 +189,7 @@
   align-items: center;
   gap: 4px;
   color: var(--text-secondary);
-  font-size: 12px;
+  font-size: clamp(10.5px, calc(7.5px + 0.9375vw), 12px);
   font-weight: 600;
   font-family: var(--font-mono);
 }
@@ -232,7 +221,7 @@
   left: 50%;
   top: -2px;
   transform: translateX(-50%);
-  font-size: 11px;
+  font-size: clamp(9.5px, calc(6.5px + 0.9375vw), 11px);
   font-weight: 700;
   white-space: nowrap;
   pointer-events: none;
@@ -257,7 +246,7 @@
 
 .brand-name {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: clamp(10.5px, calc(7.5px + 0.9375vw), 12px);
   font-weight: 600;
   color: var(--wood);
   letter-spacing: 0.32em;
@@ -273,12 +262,16 @@
 }
 
 .brand-hero h1 {
-  font-size: var(--text-title);
+  /* 这里特意不改 --text-title 这个共享变量本身——它同时也被别的
+     页面(比如 mode-card)在用,直接改共享变量会波及首页之外没让
+     碰的地方。改成只在这里局部覆盖一个响应式的字号,--text-title
+     自己保持原来的固定 36px,其它引用它的地方不受影响。 */
+  font-size: clamp(31.5px, calc(22.5px + 2.8125vw), 36px);
 }
 
 .brand-slogan {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: clamp(11.5px, calc(8.5px + 0.9375vw), 13px);
   color: var(--text-secondary);
   letter-spacing: 0.12em;
   margin-top: var(--space-1);
@@ -378,17 +371,31 @@
    字号、间距、圆点、装饰线整体等比调小一圈,不改样式本身。
    ============================================================ */
 .online-status {
-  position: absolute;
-  left: 0;
-  right: 0;
-  top: 64%;
-  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 4px;
   text-align: center;
-  padding: 0 var(--space-4);
+  /* 要落在棋盘下方,不能压在棋盘上。图片现在是铺满整个屏幕的全屏
+     背景,用 object-fit: cover + object-position: top 从顶部往下裁,
+     不管屏幕多宽多窄,棋盘投影结束的位置在屏幕上永远是"图片实际
+     渲染宽度的 86.4%"这么多像素(0.346 是棋盘投影在原图 1981px
+     高度里的结束位置占比,1981/793 是原图宽高比,两者相乘约等于
+     0.864——这个比例只跟图片本身有关,不随屏幕宽度变化)。
+     margin-top 的百分比是相对"这个元素自己的容器宽度"算的,记这个
+     宽度为 C(即 .menu-screen-flex 的宽度,也就是 app-shell 减去
+     左右各 16px 内边距之后的内容区宽度)。但背景图是相对
+     .app-shell-menu 的整个内边距盒铺满的,实际渲染宽度是 C+32px,
+     不是 C——这 32px 的差需要单独在常数项里补回来,不能直接套用
+     图片自己的宽度去算百分比。
+     上面顶栏 + 品牌标题这块内容的高度,是字号/内边距全部写死 px
+     算出来的固定值,不随屏幕宽度变化,实测约 164px,这里进一步收紧
+     到贴近棋盘投影边缘(呼吸间隙压到 -8px,也就是比边缘再往上一丁点):
+       margin = 0.864 × (C+32px) + (-8px) - 164px
+              = 0.864×C + 27.6px - 8px - 164px
+              = 86.4%×C - 144px(27.6-8-164≈-144,四舍五入)
+     换算成 calc() 就是下面这行。 */
+  margin-top: calc(86.4% - 144px);
 }
 
 .online-status-line {
@@ -396,7 +403,7 @@
   align-items: center;
   gap: 6px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: clamp(8px, calc(6px + 0.625vw), 9px);
   font-weight: 600;
   letter-spacing: 0.18em;
   color: var(--wood-soft);
@@ -415,7 +422,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
-  font-size: 10px;
+  font-size: clamp(9px, calc(7px + 0.625vw), 10px);
   color: rgba(241, 231, 216, 0.78);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
@@ -439,11 +446,10 @@
   width: 100%;
   position: relative;
   z-index: 2;
-  /* 图片本身完整保留、不做任何裁剪/缩放处理——这里只是把按钮通过
-     负 margin 往上拉,贴近棋盘投影下方那片留白区里的"ONLINE"文字,
-     减少中间那段空白,不用下滑就能看到。数值需要比之前更大,因为
-     图片没有变矮,留白区本身还是那么长。 */
-  margin-top: -148px;
+  /* 直接跟在"在线状态"下面,固定小间距(12px),不再是之前"推到屏幕
+     底部"的做法——ONLINE 落在棋盘下方之后,按钮紧跟着它就行,不需要
+     额外的弹性占位或复杂的定位计算。 */
+  margin-top: var(--space-3);
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);
@@ -465,14 +471,14 @@
 
 .cta-primary-title {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: clamp(17.5px, calc(12.5px + 1.5625vw), 20px);
   font-weight: 700;
   letter-spacing: 0.1em;
 }
 
 .cta-primary-sub {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: clamp(9.5px, calc(6.5px + 0.9375vw), 11px);
   letter-spacing: 0.24em;
   color: rgba(198, 161, 91, 0.85);
 }
@@ -497,16 +503,6 @@
   display: flex;
   gap: var(--space-3);
   margin-top: var(--space-2);
-  /* .hero-full-bleed 的实际盒子高度是按图片原始比例撑出来的(远比棋盘
-     视觉内容本身高),而 .cta-primary 又用负 margin 把后面的正常流内容
-     往上拉,拉到跟 hero-full-bleed 的盒子在几何上重叠。.hero-full-bleed
-     有 position: relative(哪怕没写 z-index),按 CSS 层叠规则就已经
-     高于普通静态定位元素——这块 .secondary-row 之前没有自己的定位/
-     层级,重叠区域里就被 hero-full-bleed 盖在了上面,只是之前露出来的
-     刚好是图片本身偏亮的色调,不仔细看不容易发现。给它一个明确高于
-     hero-full-bleed 的层级,从根上解决,不依赖两边颜色恰好凑巧接近。 */
-  position: relative;
-  z-index: 2;
 }
 
 .secondary-card {
@@ -551,13 +547,13 @@
 
 .secondary-card-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: clamp(12px, calc(8px + 1.25vw), 14px);
   color: var(--fg);
 }
 
 .secondary-card-sub {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: clamp(8px, calc(6px + 0.625vw), 9px);
   letter-spacing: 0.16em;
   color: var(--text-secondary);
 }
@@ -578,20 +574,24 @@
   gap: var(--space-3);
   margin-top: var(--space-2);
   padding-bottom: var(--space-2);
-  font-size: 12px;
+  font-size: clamp(10.5px, calc(7.5px + 0.9375vw), 12px);
   letter-spacing: 0.14em;
-  color: var(--text-secondary);
-  /* 跟 .secondary-row 同样的原因:更窄的屏幕宽度下 hero-full-bleed 的
-     盒子(按图片比例撑出来的)可能延伸到这里,需要同样明确的层级
-     才能保证任何屏幕宽度下都不会被盖住。 */
-  position: relative;
-  z-index: 2;
+  /* 之前是深灰棕色(--text-secondary),是配那层浅色 CSS 渐变页面
+     背景用的。现在整个页面背景是照片,这行标语正好叠在照片最暗的
+     桌面区域(再加上 .page-bg-scrim 在底部的额外压暗),深色文字在
+     那种背景下基本看不清——换成暖白色 + 一点文字阴影,跟"ONLINE"
+     状态那行(.online-status-sub)保持同一套"叠在深色照片上"的配色
+     逻辑,而不是沿用只适合浅色背景的旧配色。 */
+  color: rgba(241, 231, 216, 0.75);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .tagline-line {
   width: 22px;
   height: 1px;
-  background: var(--border-token);
+  /* 同理,原来的浅米色边框色在深色照片背景下本来就偏亮、依然能看清,
+     不需要改;但透明度调高一点,视觉上跟旁边变亮的文字更协调。 */
+  background: rgba(241, 231, 216, 0.4);
 }
 
 /* ============================================================

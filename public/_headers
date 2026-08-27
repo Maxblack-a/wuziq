@@ -11,10 +11,14 @@
 # 注意:因为设了 immutable,以后如果要换掉这张图,不能直接用同名文件
 # 覆盖(线上已经缓存的用户不会看到新图)——正确做法是换一个新文件名
 # (比如 hero-scene-v2.webp),同时把 MainMenu.jsx 里引用的路径也改掉。
-/hero-scene.webp
+# 这次换图已经是这么做的:文件名从 hero-scene.* 改成了 hero-scene-v2.*,
+# 规则也跟着改成新文件名——旧的 hero-scene.jpg/webp 文件已经不存在了,
+# 规则留着也没意义。下次再换图,记得再往上加一版(hero-scene-v3.*),
+# 不要复用已经出现过的文件名。
+/hero-scene-v2.webp
   Cache-Control: public, max-age=31536000, immutable
 
-/hero-scene.jpg
+/hero-scene-v2.jpg
   Cache-Control: public, max-age=31536000, immutable
 
 # JS/CSS 由 Vite 构建时自动加上内容哈希文件名(比如 index-a1b2c3.js),
