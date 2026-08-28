@@ -4,7 +4,7 @@ import { IconChevronLeft } from "./Icons";
 import { createEmptyBoard, checkWin, isBoardFull, cloneBoard } from "../game/logic";
 import {
   PLAYER_COLOR, LINMO_COLOR,
-  computeSkillDial, getAdaptiveMove,
+  computeSkillDial, getAdaptiveMove, classifyMoveSituation,
   createMoveLog, recordPlayerMove, computeMatchQuality,
   createOpponentStyleState, recordPlayerStyleSignal,
 } from "../game/dailyTrialEngine";
@@ -117,8 +117,14 @@ export default function DailyTrialGameScreen({ npc, playerRating, linmoRating, s
       finalBoardRef.current = afterAi;
       moveCountRef.current += 1;
       setThinking(false);
-      if (Math.random() < 0.5) {
-        const line = pickDailyAmbientLine(activeNpc.id);
+      // 是否要说话这件事,也不该跟局势脱节:danger/attack 这种真正有
+      // 分量的时刻,理应比"随手一步"更容易让人开口——概率跟着局势走,
+      // 而不是固定 50%,不然平淡的一步和一次真正的化险为夷听起来
+      // 一样"随意",反而削弱了刚接好的这套局势分类的意义。
+      const situation = classifyMoveSituation(currentBoard, move, LINMO_COLOR, PLAYER_COLOR);
+      const chatChance = situation === "neutral" ? 0.35 : situation === "complex" ? 0.55 : 0.75;
+      if (Math.random() < chatChance) {
+        const line = pickDailyAmbientLine(activeNpc.id, situation);
         if (line) setCurrentLine(line);
       }
 

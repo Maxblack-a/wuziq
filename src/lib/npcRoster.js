@@ -21,12 +21,18 @@ export const NPC_LIST = [
     scene: "/suqing-scene.jpg",
     sceneWebp: "/suqing-scene.webp",
   },
+  {
+    id: "xiaoqi",
+    name: "小七",
+    portrait: "/xiaoqi-portrait.webp",
+    scene: "/xiaoqi-scene.jpg",
+    sceneWebp: "/xiaoqi-scene.webp",
+  },
 ];
 
 // 随机挑一个 NPC。excludeId 用于"换个对手"场景——优先不选中刚刚那位,
-// 但目前名册里只有一个人,排除之后池子会是空的,这时候退回完整名册
-// (也就是还会选中同一个人)。等名册里有多个人了,这行代码不用改,
-// exclude 会自然生效。
+// 名册里人数够多时 exclude 会自然生效;如果排除之后池子空了(比如名册
+// 只剩一个人),就退回完整名册,也就是还会选中同一个人。
 export function pickRandomNpc(excludeId) {
   const pool = NPC_LIST.filter((n) => n.id !== excludeId);
   const finalPool = pool.length ? pool : NPC_LIST;

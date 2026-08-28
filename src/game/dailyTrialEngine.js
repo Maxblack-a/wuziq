@@ -52,13 +52,22 @@ import {
 //     被选中的概率差距会被放大得越明显,选择更集中、更少出人意料的跳跃
 //
 // 林墨保持 (1,1,1,1),也就是这一整层对他完全没有作用——这是为了不让
-// 已经调好、跑过实战的林墨手感因为"给苏晴加人格"这件事被连带改动。
+// 已经调好、跑过实战的林墨手感因为"给苏晴/小七加人格"这件事被连带改动。
 const NPC_PERSONALITY = {
   linmo: { aggression: 1, caution: 1, precision: 1, patience: 1 },
   // 数值来自苏晴的角色设定文档(防守能力85 / 攻击欲望60 / 计算深度75 /
   // 风险偏好35 / 耐心程度95)——这里不是照抄百分比,那些数字是给人看的
   // 角色调性,换算成"相对林墨更偏向哪边"的乘数才是引擎真正用得上的东西。
   suqing: { aggression: 0.82, caution: 1.22, precision: 1.15, patience: 1.4 },
+  // 数值来自小七的角色设定文档(攻击欲望85 / 防守意识45 / 冒险程度80 /
+  // 计算深度65 / 耐心程度40,核心是"灵感攻击型"——同样换算成相对倍数:
+  //   aggression 明显 >1:攻击欲望和冒险程度都是全场最高,主动抢攻;
+  //   caution 明显 <1:防守意识最低,符合设定弱点"过度攻击、忽略防守";
+  //   precision 略 <1:计算深度中等(65,低于苏晴的75),她"计算之后更
+  //     相信直觉",不像苏晴那样把对手最优回应算得那么细;
+  //   patience 明显 <1:耐心程度全场最低(40),对应候选点权重的"锐利度"
+  //     调低,选点更容易出现她设定里说的"看起来奇怪但最后正确"的跳跃感。
+  xiaoqi: { aggression: 1.35, caution: 0.75, precision: 0.85, patience: 0.55 },
 };
 function getPersonality(npcId) {
   return NPC_PERSONALITY[npcId] || NPC_PERSONALITY.linmo;
@@ -71,12 +80,35 @@ function styledBase(c, personality) {
   return Math.max(c.attack * personality.aggression, c.defend * personality.caution);
 }
 
-// ---- 苏晴专属:读懂对手棋风、动态调整 ----
+// ---- 读懂对手棋风、动态调整(苏晴 / 小七专属)----
 // "洞察调整型"是苏晴的核心设定——面对进攻型玩家,她会避免正面对抗,
 // 利用防守找反击机会;面对偏保守的玩家,她会慢慢加压,逼玩家主动求变。
+// 小七的设定文档里也有对应的一条弱点("缺乏耐心——面对防守型玩家,
+// 容易主动制造变化"),同一套机制拿来复用,只是反应幅度按各自人设
+// 分开配:小七"学习能力"高但耐心低,遇到保守玩家会比苏晴压得更猛、
+// 更快失去耐心;遇到进攻型玩家,她的设定里没有苏晴那种"主动转为防守
+// 打反击"的倾向,只做很轻的收敛,不会整体变保守。
 // 林墨是"计算压制型",整局强度只跟 dial 走,不会因为读出玩家风格而
-// 临场变调,所以这一层只对 npcId === "suqing" 生效,对其他 npc(包括
-// 以后新加的)一律原样返回人格参数、不做任何改动。
+// 临场变调,所以他不在下面这张表里,原样返回人格参数、不做任何改动
+// ——以后再加不需要这层临场调整的新棋手,同样不用配这张表。
+const STYLE_REACTIONS = {
+  suqing: {
+    // 玩家偏进攻:避免正面对抗,把权重进一步压向防守,等对手自己
+    // 露出破绽再反击——对应"利用防守寻找反击机会"。
+    offensive: { aggression: 0.85, caution: 1.12 },
+    // 玩家偏保守:慢慢加压,逼玩家主动变化——对应
+    // "扩大优势区域,逼迫玩家主动变化"。
+    defensive: { aggression: 1.15, caution: 0.92 },
+  },
+  xiaoqi: {
+    // 玩家偏进攻:她不会像苏晴那样转向防守打反击,只是稍微收一点,
+    // 避免在对攻里因为防守意识本来就低而被punish得太狠。
+    offensive: { aggression: 0.95, caution: 1.08 },
+    // 玩家偏保守:耐心全场最低,面对慢节奏玩家会更快主动搅局、
+    // 加压幅度比苏晴更大——对应设定文档"缺乏耐心"这条弱点。
+    defensive: { aggression: 1.25, caution: 0.85 },
+  },
+};
 //
 // 判断依据很朴素:玩家每一步落子前,比较那个点当时的进攻分和防守分——
 // 明显偏进攻分的算一次"进攻倾向",明显偏防守分的算一次"防守倾向"。
@@ -103,27 +135,26 @@ export function recordPlayerStyleSignal(styleState, boardBeforeMove, x, y, playe
 const STYLE_READING_MIN_SAMPLES = 4; // 样本太少时不调整,等看够几步再下结论
 
 function applyOpponentStyleReading(personality, npcId, styleState) {
-  if (npcId !== "suqing" || !styleState || styleState.total < STYLE_READING_MIN_SAMPLES) {
+  const reactions = STYLE_REACTIONS[npcId];
+  if (!reactions || !styleState || styleState.total < STYLE_READING_MIN_SAMPLES) {
     return personality;
   }
   const offensiveRatio = styleState.offensive / styleState.total;
   if (offensiveRatio >= 0.55) {
-    // 玩家偏进攻:避免正面对抗,把权重进一步压向防守,等对手自己
-    // 露出破绽再反击——对应"利用防守寻找反击机会"。
+    const { aggression, caution } = reactions.offensive;
     return {
       ...personality,
-      aggression: personality.aggression * 0.85,
-      caution: personality.caution * 1.12,
+      aggression: personality.aggression * aggression,
+      caution: personality.caution * caution,
     };
   }
   const defensiveRatio = styleState.defensive / styleState.total;
   if (defensiveRatio >= 0.55) {
-    // 玩家偏保守:慢慢加压,逼玩家主动变化——对应
-    // "扩大优势区域,逼迫玩家主动变化"。
+    const { aggression, caution } = reactions.defensive;
     return {
       ...personality,
-      aggression: personality.aggression * 1.15,
-      caution: personality.caution * 0.92,
+      aggression: personality.aggression * aggression,
+      caution: personality.caution * caution,
     };
   }
   return personality;
@@ -317,6 +348,41 @@ export function getAdaptiveMove(board, aiPlayer, humanPlayer, dial, npcId = "lin
   if (dial >= 70) return pickByDialHigh(board, pool, aiPlayer, humanPlayer, personality);
   if (dial >= 35) return pickByDialMid(board, pool, aiPlayer, humanPlayer, personality);
   return pickByDialLow(pool, personality);
+}
+
+// ---- 局势分类,给"对局中闲聊"用 ----
+// 背景:之前闲聊台词是纯随机抽卡(Math.random() < 0.5 就抽一句),
+// 完全不管这一步棋实际发生了什么——小七可能在一步毫无威胁的棋上说
+// "这一步很危险哦",一眼就能看出是在瞎说,人设反而被拆穿。这个函数
+// 把"这一步刚刚发生了什么"读出来,分成四类,台词库按类别配台词,
+// 保证 NPC 说的话跟棋盘上真实发生的事情对得上:
+//   "danger"  —— AI 这一步是在化解玩家的强威胁(defend 分数达到冲四
+//                甚至更高的门槛,也就是玩家那手棋不接住下一步就要糟)
+//   "attack"  —— AI 这一步自己走出了强攻(attack 分数达到冲四/活三
+//                级别,主动权在她这边)
+//   "complex" —— 都够不上以上两档的强度,但双方各自都还有至少一处
+//                能长成活三的苗头,棋盘绞在一起,没有单方面明显的
+//                主导方
+//   "neutral" —— 以上都不满足,普通的一手
+// 复用的都是 ai.js 里已经在用、经过实战验证的评分原语,不新增任何
+// 独立的"是否危险"判定逻辑,避免闲聊台词的判断标准跟 AI 真正落子时
+// 用的标准对不上、说一套下一套。
+export function classifyMoveSituation(boardBeforeMove, move, aiPlayer, humanPlayer) {
+  if (!move) return "neutral";
+  const scored = scoreCandidates(boardBeforeMove, aiPlayer, humanPlayer);
+  const picked = scored.find((c) => c.x === move.x && c.y === move.y);
+  if (!picked) return "neutral";
+
+  if (picked.defend >= SCORE.FOUR || picked.defend >= SCORE.LIVE_THREE) return "danger";
+  if (picked.attack >= SCORE.FOUR || picked.attack >= SCORE.LIVE_THREE) return "attack";
+
+  const boardAfter = cloneBoard(boardBeforeMove);
+  boardAfter[move.y][move.x] = aiPlayer;
+  const aiHasHeat = countLiveThreeThreats(boardAfter, aiPlayer, humanPlayer) >= 1;
+  const humanHasHeat = countLiveThreeThreats(boardAfter, humanPlayer, aiPlayer) >= 1;
+  if (aiHasHeat && humanHasHeat) return "complex";
+
+  return "neutral";
 }
 
 // 首页展示体力用。profiles.stamina 这个字段只有玩家真的点开过一次

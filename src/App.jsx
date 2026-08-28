@@ -30,7 +30,7 @@ import { initPresence } from "./lib/presence";
 // ⚠️ 调试用开关:改成 true 之后,不管账号昵称/棋力测试状态是什么,
 // 每次登录成功都会强制停在"认识林墨"这个见面场景,方便反复测试效果。
 // 正式发布前记得改回 false,不然所有用户每次打开都会被拦在这一页。
-const DEBUG_ALWAYS_SHOW_LINMO = true;
+const DEBUG_ALWAYS_SHOW_LINMO = false;
 
 export default function App() {
   const [myId, setMyId] = useState(null);
@@ -232,7 +232,7 @@ export default function App() {
       if (historyError) console.error("读取棋力测试历史失败", historyError);
       priorHistory = (historyRows || []).map((r) => ({ dims: r.dims, type: r.type, completedAt: r.completed_at }));
 
-      const { error } = await supabase.from("profiles").update({
+      const skillTestUpdate = {
         skill_test_status: "completed",
         skill_test_dims: profile.dims,
         skill_test_type: profile.type,
@@ -244,8 +244,17 @@ export default function App() {
           openingSamples: testState.openingSamples,
         },
         skill_test_completed_at: new Date().toISOString(),
-      }).eq("id", myId);
-      if (error) console.error("保存棋力测试结果失败", error);
+      };
+      const { error } = await supabase.from("profiles").update(skillTestUpdate).eq("id", myId);
+      if (error) {
+        console.error("保存棋力测试结果失败", error);
+      } else {
+        // 写库成功后立刻同步本地 profile state——不然 navigate("daily") 里
+        // 读的还是测试之前缓存的 profile(status 还是 null/pending),onboarding
+        // 模式测完之后不会经过任何一处 refreshProfile,会导致测完立刻点
+        // "每日试炼"又被门槛弹窗拦一次,误判成"没测过"。
+        setProfile((prev) => (prev ? { ...prev, ...skillTestUpdate } : prev));
+      }
 
       // 追加历史行,不覆盖 profiles 上的快照(那一列继续只代表"最新一次",
       // 每日试炼那类功能读它不用关心历史表的存在)
@@ -323,17 +332,15 @@ export default function App() {
       loadPendingNotifications(uid); // 补一次:上次关闭 App 期间收到的邀请/申请,实时订阅是抓不到的,得主动查一遍
 
       // 第一次进这个游戏、且昵称还没走过确认这一步:停在"认识林墨"场景,
-      // 先问名字。往下走深链接/断线续局那套路由逻辑要等这一步和棋力
-      // 测试邀请都走完(handleNicknameConfirmed / continueAfterSkillTest
-      // 会接着补上)。
+      // 先问名字,名字确认完在同一个场景里接着问要不要测棋力
+      // (LinMoIntroScreen 内部 step 从 'name' 切到 'invite',不用再回这里
+      // 重新判断)。往下走深链接/断线续局那套路由逻辑要等这一步走完
+      // (continueAfterSkillTest 会接着补上)。
       //
       // 网页版用户名密码注册的账号,注册那一步已经手动填过昵称了
-      // (password-auth 云函数直接把 nickname_confirmed 标成 true),不需要
-      // 再问一遍名字——但棋力测试的邀请不能因此被跳过,不然网页版用户
-      // 会永远见不到林墨、也永远不会被邀请测棋力。所以这里拆成两种情况:
-      // 昵称没确认过 -> 走完整流程(问名字+邀请);昵称确认过但棋力测试
-      // 还没问过(pending,包括老账号第一次跑到这个新功能上线之后) ->
-      // 跳过问名字,直接从"邀请测试"这一步开始。
+      // (password-auth 云函数直接把 nickname_confirmed 标成 true),不会
+      // 走到这个"认识林墨"场景,也就不会自动被邀请测棋力——这是有意
+      // 的:见下面的说明。
       if (DEBUG_ALWAYS_SHOW_LINMO) {
         setLinmoIntroStep("name");
         setScreen("nickname");
@@ -344,11 +351,17 @@ export default function App() {
         setScreen("nickname");
         return;
       }
-      if (cachedProfile?.skill_test_status === "pending") {
-        setLinmoIntroStep("invite");
-        setScreen("nickname");
-        return;
-      }
+      // 原来这里还有一条 `skill_test_status === "pending"` 就自动弹邀请的
+      // 分支,已经去掉——那条判断没法区分"网页版用户第一次注册,昵称在
+      // 注册时就写好了,所以走不到上面 nickname_confirmed 那条"和
+      // "老账号,这个字段是后加的、用 default 'pending' 回填的,压根不是
+      // 第一次登录,只是历史原因状态还停在 pending"这两种情况——凡是
+      // 状态没推进过的账号,不管是不是老用户,每次登录都会被自动拉去
+      // 问一遍,体验上很打扰。现在自动弹出只保留给上面这条真正意义上的
+      // "第一次登录"(从没确认过昵称);其余情况(网页版首次注册、老账号
+      // 状态停在 pending 或 skipped)统一靠"每日试炼"入口那道门槛
+      // (navigate() 里 skill_test_status !== "completed" 的判断)去发现
+      // 并引导测试,不需要登录就强推。
       await routeAfterLogin(uid);
     }
 
