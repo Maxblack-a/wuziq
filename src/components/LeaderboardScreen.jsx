@@ -9,7 +9,7 @@ export default function LeaderboardScreen({ myId, onExit }) {
 
   useEffect(() => {
     supabase
-      .from("profiles")
+      .from("profiles_public")
       .select("id, display_name, exp, wins, losses, draws")
       .eq("is_guest", false)
       .order("exp", { ascending: false })

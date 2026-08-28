@@ -31,6 +31,11 @@ export async function getDailyTrialStatus(npcId) {
 // 体力不够时 RPC 会直接抛错('体力不足'),调用方 catch 住给提示即可。
 // npcId 必填,理由同上;这也是"跟这位棋手的评分条目"第一次真正落库
 // 的时刻(还没打过就是冷启动值,打过就是上次结算之后的值)。
+// 返回值里现在多了 sessionId——这是这一局在服务端 daily_trial_sessions
+// 表里的凭证,调用方必须把它原样存起来,结束时传给 finishDailyTrial。
+// 没有它,finish_daily_trial 会直接拒绝结算(见
+// supabase/daily_trial_session_binding.sql),不再存在"没开过局也能
+// 领奖"或者"同一局领两次"的口子。
 export async function startDailyTrial(npcId) {
   const { data, error } = await supabase.rpc("start_daily_trial", { p_npc_id: npcId });
   if (error) throw error;
@@ -41,6 +46,7 @@ export async function startDailyTrial(npcId) {
     rating: row.out_rating,
     linmoRating: row.out_linmo_rating,
     streak: row.out_streak,
+    sessionId: row.out_session_id,
   };
 }
 
@@ -50,8 +56,12 @@ export async function startDailyTrial(npcId) {
 // 不完全信任客户端传来的原始数字,但仍然拿它当评分更新的一个输入,
 // 让"每日试炼的隐藏分"不只是单纯的胜负记录,还能反映过程表现。
 // npcId 必填,决定这一局记到哪位棋手名下,理由同上。
-export async function finishDailyTrial(npcId, result, quality) {
+// sessionId 必填——必须是 startDailyTrial 刚刚返回的那个,服务器会校验
+// 它属于当前用户、对应同一个 npcId、状态还是 active 且没过期,校验不过
+// 会直接抛错,调用方需要 catch 住给提示(比如引导玩家重新开始这一局)。
+export async function finishDailyTrial(sessionId, npcId, result, quality) {
   const { data, error } = await supabase.rpc("finish_daily_trial", {
+    p_session_id: sessionId,
     p_npc_id: npcId,
     p_result: result,
     p_quality: quality,

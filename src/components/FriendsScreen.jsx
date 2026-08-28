@@ -32,11 +32,21 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
   }, []);
 
   async function loadFriends() {
-    const { data } = await supabase
+    const { data: rows } = await supabase
       .from("friendships")
-      .select("friend_id, profiles:friend_id(id, display_name, exp, avatar_url)")
+      .select("friend_id")
       .eq("user_id", myId);
-    setFriends((data || []).map((r) => r.profiles).filter(Boolean));
+    const friendIds = (rows || []).map((r) => r.friend_id);
+    if (!friendIds.length) { setFriends([]); return; }
+    // 原来是靠 profiles:friend_id(...) 隐式外键 join 一次查完的,现在
+    // profiles 本身只能看自己那一行了,视图又没有外键元数据支持这种
+    // 隐式 join 写法,只能拆成两步:先拿 friend_id 列表,再对
+    // profiles_public 批量查一次。
+    const { data: friendProfiles } = await supabase
+      .from("profiles_public")
+      .select("id, display_name, exp, avatar_url")
+      .in("id", friendIds);
+    setFriends(friendProfiles || []);
   }
 
   async function loadSentRequests() {
@@ -77,7 +87,7 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
     setSearching(true);
     const t = setTimeout(async () => {
       const { data } = await supabase
-        .from("profiles")
+        .from("profiles_public")
         .select("id, display_name, avatar_url, exp")
         .ilike("display_name", `%${q}%`)
         .neq("id", myId)

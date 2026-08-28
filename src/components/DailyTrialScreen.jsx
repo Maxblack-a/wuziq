@@ -197,6 +197,9 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
         linmoRating: started.linmoRating,
         streak: started.streak,
         gamesPlayed: status?.gamesPlayed ?? 0,
+        // 这一局的服务端凭证,结束时原样带回去给 finishDailyTrial——见
+        // supabase/daily_trial_session_binding.sql,没有它服务器不认这局。
+        sessionId: started.sessionId,
       });
       setMode("battle");
     } catch (e) {
@@ -224,7 +227,7 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
   async function handleBattleFinish(result, quality, meta) {
     setMode("settling");
     try {
-      const reward = await finishDailyTrial(npc.id, result, quality);
+      const reward = await finishDailyTrial(battleSeed?.sessionId, npc.id, result, quality);
       const nextStatus = {
         stamina: status?.stamina ?? 0, // battle 开始时已经扣过体力,settle 不改体力,这里沿用当前值
         diamonds: reward.diamonds,

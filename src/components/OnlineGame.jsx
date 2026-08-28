@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Board from "./Board";
 import { supabase, getStoredSessionId, sendHeartbeat } from "../lib/supabase";
-import { toBoard2D, checkWin, isBoardFull, cloneBoard, BOARD_SIZE } from "../game/logic";
+import { toBoard2D, checkWin, cloneBoard, BOARD_SIZE } from "../game/logic";
 import { hapticNotify, useTelegramBackButton, setClosingConfirmation } from "../lib/telegram";
 import { IconUndo } from "./Icons";
 
@@ -156,7 +156,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     if (!room) return;
     const opponentId = room.player1_id === myId ? room.player2_id : room.player1_id;
     if (!opponentId) return;
-    supabase.from("profiles").select("display_name").eq("id", opponentId).single()
+    supabase.from("profiles_public").select("display_name").eq("id", opponentId).single()
       .then(({ data }) => data && setOpponentName(data.display_name || "对手"));
   }, [room, myId]);
 
@@ -330,9 +330,6 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     if (!isMyTurn || room.undo_requested_by) return; // 有悔棋请求在处理中时不能落子
     const next = cloneBoard(board2D);
     next[y][x] = mySlot;
-
-    const win = checkWin(next, x, y);
-    const full = isBoardFull(next);
     const nextTurn = mySlot === 1 ? 2 : 1;
 
     // 先本地落子,画面立刻响应,不等网络
@@ -340,8 +337,13 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     setPendingMove({ board: next, turnAfter: nextTurn, moveCountAfter: room.move_count + 1 });
 
     // 落子改走 make_move RPC(原来是前端直接 update 整个棋盘)。服务端会
-    // 校验"确实轮到我""这一格确实空着",并刷新 turn_deadline;赢棋/
-    // 平局判定仍然由客户端算好之后再调 finish_match 上报,跟之前一致。
+    // 校验"确实轮到我""这一格确实空着",并刷新 turn_deadline;胜负/平局
+    // 判定现在也完全收在服务端这一次调用内部完成(见 schema 里
+    // security_hardening_p0.sql 的说明)——客户端不再自己算 checkWin/
+    // isBoardFull 之后另外调 finish_match 上报,那个口子已经被收紧到
+    // 只接受"认输"和"判对方掉线"这两种自认吃亏的结局,传 winner/normal
+    // 会被服务端直接拒绝。这里只读 make_move 返回的 game_status/winner
+    // 作为唯一权威结果。
     const { data, error } = await supabase.rpc("make_move", {
       p_room_id: roomId, p_x: x, p_y: y, p_session_id: getStoredSessionId(),
     });
@@ -356,18 +358,9 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
       return;
     }
 
-    if (win) {
-      hapticNotify("success");
-      const { data: fd } = await supabase.rpc("finish_match", {
-        p_room_id: roomId, p_winner: mySlot, p_session_id: getStoredSessionId(),
-      });
-      if (fd && !fd.already_finished) {
-        setExpDelta(mySlot === 1 ? fd.my1_delta : fd.my2_delta);
-      }
-    } else if (full) {
-      const { data: fd } = await supabase.rpc("finish_match", {
-        p_room_id: roomId, p_winner: 0, p_session_id: getStoredSessionId(),
-      });
+    if (data.game_status === "finished") {
+      if (data.winner === mySlot) hapticNotify("success");
+      const fd = data.settlement;
       if (fd && !fd.already_finished) {
         setExpDelta(mySlot === 1 ? fd.my1_delta : fd.my2_delta);
       }

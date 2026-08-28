@@ -133,7 +133,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   // 分数是为了推算 ta 的 LV.几 等级徽章,跟"我"这边用同一套算法
   useEffect(() => {
     if (!room?.player2_id) { setOpponent(null); return; }
-    supabase.from("profiles").select("display_name, avatar_url, exp").eq("id", room.player2_id).single()
+    supabase.from("profiles_public").select("display_name, avatar_url, exp").eq("id", room.player2_id).single()
       .then(({ data }) => setOpponent(data));
   }, [room?.player2_id]);
 
@@ -202,9 +202,19 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     if (!myId) return;
     supabase
       .from("friendships")
-      .select("friend_id, profiles:friend_id(id, display_name, avatar_url, exp)")
+      .select("friend_id")
       .eq("user_id", myId)
-      .then(({ data }) => setFriends((data || []).map((r) => r.profiles).filter(Boolean)));
+      .then(async ({ data: rows }) => {
+        const friendIds = (rows || []).map((r) => r.friend_id);
+        if (!friendIds.length) { setFriends([]); return; }
+        // 拆成两步查,理由同 FriendsScreen.jsx 的 loadFriends——隐式外键
+        // join 语法查不了 profiles_public 这个视图。
+        const { data: friendProfiles } = await supabase
+          .from("profiles_public")
+          .select("id, display_name, avatar_url, exp")
+          .in("id", friendIds);
+        setFriends(friendProfiles || []);
+      });
   }, [myId]);
 
   async function inviteFriend(friend) {
@@ -223,7 +233,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     setFriendSearching(true);
     const t = setTimeout(async () => {
       const { data } = await supabase
-        .from("profiles")
+        .from("profiles_public")
         .select("id, display_name, avatar_url, exp")
         .ilike("display_name", `%${q}%`)
         .neq("id", myId)
@@ -240,11 +250,17 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     if (data?.status === "auto_accepted") {
       // 对方之前也申请过我,已经直接成为好友——刷新好友列表,这样 TA 马上
       // 会出现在上面的"邀请对战"名单里,不用等再打开一次这个面板
-      const { data: fr } = await supabase
+      const { data: rows } = await supabase
         .from("friendships")
-        .select("friend_id, profiles:friend_id(id, display_name, avatar_url, exp)")
+        .select("friend_id")
         .eq("user_id", myId);
-      setFriends((fr || []).map((r) => r.profiles).filter(Boolean));
+      const friendIds = (rows || []).map((r) => r.friend_id);
+      if (!friendIds.length) { setFriends([]); return; }
+      const { data: friendProfiles } = await supabase
+        .from("profiles_public")
+        .select("id, display_name, avatar_url, exp")
+        .in("id", friendIds);
+      setFriends(friendProfiles || []);
     } else {
       setSentFriendRequestIds((prev) => new Set(prev).add(targetId));
     }

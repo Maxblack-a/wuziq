@@ -208,7 +208,9 @@ export default function App() {
       return;
     }
     if (myId) {
-      supabase.from("profiles").update({ skill_test_status: "skipped" }).eq("id", myId)
+      // skill_test_status 现在是 profiles 上的系统字段,客户端不能再直接
+      // update 这张表,改走 skip_skill_test() RPC(见 security_hardening_p0.sql)
+      supabase.rpc("skip_skill_test")
         .then(({ error }) => { if (error) console.error("记录跳过棋力测试失败", error); });
     }
     await continueAfterSkillTest();
@@ -245,7 +247,18 @@ export default function App() {
         },
         skill_test_completed_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("profiles").update(skillTestUpdate).eq("id", myId);
+
+      // skill_test_* 都是 profiles 上的系统字段,不能再直接 update 这张表
+      // (见 security_hardening_p0.sql:客户端只保留 display_name/avatar_url/
+      // nickname_confirmed 三列的写权限)。写 profiles 快照 + 追加历史行,
+      // 现在由 submit_skill_test_result() 这一个 RPC 在服务端原子完成。
+      const { error } = await supabase.rpc("submit_skill_test_result", {
+        p_dims: profile.dims,
+        p_type: profile.type,
+        p_hidden_score: profile.hiddenScore,
+        p_confidence: profile.confidence,
+        p_raw: skillTestUpdate.skill_test_raw,
+      });
       if (error) {
         console.error("保存棋力测试结果失败", error);
       } else {
@@ -255,17 +268,6 @@ export default function App() {
         // "每日试炼"又被门槛弹窗拦一次,误判成"没测过"。
         setProfile((prev) => (prev ? { ...prev, ...skillTestUpdate } : prev));
       }
-
-      // 追加历史行,不覆盖 profiles 上的快照(那一列继续只代表"最新一次",
-      // 每日试炼那类功能读它不用关心历史表的存在)
-      const { error: historyInsertError } = await supabase.from("skill_test_history").insert({
-        profile_id: myId,
-        dims: profile.dims,
-        type: profile.type,
-        hidden_score: profile.hiddenScore,
-        confidence: profile.confidence,
-      });
-      if (historyInsertError) console.error("记录棋力测试历史失败", historyInsertError);
     }
     setSkillTestProfile(profile);
     setSkillTestPriorHistory(priorHistory);
@@ -285,20 +287,35 @@ export default function App() {
   async function loadPendingNotifications(uid) {
     const [{ data: invites }, { data: requests }] = await Promise.all([
       supabase.from("game_invites")
-        .select("id, room_id, created_at, profiles:from_id(display_name, avatar_url)")
+        .select("id, room_id, created_at, from_id")
         .eq("to_id", uid).eq("status", "pending").order("created_at", { ascending: true }),
       supabase.from("friend_requests")
-        .select("id, from_id, created_at, profiles:from_id(display_name, avatar_url)")
+        .select("id, from_id, created_at")
         .eq("to_id", uid).eq("status", "pending").order("created_at", { ascending: true }),
     ]);
+    // 发起人的头像/昵称原来是靠 profiles:from_id(...) 这种隐式外键 join
+    // 一起查出来的,但 profiles 表本身的 select 权限现在收紧到只能看自己
+    // 那一行(见 supabase/profiles_public_view.sql),嵌入式 join 本质上
+    // 还是对 profiles 表发起一次查询,会被同一条 RLS 拦住。改成先查两张
+    // 通知表拿到 from_id,再对 profiles_public 这个安全视图批量查一次,
+    // 在前端把结果拼回去。
+    const fromIds = [...new Set([...(invites || []), ...(requests || [])].map((r) => r.from_id))];
+    let senderMap = {};
+    if (fromIds.length) {
+      const { data: senders } = await supabase
+        .from("profiles_public")
+        .select("id, display_name, avatar_url")
+        .in("id", fromIds);
+      senderMap = Object.fromEntries((senders || []).map((p) => [p.id, p]));
+    }
     const items = [
       ...(invites || []).map((i) => ({
         kind: "invite", id: i.id, room_id: i.room_id,
-        fromName: i.profiles?.display_name, fromAvatar: i.profiles?.avatar_url, created_at: i.created_at,
+        fromName: senderMap[i.from_id]?.display_name, fromAvatar: senderMap[i.from_id]?.avatar_url, created_at: i.created_at,
       })),
       ...(requests || []).map((r) => ({
         kind: "friend_request", id: r.id,
-        fromName: r.profiles?.display_name, fromAvatar: r.profiles?.avatar_url, created_at: r.created_at,
+        fromName: senderMap[r.from_id]?.display_name, fromAvatar: senderMap[r.from_id]?.avatar_url, created_at: r.created_at,
       })),
     ].sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
     if (items.length) setNotifQueue((prev) => [...prev, ...items]);
@@ -607,7 +624,7 @@ export default function App() {
         async (payload) => {
           const inv = payload.new;
           const { data: fromProfile } = await supabase
-            .from("profiles").select("display_name, avatar_url").eq("id", inv.from_id).single();
+            .from("profiles_public").select("display_name, avatar_url").eq("id", inv.from_id).single();
           setNotifQueue((prev) => [...prev, {
             kind: "invite", id: inv.id, room_id: inv.room_id,
             fromName: fromProfile?.display_name, fromAvatar: fromProfile?.avatar_url,
@@ -622,7 +639,7 @@ export default function App() {
         async (payload) => {
           const req = payload.new;
           const { data: fromProfile } = await supabase
-            .from("profiles").select("display_name, avatar_url").eq("id", req.from_id).single();
+            .from("profiles_public").select("display_name, avatar_url").eq("id", req.from_id).single();
           setNotifQueue((prev) => [...prev, {
             kind: "friend_request", id: req.id,
             fromName: fromProfile?.display_name, fromAvatar: fromProfile?.avatar_url,
