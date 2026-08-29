@@ -117,16 +117,64 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   }, [incomingRoomId]);
 
   // 订阅这间房间的变化:对手加入(player2_id 从空变有值)、状态从
-  // waiting → lobby → playing,都是同一行数据的 UPDATE,一个订阅够用
+  // waiting → lobby → playing,都是同一行数据的 UPDATE,一个订阅够用。
+  //
+  // 但只靠这一个订阅有个真实存在的漏洞:如果"状态变成 playing"这个
+  // UPDATE 事件,发生在这边 WebSocket 订阅握手完成之前(比如房主手速快,
+  // 对手一进房就点了"开始游戏",而被邀请这一方的订阅还没握手成功),
+  // Supabase Realtime 不会补发错过的历史事件,这一下就是永久错过,
+  // 界面会一直卡在"等待房主开始",没有任何东西会把它救回来。手机端
+  // /Telegram 内置浏览器把页面切到后台时 WebSocket 被系统暂停、切回来
+  // 没有自动补一次状态同步,也是同一类问题的另一种触发方式。
+  //
+  // 补三层兜底,不依赖"必须精确定位是哪一种原因"就能统一解决:
+  //   1) 订阅刚握手成功(status === 'SUBSCRIBED')的那一刻,主动补一次
+  //      查询——这样即使订阅生效之前已经错过了事件,握手一成功立刻会
+  //      用最新数据纠正过来,不用等下一次事件
+  //   2) 房间还没进入 playing 之前,每 4 秒轮询一次兜底,不管订阅是握手
+  //      慢了还是中途断线又没重连成功,几秒内都能追回正确状态
+  //   3) 页面从后台切回前台的那一刻,立刻补一次查询,不用等下一次轮询
+  //      的间隔——这是移动端最容易触发漏收事件的场景,单独处理一下体验
+  //      会好很多
   useEffect(() => {
     if (!roomId) return;
+    let cancelled = false;
+    let pollTimer = null;
+
+    function refetch() {
+      supabase.from("rooms").select("*").eq("id", roomId).single()
+        .then(({ data }) => { if (!cancelled && data) setRoom(data); });
+    }
+
     const channel = supabase
       .channel(`room-lobby-${roomId}`)
       .on("postgres_changes",
         { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
         (payload) => setRoom(payload.new)
-      ).subscribe();
-    return () => supabase.removeChannel(channel);
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") refetch();
+      });
+
+    pollTimer = setInterval(() => {
+      setRoom((prev) => {
+        if (prev?.status === "playing") return prev; // 已经进对局了,不用再轮询
+        refetch();
+        return prev;
+      });
+    }, 4000);
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") refetch();
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollTimer);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      supabase.removeChannel(channel);
+    };
   }, [roomId]);
 
   // 对手进来之后,把 ta 的头像/昵称/分数拉出来显示在 VS 的另一侧——
