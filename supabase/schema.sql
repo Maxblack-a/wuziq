@@ -1174,7 +1174,8 @@ declare
   r rooms%rowtype;
   my_slot int;
   idx int;
-  board jsonb;
+  v_board jsonb; -- 原来叫 board,跟 rooms.board 这一列同名会导致 update 语句里
+                  -- set board = board 被判定成有歧义,改名避免撞列名
   cell int;
 begin
   if me is null then raise exception '未登录'; end if;
@@ -1191,14 +1192,14 @@ begin
   if p_x < 0 or p_x >= 15 or p_y < 0 or p_y >= 15 then return jsonb_build_object('error', '坐标越界'); end if;
 
   idx := p_y * 15 + p_x; -- 前端 flat 数组是 y*BOARD_SIZE+x,跟 logic.js toBoard2D 保持一致
-  board := r.board;
-  cell := (board->>idx)::int; -- ->> 按下标取值再转text,jsonb array直接转int会报错,得先转text
+  v_board := r.board;
+  cell := (v_board->>idx)::int; -- ->> 按下标取值再转text,jsonb array直接转int会报错,得先转text
   if cell <> 0 then return jsonb_build_object('error', '这一格已经有子了'); end if;
 
-  board := jsonb_set(board, array[idx::text], to_jsonb(my_slot));
+  v_board := jsonb_set(v_board, array[idx::text], to_jsonb(my_slot));
 
   update rooms set
-    board = board,
+    board = v_board,
     current_turn = case when my_slot = 1 then 2 else 1 end,
     move_count = r.move_count + 1,
     board_before_last_move = r.board,

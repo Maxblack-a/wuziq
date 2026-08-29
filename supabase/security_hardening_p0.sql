@@ -73,7 +73,9 @@ declare
   r rooms%rowtype;
   my_slot int;
   idx int;
-  board jsonb;
+  v_board jsonb; -- 原来叫 board,跟 rooms.board 这一列同名,导致 update 语句里
+                  -- "set board = board" 被判定成有歧义(ambiguous),每次落子必然
+                  -- 报错 "column reference \"board\" is ambiguous"——改名避免撞列名
   cell int;
   new_move_count int;
   settlement jsonb;
@@ -92,15 +94,15 @@ begin
   if p_x < 0 or p_x >= 15 or p_y < 0 or p_y >= 15 then return jsonb_build_object('error', '坐标越界'); end if;
 
   idx := p_y * 15 + p_x; -- 前端 flat 数组是 y*BOARD_SIZE+x,跟 logic.js toBoard2D 保持一致
-  board := r.board;
-  cell := (board->>idx)::int; -- ->> 按下标取值再转text,jsonb array直接转int会报错,得先转text
+  v_board := r.board;
+  cell := (v_board->>idx)::int; -- ->> 按下标取值再转text,jsonb array直接转int会报错,得先转text
   if cell <> 0 then return jsonb_build_object('error', '这一格已经有子了'); end if;
 
-  board := jsonb_set(board, array[idx::text], to_jsonb(my_slot));
+  v_board := jsonb_set(v_board, array[idx::text], to_jsonb(my_slot));
   new_move_count := r.move_count + 1;
 
   update rooms set
-    board = board,
+    board = v_board,
     current_turn = case when my_slot = 1 then 2 else 1 end,
     move_count = new_move_count,
     board_before_last_move = r.board,
@@ -110,7 +112,7 @@ begin
     player2_last_seen = case when my_slot = 2 then now() else player2_last_seen end
   where id = p_room_id;
 
-  if check_five_in_a_row(board, p_x, p_y, my_slot) then
+  if check_five_in_a_row(v_board, p_x, p_y, my_slot) then
     settlement := _finish_match_internal(p_room_id, my_slot, 'normal');
     return jsonb_build_object(
       'ok', true, 'move_count', new_move_count,

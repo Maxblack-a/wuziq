@@ -130,12 +130,17 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   }, [roomId]);
 
   // 对手进来之后,把 ta 的头像/昵称/分数拉出来显示在 VS 的另一侧——
-  // 分数是为了推算 ta 的 LV.几 等级徽章,跟"我"这边用同一套算法
+  // 分数是为了推算 ta 的 LV.几 等级徽章,跟"我"这边用同一套算法。
+  // 注意:不能写死查 player2_id——如果打开这个页面的人自己就是 player2
+  // (比如通过邀请码加入、成为对手的那一方),player2_id 查出来的会是
+  // "我自己",而不是真正的对手,导致 VS 两边显示成同一个名字。要看
+  // player1_id/player2_id 里哪一个不是我自己,取那一个才是真正的对手。
+  const opponentId = room && (room.player1_id === myId ? room.player2_id : room.player1_id);
   useEffect(() => {
-    if (!room?.player2_id) { setOpponent(null); return; }
-    supabase.from("profiles_public").select("display_name, avatar_url, exp").eq("id", room.player2_id).single()
+    if (!opponentId) { setOpponent(null); return; }
+    supabase.from("profiles_public").select("display_name, avatar_url, exp").eq("id", opponentId).single()
       .then(({ data }) => setOpponent(data));
-  }, [room?.player2_id]);
+  }, [opponentId]);
 
   // 状态推进到 playing 的那一刻(房主点了"开始游戏"),不管我是房主
   // 自己点的、还是作为对方在旁边看着状态变化的,都统一走 onMatched 进真实对局
@@ -320,7 +325,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   const myTitle = titleForExp(exp ?? 0);
   const oppLevel = opponent ? levelForExp(opponent.exp) : null;
   const oppTitle = opponent ? titleForExp(opponent.exp ?? 0) : null;
-  const opponentOnline = room?.player2_id ? onlineIds.has(room.player2_id) : false;
+  const opponentOnline = opponentId ? onlineIds.has(opponentId) : false;
   const onlineFriendsCount = friends.filter((f) => onlineIds.has(f.id)).length;
 
   return (
