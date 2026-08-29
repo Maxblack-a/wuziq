@@ -252,16 +252,16 @@ export default function App() {
       // (见 security_hardening_p0.sql:客户端只保留 display_name/avatar_url/
       // nickname_confirmed 三列的写权限)。写 profiles 快照 + 追加历史行,
       // 现在由 submit_skill_test_result() 这一个 RPC 在服务端原子完成。
-      // sessionId 必填——必须是 SkillTestScreen 挂载时 start_skill_test()
-      // 拿到的那个,服务器会校验它属于当前用户、还没提交过、没超时,还会
-      // 顺手查一下耗时是否合理(见 supabase/skill_test_session_binding.sql)。
       const { error } = await supabase.rpc("submit_skill_test_result", {
-        p_session_id: sessionId,
         p_dims: profile.dims,
         p_type: profile.type,
         p_hidden_score: profile.hiddenScore,
         p_confidence: profile.confidence,
         p_raw: skillTestUpdate.skill_test_raw,
+        // sessionId 必填——必须是 SkillTestScreen 挂载时 start_skill_test()
+        // 拿到的那个,服务器会校验它属于当前用户、还没提交过、没超时,还会
+        // 顺手查一下耗时是否合理(见 supabase/skill_test_session_binding.sql)。
+        p_session_id: sessionId,
       });
       if (error) {
         console.error("保存棋力测试结果失败", error);

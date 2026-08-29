@@ -82,29 +82,6 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     }
     load();
 
-    // 把"棋盘变化时顺手算出最后一手落在哪"这段 diff 逻辑抽出来,让正常的
-    // postgres_changes 推送和下面几处兜底刷新走同一套逻辑,行为保持一致。
-    function applyRoomUpdate(next) {
-      if (!next) return;
-      const newFlat = next.board;
-      const oldFlat = lastBoardFlatRef.current;
-      if (oldFlat && newFlat) {
-        for (let i = 0; i < newFlat.length; i++) {
-          if (newFlat[i] !== oldFlat[i] && newFlat[i] !== 0) {
-            setLastMove([i % BOARD_SIZE, Math.floor(i / BOARD_SIZE)]);
-            break;
-          }
-        }
-      }
-      lastBoardFlatRef.current = newFlat;
-      setRoom(next);
-    }
-
-    function refetch() {
-      supabase.from("rooms").select("*").eq("id", roomId).single()
-        .then(({ data }) => { if (!cancelled && data) applyRoomUpdate(data); });
-    }
-
     // 同一个 channel 上同时挂落子同步(postgres_changes)、在线状态(presence)、
     // 以及"对方点了再来一局、新房间已经建好"的通知(用 rematch_of 精确关联,不用猜)
     const channel = supabase.channel(`room-${roomId}`, { config: { presence: { key: myId } } });
@@ -113,12 +90,25 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
       .on(
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "rooms", filter: `id=eq.${roomId}` },
-        // 棋盘变化时,跟上一次已知的棋盘做个 diff,找出真正落子的那一格——
-        // 不管这一步是我下的还是对方下的,都能算出正确的坐标,用来画获胜连线、
-        // 高亮最后一手。之前这里只依赖"我自己点击时记录的坐标",导致对方
-        // 赢的那一局,输的一方因为 lastMove 还停在自己上一手,连线根本对不上,
-        // 直接就看不到获胜连线了。
-        (payload) => applyRoomUpdate(payload.new)
+        (payload) => {
+          // 棋盘变化时,跟上一次已知的棋盘做个 diff,找出真正落子的那一格——
+          // 不管这一步是我下的还是对方下的,都能算出正确的坐标,用来画获胜连线、
+          // 高亮最后一手。之前这里只依赖"我自己点击时记录的坐标",导致对方
+          // 赢的那一局,输的一方因为 lastMove 还停在自己上一手,连线根本对不上,
+          // 直接就看不到获胜连线了。
+          const newFlat = payload.new.board;
+          const oldFlat = lastBoardFlatRef.current;
+          if (oldFlat && newFlat) {
+            for (let i = 0; i < newFlat.length; i++) {
+              if (newFlat[i] !== oldFlat[i] && newFlat[i] !== 0) {
+                setLastMove([i % BOARD_SIZE, Math.floor(i / BOARD_SIZE)]);
+                break;
+              }
+            }
+          }
+          lastBoardFlatRef.current = newFlat;
+          setRoom(payload.new);
+        }
       )
       .on(
         "postgres_changes",
@@ -132,40 +122,12 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
         if (key !== myId) setDisconnectSince(null); // 对方回来了,清掉断线状态
       })
       .subscribe(async (status) => {
-        if (status === "SUBSCRIBED") {
-          await channel.track({ online: true });
-          // 握手成功的这一刻补一次查询——如果对手的落子/认输/掉线判负
-          // 发生在这次订阅握手完成之前,这一下会把错过的状态追回来,
-          // 不用一直等下一次 postgres_changes 推送(可能永远不会再来)。
-          refetch();
-        }
+        if (status === "SUBSCRIBED") await channel.track({ online: true });
       });
-
-    // 兜底轮询:每 5 秒补一次查询,只要还在 playing 就一直跑。跟房间页
-    // (RoomScreen.jsx)加的那个轮询兜底是同一个思路——WebSocket 握手慢、
-    // 中途断线没重连成功、手机端切后台被系统暂停,这些情况都可能导致
-    // 漏收关键事件(落子、认输、掉线判负),光靠 postgres_changes 一条腿走路
-    // 撑不住,轮询能保证最多几秒钟就能纠正回正确状态。
-    const pollTimer = setInterval(() => {
-      setRoom((prev) => {
-        if (prev?.status !== "playing") return prev;
-        refetch();
-        return prev;
-      });
-    }, 5000);
-
-    // 页面从后台切回前台立刻补一次,不用等下一次轮询——这是手机端/
-    // Telegram 内置浏览器最容易漏收事件的场景,单独处理体验会好很多。
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible") refetch();
-    }
-    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     channelRef.current = channel;
     return () => {
       cancelled = true;
-      clearInterval(pollTimer);
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
       supabase.removeChannel(channel);
     };
   }, [roomId, myId]);
