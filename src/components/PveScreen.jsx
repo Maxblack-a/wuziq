@@ -12,10 +12,12 @@ import { isInTelegram, useTelegramBackButton, hapticNotify, confirmDialog } from
 const WIN_REVEAL_DELAY = 1000;
 const DRAW_REVEAL_DELAY = 400;
 
+// 配色语义跟每日试炼结算页、联机对局结算面板统一:赢=金色渐变字，
+// 输/和棋=墨色，颜色规则定义在 board.css 的 .pve-result-title.win/.lose/.draw。
 const RESULT_COPY = {
-  win: { title: "胜局", desc: "五子连珠,漂亮的一局。", color: "var(--wood)" },
-  lose: { title: "败局", desc: "差一点,再来一局找回来。", color: "var(--gold)" },
-  draw: { title: "和棋", desc: "棋盘落满,不分胜负。", color: "var(--fg)" },
+  win: { title: "胜局", desc: "五子连珠,漂亮的一局。" },
+  lose: { title: "败局", desc: "差一点,再来一局找回来。" },
+  draw: { title: "和棋", desc: "棋盘落满,不分胜负。" },
 };
 
 // 思考延迟按难度区分:困难档想得更久一点、简单档更快,是白送的一个
@@ -284,7 +286,7 @@ export default function PveScreen({ onExit, onExitHome }) {
           <div className="pve-result-panel">
             {result && (
               <>
-                <h2 className="pve-result-title" style={{ color: RESULT_COPY[result].color }}>
+                <h2 className={`pve-result-title ${result}`}>
                   {RESULT_COPY[result].title}
                 </h2>
                 <p className="pve-result-desc">{RESULT_COPY[result].desc}</p>

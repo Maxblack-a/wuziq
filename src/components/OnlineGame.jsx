@@ -11,10 +11,14 @@ const DISCONNECT_GRACE_MS = 20000; // 对方断线后,宽限20秒再允许判负
 const WIN_REVEAL_DELAY = 1000;     // 五连产生后,先让连线动画播完,再切出结算面板(跟 PveScreen 一致)
 const TURN_SECONDS = 30;           // 每一步的倒计时,纯展示用的软提醒,不会自动判负
 
+// 文案跟每日试炼结算页(dailytrial.css 的 .result-title)共用同一套配色语义:
+// 赢=金色渐变字，输/和棋=墨色，具体颜色在 board.css 里通过 .pve-result-title.win/.lose/.draw
+// 定义，这里只保留文案，不再用内联 color——两个结算页的"赢用金色、输/和棋用墨色"这套视觉规则
+// 现在是统一的，只是联机这边字号更小以适配棋盘上方 74px 的固定高度面板。
 const RESULT_COPY = {
-  win: { title: "胜局", color: "var(--wood)" },
-  lose: { title: "败局", color: "var(--gold)" },
-  draw: { title: "和棋", color: "var(--fg)" },
+  win: { title: "胜局" },
+  lose: { title: "败局" },
+  draw: { title: "和棋" },
 };
 
 function resultDesc(outcome, reason) {
@@ -32,6 +36,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   const [expDelta, setExpDelta] = useState(null);
   // 乐观更新:落子瞬间先在本地显示,等服务器确认后再对齐/回滚
   const [pendingMove, setPendingMove] = useState(null); // { board, moveCountAfter }
+  const [debugError, setDebugError] = useState(null); // 临时调试用:显示 make_move 失败的具体原因
   // 对手在线状态:disconnectSince=null 表示在线;有值表示从那一刻起断线,配合宽限期显示倒计时
   const [disconnectSince, setDisconnectSince] = useState(null);
   const [now, setNow] = useState(Date.now());
@@ -354,9 +359,12 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
       setPendingMove(null);
       setLastMove(null);
       hapticNotify("error");
+      // 临时调试:把具体错误原因显示出来,方便定位问题,排查完记得删掉
+      setDebugError(data?.error || error?.message || "未知错误");
       if (isSessionSupersededError(error)) handleSessionSuperseded();
       return;
     }
+    setDebugError(null);
 
     if (data.game_status === "finished") {
       if (data.winner === mySlot) hapticNotify("success");
@@ -478,7 +486,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
           <div className="pve-result-panel">
             {result ? (
               <>
-                <h2 className="pve-result-title" style={{ color: RESULT_COPY[result.outcome].color }}>
+                <h2 className={`pve-result-title ${result.outcome}`}>
                   {RESULT_COPY[result.outcome].title}
                 </h2>
                 <p className="pve-result-desc">{resultDesc(result.outcome, result.reason)}</p>
@@ -502,6 +510,16 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
               )
             )}
           </div>
+
+          {debugError && (
+            // 临时调试提示条,排查完问题后记得连同上面 debugError 相关代码一起删掉
+            <div style={{
+              background: "#fee2e2", color: "#991b1b", padding: "8px 12px",
+              borderRadius: 8, marginBottom: 8, fontSize: 13, textAlign: "center",
+            }}>
+              落子失败:{debugError}
+            </div>
+          )}
 
           <Board
             board={board2D}

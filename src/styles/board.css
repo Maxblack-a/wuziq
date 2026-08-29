@@ -430,11 +430,26 @@
   margin-bottom: var(--space-3);
 }
 
+/* 标题字体/配色语义跟 dailytrial.css 的 .result-title 保持一致(衬线字 +
+   赢=金色渐变字/输和和棋=墨色),只是字号、字距按这里 74px 高度的面板压缩过,
+   不能照搬试炼页那个 52px 大字——面板高度是写死的硬约束,加大字号会撑破它。 */
 .pve-result-title {
   margin: 0;
-  font-size: 20px;
+  font-family: var(--font-display), serif;
+  font-size: 21px;
   font-weight: 700;
+  letter-spacing: 3px;
   line-height: 1.2;
+}
+.pve-result-title.win {
+  background: linear-gradient(160deg, #FCE8B0 0%, var(--gold) 45%, #8A5A16 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.pve-result-title.lose,
+.pve-result-title.draw {
+  color: var(--ink-token);
 }
 
 .pve-result-desc {
