@@ -36,7 +36,6 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   const [expDelta, setExpDelta] = useState(null);
   // 乐观更新:落子瞬间先在本地显示,等服务器确认后再对齐/回滚
   const [pendingMove, setPendingMove] = useState(null); // { board, moveCountAfter }
-  const [debugError, setDebugError] = useState(null); // 临时调试用:显示 make_move 失败的具体原因
   // 对手在线状态:disconnectSince=null 表示在线;有值表示从那一刻起断线,配合宽限期显示倒计时
   const [disconnectSince, setDisconnectSince] = useState(null);
   const [now, setNow] = useState(Date.now());
@@ -242,6 +241,27 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     return () => setClosingConfirmation(false);
   }, [room?.status]);
 
+  // 上面那套(useTelegramBackButton / setClosingConfirmation)只在真正的
+  // Telegram 客户端里生效——在普通浏览器里测试/使用时,tg?.BackButton 判空
+  // 直接跳过,关标签页、刷新、浏览器后退完全没有任何拦截,对手也感知不到
+  // 你已经走了,会一直卡在"轮到对方"干等。这里补一个浏览器原生的
+  // beforeunload 兜底:对局进行中弹出"确定要离开此页面吗",减少手滑误触
+  // 退出。注意这里只能做到"提醒",做不到"关闭那一刻通知服务端判负"——
+  // 想在 unload 时补发一次请求,通常会用 sendBeacon,但 Supabase 的 RPC
+  // 需要带用户登录的 JWT 做鉴权,sendBeacon 没法附加这个请求头,发了也会
+  // 被服务端拒绝,所以这里不做这个假动作。真正的兜底还是已有的服务端
+  // 45 秒心跳超时判负(见 schema.sql 里 check_timeouts 的注释),不管
+  // 这个提示框有没有拦住玩家,对手最终都不会永远卡死。
+  useEffect(() => {
+    if (room?.status !== "playing") return;
+    function handleBeforeUnload(e) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [room?.status]);
+
   if (!room) {
     return (
       <div style={{ textAlign: "center", padding: 60 }}>
@@ -309,9 +329,14 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   const myUndoPending = room.undo_requested_by === myId;
   const canRequestUndo = room.status === "playing" && !room.undo_requested_by && !!room.board_before_last_move && !pendingMove && !revealing;
 
-  // 回合倒计时:从"上一次棋盘更新"的时间戳算 30 秒,纯展示用的软提醒,
-  // 不会自动判负——真正的"长时间不动"由断线判定那一套走(玩家可以确认判对方负)
-  const turnDeadline = room.status === "playing" ? new Date(room.updated_at).getTime() + TURN_SECONDS * 1000 : null;
+  // 回合倒计时:改成读服务端权威的 turn_deadline 字段,而不是 updated_at——
+  // updated_at 这一列只要 rooms 这一行被 UPDATE 就会被触发器刷新,心跳
+  // (每 8 秒一次)也会触发这个刷新,如果拿它来算倒计时,会导致倒计时
+  // 每隔几秒就跳回满值,显示完全不对。turn_deadline 只在真正落子/悔棋时
+  // 才会被服务端刷新,不受心跳影响,是唯一准确的依据。
+  const turnDeadline = room.status === "playing" && room.turn_deadline
+    ? new Date(room.turn_deadline).getTime()
+    : null;
   const turnSecondsLeft = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : TURN_SECONDS;
   const turnUrgent = turnSecondsLeft <= 10;
 
@@ -359,12 +384,9 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
       setPendingMove(null);
       setLastMove(null);
       hapticNotify("error");
-      // 临时调试:把具体错误原因显示出来,方便定位问题,排查完记得删掉
-      setDebugError(data?.error || error?.message || "未知错误");
       if (isSessionSupersededError(error)) handleSessionSuperseded();
       return;
     }
-    setDebugError(null);
 
     if (data.game_status === "finished") {
       if (data.winner === mySlot) hapticNotify("success");
@@ -510,16 +532,6 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
               )
             )}
           </div>
-
-          {debugError && (
-            // 临时调试提示条,排查完问题后记得连同上面 debugError 相关代码一起删掉
-            <div style={{
-              background: "#fee2e2", color: "#991b1b", padding: "8px 12px",
-              borderRadius: 8, marginBottom: 8, fontSize: 13, textAlign: "center",
-            }}>
-              落子失败:{debugError}
-            </div>
-          )}
 
           <Board
             board={board2D}

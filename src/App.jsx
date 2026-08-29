@@ -219,7 +219,7 @@ export default function App() {
   // 测试对局结束(不管是关卡收集完、撞了步数上限、还是意外分出了胜负):
   // 把六维风格分/隐藏水平分/原始数据写库,再进结果揭晓页——揭晓页看完
   // 点"继续"才会真正往下路由,不在这里直接走。
-  async function handleSkillTestFinish(profile, testState) {
+  async function handleSkillTestFinish(profile, testState, reason, sessionId) {
     let priorHistory = [];
     if (myId) {
       // 写入这次结果之前,先把"这次之前"的历史记录取出来,给结果页做
@@ -252,7 +252,11 @@ export default function App() {
       // (见 security_hardening_p0.sql:客户端只保留 display_name/avatar_url/
       // nickname_confirmed 三列的写权限)。写 profiles 快照 + 追加历史行,
       // 现在由 submit_skill_test_result() 这一个 RPC 在服务端原子完成。
+      // sessionId 必填——必须是 SkillTestScreen 挂载时 start_skill_test()
+      // 拿到的那个,服务器会校验它属于当前用户、还没提交过、没超时,还会
+      // 顺手查一下耗时是否合理(见 supabase/skill_test_session_binding.sql)。
       const { error } = await supabase.rpc("submit_skill_test_result", {
+        p_session_id: sessionId,
         p_dims: profile.dims,
         p_type: profile.type,
         p_hidden_score: profile.hiddenScore,

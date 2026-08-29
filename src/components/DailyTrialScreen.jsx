@@ -227,7 +227,7 @@ export default function DailyTrialScreen({ onExit, onExitHome, avatarUrl, exp })
   async function handleBattleFinish(result, quality, meta) {
     setMode("settling");
     try {
-      const reward = await finishDailyTrial(battleSeed?.sessionId, npc.id, result, quality);
+      const reward = await finishDailyTrial(battleSeed?.sessionId, npc.id, result, quality, meta?.moveCount, meta?.durationSec);
       const nextStatus = {
         stamina: status?.stamina ?? 0, // battle 开始时已经扣过体力,settle 不改体力,这里沿用当前值
         diamonds: reward.diamonds,

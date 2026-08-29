@@ -59,12 +59,20 @@ export async function startDailyTrial(npcId) {
 // sessionId 必填——必须是 startDailyTrial 刚刚返回的那个,服务器会校验
 // 它属于当前用户、对应同一个 npcId、状态还是 active 且没过期,校验不过
 // 会直接抛错,调用方需要 catch 住给提示(比如引导玩家重新开始这一局)。
-export async function finishDailyTrial(sessionId, npcId, result, quality) {
+// moveCount/durationSec 是这一局实际走了多少步、耗时多少秒(见
+// DailyTrialGameScreen.jsx 的 meta),服务器会拿这两个数做一个"耗时是否
+// 合理"的基础校验——挡不住精细作弊,但能挡住"开局立刻上报一个编好的
+// 高质量胜利"这种最粗暴的滥用(见
+// supabase/daily_trial_quality_plausibility.sql)。两个都是可选参数,
+// 传 undefined/null 时服务器会用一个宽松的默认下限。
+export async function finishDailyTrial(sessionId, npcId, result, quality, moveCount, durationSec) {
   const { data, error } = await supabase.rpc("finish_daily_trial", {
     p_session_id: sessionId,
     p_npc_id: npcId,
     p_result: result,
     p_quality: quality,
+    p_move_count: moveCount ?? null,
+    p_duration_sec: durationSec ?? null,
   });
   if (error) throw error;
   const row = Array.isArray(data) ? data[0] : data;

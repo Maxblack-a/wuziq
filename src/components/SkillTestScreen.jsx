@@ -5,14 +5,19 @@ import { skillTestEngine, PLAYER_COLOR, LINMO_COLOR, isPracticalDraw } from "../
 import { computeSkillProfile } from "../lib/skillProfile";
 import { pickInGameLine } from "../lib/linmoDialogue";
 import { hapticNotify } from "../lib/telegram";
+import { supabase } from "../lib/supabase";
 
 const THINKING_DELAY = 500; // 固定思考延迟,不用像三档AI那样区分快慢——这不是在"演强弱",只是给点节奏感
 const WIN_REVEAL_DELAY = 1000;
 const DRAW_REVEAL_DELAY = 400;
 
-// onFinish(profile, testState, reason): 测试结束(不管是关卡收集完、撞了步数
-// 上限、还是真的下出了胜负)统一走这一个回调,交给上层决定去结果揭晓页。
-// onAbort: 中途放弃,不产出结果,等同于没测过。
+// onFinish(profile, testState, reason, sessionId): 测试结束(不管是关卡收集完、
+// 撞了步数上限、还是真的下出了胜负)统一走这一个回调,交给上层决定去结果揭晓页。
+// sessionId 是这次测试在服务端 skill_test_sessions 表里的凭证——挂载时调
+// start_skill_test() 拿到,交给上层原样带去 submit_skill_test_result(),
+// 服务器没有这个凭证不认这次结果(见 supabase/skill_test_session_binding.sql)。
+// onAbort: 中途放弃,不产出结果,等同于没测过——这种情况下 session 就晾在
+// 那儿,不用管,过期时间到了服务端自己会清掉。
 export default function SkillTestScreen({ onFinish, onAbort }) {
   const [board, setBoard] = useState(createEmptyBoard());
   const [turn, setTurn] = useState(PLAYER_COLOR);
@@ -25,8 +30,16 @@ export default function SkillTestScreen({ onFinish, onAbort }) {
   const linmoTimerRef = useRef(null);
   const revealTimerRef = useRef(null);
   const finishedRef = useRef(false); // 防止揭晓延迟期间又触发一次 finalize
+  const sessionIdRef = useRef(null);
 
   useEffect(() => {
+    supabase.rpc("start_skill_test").then(({ data, error }) => {
+      if (error) {
+        console.error("创建棋力测试 session 失败", error);
+        return;
+      }
+      sessionIdRef.current = data;
+    });
     return () => {
       if (linmoTimerRef.current) clearTimeout(linmoTimerRef.current);
       clearTimeout(revealTimerRef.current);
@@ -43,7 +56,7 @@ export default function SkillTestScreen({ onFinish, onAbort }) {
     if (finishedRef.current) return;
     finishedRef.current = true;
     const profile = computeSkillProfile(finalTestState);
-    const proceed = () => onFinish(profile, finalTestState, reason);
+    const proceed = () => onFinish(profile, finalTestState, reason, sessionIdRef.current);
     setRevealing(true);
     revealTimerRef.current = setTimeout(proceed, outcome === "draw" ? DRAW_REVEAL_DELAY : WIN_REVEAL_DELAY);
   }
