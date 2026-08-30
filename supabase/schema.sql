@@ -101,6 +101,41 @@ create unique index if not exists profiles_username_unique
   on profiles (lower(username))
   where username is not null and telegram_id is null;
 
+-- ============================================================
+-- 房间状态机(status 字段)—— 显式列出全部状态和流转路径,新增/修改
+-- 任何一个会碰 rooms.status 的函数之前,先看这张表,不要绕开这里列出
+-- 的入口直接手写 update rooms set status = ...
+--
+--   waiting  邀请房已建、还没人加入 / 匹配队列里排队中
+--            → lobby    join_room() 有人用邀请码加入,或 match_players()
+--                        撮合成功,双方都落座
+--            → (删除)   leave_room() 房主自己退出;或者
+--                        cleanup_stale_rooms() 定时清理超时没人加入的房
+--
+--   lobby    双方都在房里了,等房主点"开始对局"
+--            → playing  start_match(),只有房主(player1)能调
+--
+--   playing  对局进行中,唯一能改棋盘的入口是 make_move()
+--            → finished 三条路径,只由服务端内部触发,客户端不能直接指定
+--                        结果:
+--                        1. make_move() 检测到五连/棋盘下满,内部调
+--                           _finish_match_internal(reason='normal')
+--                        2. finish_match(p_reason='forfeit'),一方主动认输,
+--                           赢家固定是对方,不听客户端传的 p_winner
+--                        3. finish_match(p_reason='disconnect') 或
+--                           check_timeouts() 定时任务判定对方掉线超时,
+--                           必须心跳确实超过阈值(见 check_timeouts 里的
+--                           DISCONNECT_TIMEOUT 常量)才允许
+--
+--   finished 终态。return_to_room() 是唯一的例外出口:双方都点"再来一局"
+--            之后,会新建一间全新的 rooms 行进入 waiting/lobby,而不是
+--            把这一行的 status 改回去——finished 这一行本身永远不会再
+--            变化,可以放心当历史记录用。
+--
+-- 没有列在这里的状态流转,一律视为不合法,遇到了要么是 bug,要么是有人
+-- 绕开 RPC 直接改表。
+-- ============================================================
+
 -- 对局房间表
 create table if not exists rooms (
   id uuid primary key default gen_random_uuid(),
@@ -127,6 +162,13 @@ begin
 exception when others then
   null;
 end $$;
+
+-- 真正开局(playing)的时间戳,由 start_match() 写入,专门给联机对战
+-- 结算页(OnlineResultReveal)算"用时"用。之前前端是自己拿 Date.now()
+-- 在组件挂载时打个本地时间戳当起点,同一局如果中途刷新页面,计时会从
+-- 刷新那一刻重新算起,显示的"用时"会明显偏短——created_at 不能顶替,
+-- 邀请模式下 created_at 是建房间那一刻,包含了大厅等待时间,同样不准。
+alter table rooms add column if not exists started_at timestamptz;
 
 -- 匹配队列表
 create table if not exists matchmaking_queue (
@@ -1151,7 +1193,8 @@ begin
     board = (select jsonb_agg(0) from generate_series(1, 225)),
     turn_deadline = now() + interval '30 seconds',
     player1_last_seen = now(),
-    player2_last_seen = now()
+    player2_last_seen = now(),
+    started_at = now()
   where id = p_room_id;
 
   return jsonb_build_object('ok', true);
@@ -1332,15 +1375,26 @@ begin
   end if;
 end $$;
 
+-- 掉线判负的阈值,唯一定义在这一个函数里——check_timeouts() 和
+-- finish_match() 的 disconnect 分支都从这里读,不再各自写一份字面量,
+-- 以后想调整只改这一处,不会出现"改了一处忘了另一处"导致两边标准不一致。
+-- 客户端心跳间隔是 8 秒(见 OnlineGame.jsx 的 HEARTBEAT_INTERVAL_MS),
+-- 这里给了大约 3 拍的容错空间,不会因为一次网络抖动、一次心跳没发出去
+-- 就被误判成掉线。之前是 45 秒,拍得比较随意;现在收到 25 秒,配合下面
+-- check_timeouts 调度频率的提升,把"对方真掉线之后,我这边最坏要等多久
+-- 才能等到系统自动判负"这个上限,从原来的 45+60=105 秒左右,压缩到
+-- 25+20=45 秒左右。
+create or replace function _disconnect_timeout()
+returns interval
+language sql
+immutable
+as $$ select interval '25 seconds' $$;
+
 -- 服务端权威判负扫描:pg_cron 定时跑,不依赖任何一台设备的浏览器还醒着。
 --   · 回合超时:now() > turn_deadline,当前该走棋的一方判负,reason='timeout'
---   · 掉线超时:某一方的心跳时间戳太久没刷新(用 coalesce 兜底,处理"游戏
---     刚开始/刚重连,还没来得及心跳一次"的情况),判他负,reason='disconnect'
--- 注意精度取舍:pg_cron 标准语法最小粒度是"分钟",这里每分钟跑一次,
--- 意味着实际生效时间比 turn_deadline/心跳阈值本身要晚最多接近60秒。
--- 如果想要更接近现在客户端 20~30 秒那种即时感,需要额外接一个更高频率
--- 的外部触发器(比如 Cloudflare Cron Triggers 每15秒调一次同名逻辑的
--- edge function),这里先给出零额外基础设施依赖的兜底版本。
+--   · 掉线超时:某一方的心跳时间戳超过 _disconnect_timeout() 没刷新(用
+--     coalesce 兜底,处理"游戏刚开始/刚重连,还没来得及心跳一次"的情况),
+--     判他负,reason='disconnect'
 create or replace function check_timeouts()
 returns void
 language plpgsql
@@ -1367,9 +1421,9 @@ begin
     p1_last := coalesce(r.player1_last_seen, r.updated_at);
     p2_last := coalesce(r.player2_last_seen, r.updated_at);
 
-    if now() - p1_last > interval '45 seconds' then
+    if now() - p1_last > _disconnect_timeout() then
       perform _finish_match_internal(r.id, 2, 'disconnect');
-    elsif now() - p2_last > interval '45 seconds' then
+    elsif now() - p2_last > _disconnect_timeout() then
       perform _finish_match_internal(r.id, 1, 'disconnect');
     end if;
   end loop;
@@ -1383,7 +1437,19 @@ exception when others then
   null;
 end $$;
 
-select cron.schedule('check-timeouts', '* * * * *', $$select check_timeouts();$$);
+-- 优先用更高频率的调度(pg_cron 1.4+ 支持直接写"多少秒/多少分钟"这种
+-- interval 字符串,不再受限于标准 5 字段 cron 语法"最小粒度是分钟"这条
+-- 限制)。如果当前项目的 pg_cron 版本较老、不支持这种写法,这一句会
+-- 报错——用 exception 兜底退回到每分钟一次的标准写法,不会因为这一句
+-- 报错就导致后面的语句全部没跑成功(schema.sql 之前就吃过这个亏:
+-- make_move 那次 bug 起因之一就是脚本中间某句报错、没人注意到后面的
+-- 语句其实没有真正执行,这次特意做了兜底,避免重蹈覆辙)。
+do $$
+begin
+  perform cron.schedule('check-timeouts', '20 seconds', $sched$select check_timeouts();$sched$);
+exception when others then
+  perform cron.schedule('check-timeouts', '* * * * *', $sched$select check_timeouts();$sched$);
+end $$;
 
 -- ============================================================
 -- 每日试炼(林墨):体力系统 + 钻石 + 玩家/林墨双方动态难度评分

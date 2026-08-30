@@ -1,31 +1,49 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, Suspense, lazy } from "react";
 import MainMenu from "./components/MainMenu";
-import PveScreen from "./components/PveScreen";
-import DailyTrialScreen from "./components/DailyTrialScreen";
-import MatchmakingScreen from "./components/MatchmakingScreen";
-import InviteScreen from "./components/InviteScreen";
-import RoomScreen from "./components/RoomScreen";
 import IncomingInviteModal from "./components/IncomingInviteModal";
 import IncomingFriendRequestModal from "./components/IncomingFriendRequestModal";
 import DailyTrialGateModal from "./components/DailyTrialGateModal";
-import OnlineGame from "./components/OnlineGame";
-import FriendsScreen from "./components/FriendsScreen";
-import LeaderboardScreen from "./components/LeaderboardScreen";
-import ProfileScreen from "./components/ProfileScreen";
-import MatchHistoryScreen from "./components/MatchHistoryScreen";
-import LinMoIntroScreen from "./components/LinMoIntroScreen";
-import SkillTestScreen from "./components/SkillTestScreen";
-import SkillTestResultScreen from "./components/SkillTestResultScreen";
-import SkillTestEvaluationScreen from "./components/SkillTestEvaluationScreen";
-import SkillTestReviewScreen from "./components/SkillTestReviewScreen";
 import { getDisplayStamina } from "./game/dailyTrialEngine";
-import WebAuthScreen from "./components/WebAuthScreen";
 import {
   supabase, loginWithTelegram, loginAnonymously, getExistingUserId,
   claimSession, getStoredSessionId, clearStoredSessionId,
 } from "./lib/supabase";
 import { initTelegram, isInTelegram, getInitData, getStartParam, getTelegramUserId } from "./lib/telegram";
 import { initPresence } from "./lib/presence";
+
+// 下面这些"页面级"组件全部改成 React.lazy 懒加载——原来全部走静态 import,
+// 打出来的主 bundle 518KB(vite build 会警告),但用户进来大概率只用到
+// 其中一两个(比如只想下一局人机,压根不会碰联机对战/每日试炼/棋力测试
+// 那一整套代码)。这里全部是通过 `screen === "xxx"` 条件渲染切出来的,
+// 天然就是"路由"的形状,很适合按需加载,不用 IncomingInviteModal /
+// IncomingFriendRequestModal / DailyTrialGateModal 这几个小弹窗那样,
+// 它们随时可能跟主菜单一起冒出来,还是保持静态 import。
+const PveScreen = lazy(() => import("./components/PveScreen"));
+const DailyTrialScreen = lazy(() => import("./components/DailyTrialScreen"));
+const MatchmakingScreen = lazy(() => import("./components/MatchmakingScreen"));
+const InviteScreen = lazy(() => import("./components/InviteScreen"));
+const RoomScreen = lazy(() => import("./components/RoomScreen"));
+const OnlineGame = lazy(() => import("./components/OnlineGame"));
+const FriendsScreen = lazy(() => import("./components/FriendsScreen"));
+const LeaderboardScreen = lazy(() => import("./components/LeaderboardScreen"));
+const ProfileScreen = lazy(() => import("./components/ProfileScreen"));
+const MatchHistoryScreen = lazy(() => import("./components/MatchHistoryScreen"));
+const LinMoIntroScreen = lazy(() => import("./components/LinMoIntroScreen"));
+const SkillTestScreen = lazy(() => import("./components/SkillTestScreen"));
+const SkillTestResultScreen = lazy(() => import("./components/SkillTestResultScreen"));
+const SkillTestEvaluationScreen = lazy(() => import("./components/SkillTestEvaluationScreen"));
+const SkillTestReviewScreen = lazy(() => import("./components/SkillTestReviewScreen"));
+const WebAuthScreen = lazy(() => import("./components/WebAuthScreen"));
+
+// 主菜单以外这一大片 `screen === "xxx"` 分支已经处在 .app-shell 内部了,
+// 不需要再套一层 app-shell 结构,只要给 Suspense 一个居中的 spinner 占位。
+function ScreenFallbackInline() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "50vh" }}>
+      <div className="spinner" />
+    </div>
+  );
+}
 
 // ⚠️ 调试用开关:改成 true 之后,不管账号昵称/棋力测试状态是什么,
 // 每次登录成功都会强制停在"认识林墨"这个见面场景,方便反复测试效果。
@@ -709,7 +727,9 @@ export default function App() {
   if (screen === "auth") {
     return (
       <div className="app-shell">
-        <WebAuthScreen onSuccess={handleWebAuthSuccess} />
+        <Suspense fallback={<div className="spinner" />}>
+          <WebAuthScreen onSuccess={handleWebAuthSuccess} />
+        </Suspense>
       </div>
     );
   }
@@ -717,15 +737,17 @@ export default function App() {
   if (screen === "nickname") {
     return (
       <div className="app-shell">
-        <LinMoIntroScreen
-          initialName={profile?.display_name || ""}
-          initialStep={linmoIntroStep}
-          exp={profile?.exp}
-          avatarUrl={profile?.avatar_url}
-          onNameConfirm={handleNicknameConfirmed}
-          onStartTest={handleSkillTestStart}
-          onSkipTest={handleSkillTestSkip}
-        />
+        <Suspense fallback={<div className="spinner" />}>
+          <LinMoIntroScreen
+            initialName={profile?.display_name || ""}
+            initialStep={linmoIntroStep}
+            exp={profile?.exp}
+            avatarUrl={profile?.avatar_url}
+            onNameConfirm={handleNicknameConfirmed}
+            onStartTest={handleSkillTestStart}
+            onSkipTest={handleSkillTestSkip}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -733,7 +755,9 @@ export default function App() {
   if (screen === "skilltest") {
     return (
       <div className="app-shell">
-        <SkillTestScreen onFinish={handleSkillTestFinish} onAbort={handleSkillTestSkip} />
+        <Suspense fallback={<div className="spinner" />}>
+          <SkillTestScreen onFinish={handleSkillTestFinish} onAbort={handleSkillTestSkip} />
+        </Suspense>
       </div>
     );
   }
@@ -741,10 +765,12 @@ export default function App() {
   if (screen === "skilltest_result" && skillTestProfile) {
     return (
       <div className="app-shell">
-        <SkillTestResultScreen
-          profile={skillTestProfile}
-          onContinue={() => setScreen("skilltest_evaluation")}
-        />
+        <Suspense fallback={<div className="spinner" />}>
+          <SkillTestResultScreen
+            profile={skillTestProfile}
+            onContinue={() => setScreen("skilltest_evaluation")}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -752,11 +778,13 @@ export default function App() {
   if (screen === "skilltest_evaluation" && skillTestProfile) {
     return (
       <div className="app-shell">
-        <SkillTestEvaluationScreen
-          profile={skillTestProfile}
-          priorHistory={skillTestPriorHistory}
-          onContinue={continueAfterSkillTest}
-        />
+        <Suspense fallback={<div className="spinner" />}>
+          <SkillTestEvaluationScreen
+            profile={skillTestProfile}
+            priorHistory={skillTestPriorHistory}
+            onContinue={continueAfterSkillTest}
+          />
+        </Suspense>
       </div>
     );
   }
@@ -776,45 +804,79 @@ export default function App() {
           diamondsFrom={homeBaselineRef.current.diamonds}
         />
       )}
-      {screen === "pve" && <PveScreen onExit={goBack} onExitHome={goMenu} />}
-      {screen === "daily" && <DailyTrialScreen onExit={goBack} onExitHome={goMenu} avatarUrl={profile?.avatar_url} exp={profile?.exp} />}
+      {screen === "pve" && (
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <PveScreen onExit={goBack} onExitHome={goMenu} />
+        </Suspense>
+      )}
+      {screen === "daily" && (
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <DailyTrialScreen onExit={goBack} onExitHome={goMenu} avatarUrl={profile?.avatar_url} exp={profile?.exp} />
+        </Suspense>
+      )}
       {screen === "matchmaking" && (
-        <MatchmakingScreen
-          myId={myId}
-          onMatched={handleMatched}
-          onExit={goBack}
-          onFallbackToPve={() => navigate("pve")}
-        />
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <MatchmakingScreen
+            myId={myId}
+            onMatched={handleMatched}
+            onExit={goBack}
+            onFallbackToPve={() => navigate("pve")}
+          />
+        </Suspense>
       )}
       {screen === "invite" && (
-        <InviteScreen myId={myId} prefillCode={prefillRoomCode} onMatched={handleMatched} onExit={goBack} />
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <InviteScreen myId={myId} prefillCode={prefillRoomCode} onMatched={handleMatched} onExit={goBack} />
+        </Suspense>
       )}
       {screen === "room" && (
-        <RoomScreen
-          myId={myId}
-          roomId={roomId}
-          playerName={profile?.display_name}
-          avatarUrl={profile?.avatar_url}
-          exp={profile?.exp}
-          onMatched={handleMatched}
-          onExit={goBack}
-          onRandomMatch={() => navigate("matchmaking")}
-        />
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <RoomScreen
+            myId={myId}
+            roomId={roomId}
+            playerName={profile?.display_name}
+            avatarUrl={profile?.avatar_url}
+            exp={profile?.exp}
+            onMatched={handleMatched}
+            onExit={goBack}
+            onRandomMatch={() => navigate("matchmaking")}
+          />
+        </Suspense>
       )}
       {screen === "friends" && (
-        <FriendsScreen myId={myId} onMatched={handleMatched} onExit={goBack} />
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <FriendsScreen myId={myId} onMatched={handleMatched} onExit={goBack} />
+        </Suspense>
       )}
-      {screen === "leaderboard" && <LeaderboardScreen myId={myId} onExit={goBack} />}
-      {screen === "profile" && <ProfileScreen myId={myId} onExit={goBack} onNavigate={navigate} />}
+      {screen === "leaderboard" && (
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <LeaderboardScreen myId={myId} onExit={goBack} />
+        </Suspense>
+      )}
+      {screen === "profile" && (
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <ProfileScreen myId={myId} onExit={goBack} onNavigate={navigate} />
+        </Suspense>
+      )}
       {screen === "skilltest_view" && (
-        <SkillTestReviewScreen
-          myId={myId}
-          onExit={goBack}
-          onStartTest={() => { historyRef.current.push({ screen, roomId }); handleStartSkillTestStandalone(); }}
-        />
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <SkillTestReviewScreen
+            myId={myId}
+            onExit={goBack}
+            onStartTest={() => { historyRef.current.push({ screen, roomId }); handleStartSkillTestStandalone(); }}
+          />
+        </Suspense>
       )}
-      {screen === "history" && <MatchHistoryScreen myId={myId} onExit={goBack} />}
-      {screen === "game" && <OnlineGame roomId={roomId} myId={myId} onExit={goMenu} onMatched={handleMatched} />}
+      {screen === "history" && (
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <MatchHistoryScreen myId={myId} onExit={goBack} />
+        </Suspense>
+      )}
+      {screen === "game" && (
+        <Suspense fallback={<ScreenFallbackInline />}>
+          <OnlineGame roomId={roomId} myId={myId} avatarUrl={profile?.avatar_url} onExit={goMenu} onMatched={handleMatched} />
+        </Suspense>
+      )}
 
       {notifQueue[0]?.kind === "invite" && (
         <IncomingInviteModal

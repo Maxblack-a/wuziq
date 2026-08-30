@@ -15,6 +15,14 @@
 // 常用感叹号、"呀""啦""嘿嘿"这类语气词,喜欢用反问/感叹表达惊讶
 // ("居然真的被你抓到了!"),但要注意分寸:活泼不等于幼稚或撒娇卖萌,
 // 台词里体现的是"对下棋这件事真心觉得好玩"的少年感,不是单纯的可爱人设。
+//
+// 沈之远的语气写作原则(对齐角色设定文档):从容、温和,带一点历经世事
+// 之后才有的轻松幽默——不是搞笑,是"不急着赢,也不害怕输"那种松弛感。
+// 常用"不用急""慢慢来""坐吧""茶还热着"这类句式,输赢都不会让他情绪
+// 明显起伏;点评玩家的棋不会直接说"这里错了",而是"这一手倒是让我有些
+// 意外"这类留白式的话,让玩家自己回味。标志物是茶,台词里可以偶尔带一句
+// 茶/棋馆的闲笔,但不堆砌,分寸感跟他的棋风一样"以守为攻"——话不多,
+// 但每句都留了余地。
 
 // 同一个池子不连续抽到重复的那一条——用池子数组本身当 key 存"上次抽的
 // 下标",不需要调用方额外传状态。只解决"连续两次一样"这一种最扎眼的
@@ -54,6 +62,11 @@ const FIRST_MEETING_LINES = {
     "听说棋院来了个新面孔——我可等不及要会会你了!",
     "早就想找人下棋了,你看起来挺有意思的,来一局?",
   ],
+  shenzhiyuan: [
+    "哦?新面孔。坐吧,正好茶还热着,陪我下一局?",
+    "难得棋院里来了生人,不急,先坐下,再慢慢下一盘。",
+    "刚泡好一壶茶,你要是不嫌我下得慢,就陪我一局。",
+  ],
 };
 export function dailyFirstMeetingInviteLine(npcId) {
   return pickFrom(FIRST_MEETING_LINES, npcId);
@@ -75,6 +88,11 @@ const RETURN_GREETING_LINES = {
     win: ["你最近是不是开挂了?这么能赢!今天我可要认真起来了。", "连续这么多把赢我,我不服,再来!"],
     lose: ["哎呀别沮丧啦,运气总会转的,再来一局!", "怎么老是你输呀,来,我陪你多下几局找找感觉!"],
     neutral: ["哟,你来啦!棋盘我都摆好啦~", "又来啦?走走走,开始咯!", "来啦来啦,今天想怎么下?"],
+  },
+  shenzhiyuan: {
+    win: ["最近赢得挺顺,今天我得沉住气了。", "连着几盘都是你的,今天我可不敢再大意。"],
+    lose: ["输几盘不算什么,坐下,慢慢找回来。", "上几局是有点急了,今天不妨慢一点走。"],
+    neutral: ["来了?坐吧,茶刚沏上。", "今天也想下一局?棋盘我摆好了。", "正好,一个人下棋也无趣,来一盘。"],
   },
 };
 export function dailyReturnGreetingLine(npcId, streak) {
@@ -106,6 +124,13 @@ const SMALL_TALK_LINES = {
     "巷口新开了家甜品店,下完棋要不要一起去看看?",
     "刚才看到只猫在棋院门口打盹,超可爱的。",
   ],
+  shenzhiyuan: [
+    "这壶茶泡得刚好,你要是不急,下完再喝一杯。",
+    "刚才门口那棵老树又落了些叶子,坐着看了一会儿。",
+    "棋院今天人不多,倒是清静,适合慢慢下。",
+    "年轻人下棋总爱着急,我年轻时也是这样。",
+    "这套茶具用了不少年头了,跟这盘棋一样,不急。",
+  ],
 };
 export function pickSmallTalkLine(npcId) {
   return pickFrom(SMALL_TALK_LINES, npcId);
@@ -126,6 +151,7 @@ const PLAYER_DECLINE_RESPONSE_LINES = {
   linmo: ["行,那就改天。", "没事,棋院一直都在。", "好,那我先忙别的了。"],
   suqing: ["没关系,改天有空再说。", "好,那我就不打扰你了。", "行,那我自己再摆几手。"],
   xiaoqi: ["好吧好吧,那下次可别放我鸽子!", "嗯~那我去找别人玩喽!", "没事没事,我先去练练招法!"],
+  shenzhiyuan: ["不急,棋馆一直都在,改天再说。", "好,那我自己喝喝茶,慢慢坐会儿。", "行,想下的时候随时来找我。"],
 };
 export function dailyPlayerDeclinedResponseLine(npcId) {
   return pickFrom(PLAYER_DECLINE_RESPONSE_LINES, npcId);
@@ -148,6 +174,11 @@ const RESULT_LINES = {
     lose: ["嘿嘿,这一步是不是没想到?", "赢啦赢啦!不过你后面追得挺紧的,吓我一跳!", "这局归我啦,不过你真的越来越强了!"],
     draw: ["打平啦?那就当我们俩都很厉害吧!", "平局也不错嘛,下一把见真章!"],
   },
+  shenzhiyuan: {
+    win: ["不错,今天这盘,是你下得更好。", "这局我认了,你等的机会比我等的更准。", "输了就是输了,不用找借口,你下得好。"],
+    lose: ["这盘算我的,别急,慢慢来,棋还长着。", "刚才你那几步有点急了,不然结果不一定是这样。", "赢是赢了,不过你后面稳住了,已经不错。"],
+    draw: ["打平了,谁都没等到那个机会。", "这盘算平局,倒也难得,下次再看。"],
+  },
 };
 export function dailyResultLine(npcId, result) {
   const pools = RESULT_LINES[npcId] || RESULT_LINES.linmo;
@@ -160,6 +191,7 @@ const REMATCH_INVITE_LINES = {
   linmo: ["要不要再来一局?我还没尽兴。", "时间还早,再战一盘?", "这盘不算完,再来一局找回场子?"],
   suqing: ["要不要再下一局?我还想再看看你的棋。", "时间还早,再来一盘?", "这盘让我有点想法,想再验证一下,再来一局?"],
   xiaoqi: ["再来一局嘛!我还没尽兴呢!", "等一下,我要重新研究一下你的套路!再来一盘?", "不行不行,这盘不算,再来!"],
+  shenzhiyuan: ["茶还没凉,要不要再下一局?", "棋盘还摆着,再来一盘?", "时候还早,不急着走的话,再来一局。"],
 };
 export function dailyRematchInviteLine(npcId) {
   return pickFrom(REMATCH_INVITE_LINES, npcId);
@@ -170,6 +202,7 @@ const NO_REMATCH_OFFER_LINES = {
   linmo: ["今天先这样,你随时可以再来找我。", "下次想下了,来棋院找我就行。", "这盘先到这,我这边不勉强。"],
   suqing: ["今天先这样,想下的时候来找我就好。", "这盘先到这里,我不勉强你。", "先歇一下也好,下次想下了再来。"],
   xiaoqi: ["今天先这样啦,想我了就来找我!", "好啦,下次继续来挑战我吧,先撤了!", "先歇会儿,下次再战!"],
+  shenzhiyuan: ["今天先到这吧,想下的时候再来找我。", "不勉强,棋馆常在,你随时可以再来。", "先歇着也好,茶凉了再泡就是。"],
 };
 export function dailyNoRematchOfferLine(npcId) {
   return pickFrom(NO_REMATCH_OFFER_LINES, npcId);
@@ -180,6 +213,7 @@ const ACCEPT_PLAYER_INVITE_LINES = {
   linmo: ["行,那就再来一局。", "好,奉陪到底。", "正合我意。"],
   suqing: ["好,那就再来一局。", "可以,我也还没尽兴。", "好啊,正好再看看你。"],
   xiaoqi: ["好呀好呀,我求之不得!", "来就来,我可不会手软!", "正合我意,开始吧!"],
+  shenzhiyuan: ["好,那就再来一局。", "行,坐下,慢慢下。", "正好,我这杯茶还没喝完。"],
 };
 export function dailyAcceptPlayerInviteLine(npcId) {
   return pickFrom(ACCEPT_PLAYER_INVITE_LINES, npcId);
@@ -205,6 +239,12 @@ const PLAYER_INVITE_DECLINE_REASONS = {
     "棋院有点吵,我想找个安静地方冷静一下!",
     "我先去忙点别的,一会儿来找你!",
   ],
+  shenzhiyuan: [
+    "这杯茶还没喝完,等我喝完再说。",
+    "有点乏了,让我坐着歇一会儿,晚点再下。",
+    "刚才那盘我还得琢磨琢磨,过会儿再找你。",
+    "棋馆这会儿人多了些,想找个清静点的时候再下。",
+  ],
 };
 export function dailyPlayerInviteDeclineReason(npcId) {
   return pickFrom(PLAYER_INVITE_DECLINE_REASONS, npcId);
@@ -215,6 +255,7 @@ const STAMINA_EXHAUSTED_LINES = {
   linmo: ["今天下得也不少了,养足精神明天再来。", "先歇歇吧,明天棋盘还在。"],
   suqing: ["今天下得也不少了,先歇着,明天再说。", "先到这里吧,养好精神明天再来。"],
   xiaoqi: ["今天下太多啦,我先去休息啦,明天见!", "体力耗光啦,明天再战哦!"],
+  shenzhiyuan: ["今天下得也不少了,歇一歇,明天再来。", "先到这里吧,养好精神,棋盘明天还在。"],
 };
 export function dailyStaminaExhaustedLine(npcId) {
   return pickFrom(STAMINA_EXHAUSTED_LINES, npcId);
@@ -225,6 +266,7 @@ const CHOOSE_NEXT_LINES = {
   linmo: ["要不再找别的棋手练练?", "棋院里应该还有别人在。"],
   suqing: ["要不再找别的棋手试试?", "棋院里应该还有人在。"],
   xiaoqi: ["要不去找别人玩玩?我等你回来哦!", "棋院里还有别人呢,去看看?"],
+  shenzhiyuan: ["要不再找别的棋手坐坐?", "棋馆里应该还有旁人在,去看看也好。"],
 };
 export function dailyChooseNextLine(npcId) {
   return pickFrom(CHOOSE_NEXT_LINES, npcId);
@@ -235,6 +277,7 @@ const GAME_START_LINES = {
   linmo: ["你先来吧,我看看。", "开始了,你随意。", "第一步,你来。"],
   suqing: ["你先来吧,我看看你的棋路。", "开始了,你随意。", "第一步,你来就好。"],
   xiaoqi: ["准备好了吗?我可是不会轻易放水的哦!", "来吧来吧,你先手,我等着!", "开始咯,让我看看你的实力!"],
+  shenzhiyuan: ["不用急,你先来。", "棋盘这么大,总能找到路,你先请。", "开始吧,慢慢下,我不赶时间。"],
 };
 export function dailyGameStartLine(npcId) {
   return pickFrom(GAME_START_LINES, npcId);
@@ -270,6 +313,12 @@ const AMBIENT_LINES = {
     attack: ["嘿嘿,我发现一个有趣的点!", "我要下这里啦,看好咯!", "这一手,应该能让你紧张一下!"],
     complex: ["这局势越来越好玩了!", "复杂点才有意思嘛!", "两边缠在一起,超刺激的!"],
     neutral: ["你这步我没想到,厉害!", "嗯~让我想想接下来怎么走。", "棋盘上还有好多可能性呢!"],
+  },
+  shenzhiyuan: {
+    danger: ["哦?这一手,倒是让我有些意外。", "这里得接一下,不然你就走远了。", "年轻人的想法,果然大胆——不过我还是得挡一挡。"],
+    attack: ["看来我得认真一点了,落一子在这。", "这一步,不急不躁地压过去。", "该我动一动了,你留意着点。"],
+    complex: ["局面有点意思了,不急,慢慢看。", "两边都有话说,得坐下来想清楚。", "棋盘这么大,总能找到路,再等等。"],
+    neutral: ["不用急,慢慢想。", "嗯,这边随手落一子。", "轮到你了,茶还热着,不急。"],
   },
 };
 export function pickDailyAmbientLine(npcId, situation = "neutral") {

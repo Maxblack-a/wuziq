@@ -1,24 +1,16 @@
 import { useState, useRef, useEffect } from "react";
 import Board from "./Board";
+import PveResultReveal from "./PveResultReveal";
 import { IconUndo, IconChevronLeft } from "./Icons";
 import { createEmptyBoard, checkWin, isBoardFull, cloneBoard, BLACK, WHITE } from "../game/logic";
 import { getAiMove } from "../game/ai";
 import { isInTelegram, useTelegramBackButton, hapticNotify, confirmDialog } from "../lib/telegram";
 
 // 五连线画完(见 board.css 里 .win-line-path 的 1000ms 动画)之后,再把
-// "结束状态"的 UI(棋盘上方的结果文字 + 下方的操作按钮)切换出来——
-// 时长直接等于动画时长本身,不额外加停顿,因为连线画完之后线本身不会
-// 消失,不需要多留一段"缓冲"时间。结果不是浮层弹窗、不会挡住棋盘。
+// 结算页跳出来——时长直接等于动画时长本身,不额外加停顿,因为连线画完
+// 之后线本身不会消失,不需要多留一段"缓冲"时间。
 const WIN_REVEAL_DELAY = 1000;
 const DRAW_REVEAL_DELAY = 400;
-
-// 配色语义跟每日试炼结算页、联机对局结算面板统一:赢=金色渐变字，
-// 输/和棋=墨色，颜色规则定义在 board.css 的 .pve-result-title.win/.lose/.draw。
-const RESULT_COPY = {
-  win: { title: "胜局", desc: "五子连珠,漂亮的一局。" },
-  lose: { title: "败局", desc: "差一点,再来一局找回来。" },
-  draw: { title: "和棋", desc: "棋盘落满,不分胜负。" },
-};
 
 // 思考延迟按难度区分:困难档想得更久一点、简单档更快,是白送的一个
 // 难度暗示,比三档统一用同一个延迟更能强化"困难档在认真算"这个观感
@@ -246,6 +238,23 @@ export default function PveScreen({ onExit, onExitHome }) {
     );
   }
 
+  // 对局结束、连线动画播完之后,整页切换成全屏结算页(PveResultReveal)——
+  // 跟联机对战、每日试炼同一套模式,不再是嵌在棋盘上方 74px 小面板里的
+  // 一行结果文字。"再来一局"直接调 reset(),不用带难度参数(用当前
+  // difficulty state 就行,这里不是切难度触发的重开)。
+  if (result && !revealing) {
+    return (
+      <PveResultReveal
+        result={result}
+        board={board}
+        winLine={winInfo}
+        difficulty={difficulty}
+        onExitHome={onExitHome}
+        onRematch={() => reset()}
+      />
+    );
+  }
+
   return (
     <div>
       <div className="game-layout">
@@ -269,42 +278,25 @@ export default function PveScreen({ onExit, onExitHome }) {
                 <>
                   <div className={`turn-dot black${turn === BLACK ? " active" : ""}`} />
                   <div className={`turn-dot white${turn === WHITE ? " active" : ""}`} />
-                  {result ? "对局结束" : turn === playerColor ? "轮到你" : "对方回合"}
+                  {turn === playerColor ? "轮到你" : "对方回合"}
                 </>
               )}
             </div>
-            <button className="btn-undo" onClick={undo} disabled={history.length < 1 || thinking || revealing || !!result}>
+            <button className="btn-undo" onClick={undo} disabled={history.length < 1 || thinking || revealing}>
               <IconUndo size={15} /> 悔棋
             </button>
           </div>
         </div>
 
         <div className="game-board-col">
-          {/* 结果展示区:固定留出这块高度(哪怕对局还没结束时是空的),
-              这样结果文字出现的那一刻棋盘不会跟着往下"跳"一下。
-              对局结束前这里什么都不显示,只是占着位置 */}
-          <div className="pve-result-panel">
-            {result && (
-              <>
-                <h2 className={`pve-result-title ${result}`}>
-                  {RESULT_COPY[result].title}
-                </h2>
-                <p className="pve-result-desc">{RESULT_COPY[result].desc}</p>
-              </>
-            )}
-          </div>
+          {/* 结果结算不再嵌在这块小面板里——对局结束、揭晓延迟一过,
+              整页就切换成 PveResultReveal 全屏结算页了(见上面
+              `if (result && !revealing)` 那个提前 return)。这块区域
+              固定高度留白,纯粹是为了对局进行中棋盘位置不会跳动,现在
+              永远不会显示 result 相关内容,因为走到这里 result 必为空。 */}
+          <div className="pve-result-panel" />
 
-          <Board board={board} onCellClick={handleCellClick} lastMove={lastMove} winLine={winInfo} disabled={thinking} locked={revealing || !!result} onIllegalTap={() => hapticNotify("warning")} previewColor={playerColor} />
-
-          {/* 对局结束后的操作按钮,沿用棋盘下方"确认落子"那一条 confirm-bar
-              的位置和样式——两者不会同时出现(落子确认只在对局进行中才有,
-              这时候 result 必然是空的),视觉上正好是同一个位置被复用 */}
-          {result && (
-            <div className="confirm-bar">
-              <button className="btn-ghost" style={{ flex: 1 }} onClick={onExitHome}>返回首页</button>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={() => reset()}>再来一局</button>
-            </div>
-          )}
+          <Board board={board} onCellClick={handleCellClick} lastMove={lastMove} winLine={winInfo} disabled={thinking} locked={revealing} onIllegalTap={() => hapticNotify("warning")} previewColor={playerColor} />
         </div>
 
         <div className="game-info-col">

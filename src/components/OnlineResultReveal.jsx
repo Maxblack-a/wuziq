@@ -1,39 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import MatchRecapBoard from "./MatchRecapBoard";
 import Board from "./Board";
-import { IconBolt, IconGem, IconExpStar, IconClock, IconListNumbers, IconMaximize, IconX } from "./Icons";
+import { IconExpStar, IconClock, IconListNumbers, IconMaximize, IconX } from "./Icons";
 import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
-import { DAILY_STAMINA_CAP } from "../game/dailyTrialEngine";
 import { tween, spawnSparkles, flyClone } from "../lib/resultRevealAnim";
 
-// 飞行克隆用的钻石图标——跟 Icons.jsx 里 IconGem 是同一份 10 条线描边的
-// 设计,这里单独存一份原始 SVG 字符串,是因为飞行克隆走的是原生 DOM
-// (innerHTML 注入),不经过 React 渲染,没法直接塞一个 React 组件进去。
-// 改 IconGem 形状的时候记得这份也要跟着改,不然结算页里"静止的钻石"
-// 和"飞起来的钻石"会变成两个不一样的图标。
-const DIAMOND_FLY_SVG = `<svg width="22" height="20" viewBox="0 0 24 22">
-<polygon points="4.8,1.5 19.2,1.5 23,6.8 12,21 1,7" fill="#A8D8F0"/>
-<g stroke="#1B5A8A" stroke-width="0.9" stroke-linecap="round" fill="none">
-<line x1="4.8" y1="1.5" x2="9" y2="1.5"/><line x1="9" y1="1.5" x2="15" y2="1.5"/><line x1="15" y1="1.5" x2="19.2" y2="1.5"/>
-<line x1="4.8" y1="1.5" x2="1" y2="7"/><line x1="19.2" y1="1.5" x2="23" y2="6.8"/><line x1="1" y1="7" x2="23" y2="6.8"/>
-<line x1="1" y1="7" x2="12" y2="21"/><line x1="23" y1="6.8" x2="12" y2="21"/>
-<polyline points="9,1.5 7.3,7.2 12,21"/><polyline points="15,1.5 16.9,6.4 12,21"/>
-</g></svg>`;
-
-// 结算揭晓页:胜/负/和棋 + 体力/钻石/经验的"飞行入账"动画。
-// 设计上特意不跟"点评对话"(下一步)混在一起——这一屏只负责"数字层面
-// 的客观反馈"(这局花了什么、赚了什么),态度/关系层面的反馈留给下一步
-// 林墨的点评。三种资源各自的落点不一样:
-//   体力 —— 只是数字倒数(开局那一刻已经在服务器端扣完了,这里纯粹是
-//            "让玩家看见花掉的过程",不是真的在这一刻才扣)
-//   钻石 —— 有右上角的计数徽章当"账户",飞过去落地、精确重合再消失
-//   经验 —— 没有钻石那种独立计数徽章,落点是头像下方的等级进度条,
-//            落地那一刻条本身往前长一截 + 阶内进度文字一起变
-function describeRecapTitle(result, winLine) {
+// 联机对战结算揭晓页——跟每日试炼结算页(DailyTrialResultReveal)共用
+// 同一套 .result-reveal-* 视觉语言(见 dailytrial.css),但联机对战没有
+// 体力/钻石这两种资源,只有经验值一项奖励,所以这里砍掉了资源条、钻石飞行、
+// 只保留"经验飞入头像下方进度条"这一条动画线,并且不管胜负平,经验奖励
+// 永远大于 0(赢+10/输+4/和+6,规则见 schema.sql 的 finish_match),
+// 不需要每日试炼那种"本局未获得奖励"分支。
+// 认输/掉线判负这两种非正常结束的原因,每日试炼里不存在,这里额外加了
+// 一行小字说明(desc)和对应的回顾标题文案。
+function describeRecapTitle(outcome, reason, winLine) {
+  if (reason === "forfeit") return outcome === "win" ? "对方认输离场" : "你选择了认输";
+  if (reason === "disconnect") return outcome === "win" ? "对方掉线,判你获胜" : "你掉线太久,判负";
   const len = winLine?.length || 5;
   const word = len >= 6 ? "长连" : "五子连珠";
-  if (result === "win") return `${word}取胜`;
-  if (result === "lose") return `对手${word}`;
+  if (outcome === "win") return `${word}取胜`;
+  if (outcome === "lose") return `对手${word}`;
   return "棋逢对手,和棋收场";
 }
 
@@ -43,46 +29,33 @@ function formatDuration(sec) {
   return m > 0 ? `${m}分${s}秒` : `${s}秒`;
 }
 
-export default function DailyTrialResultReveal({
-  result,
+export default function OnlineResultReveal({
+  result,       // 'win' | 'lose' | 'draw'
+  reason,       // 'normal' | 'forfeit' | 'disconnect'
+  desc,         // 一行文字说明(认输/掉线/正常结束),沿用 OnlineGame 里原有的 resultDesc 文案
   avatarUrl,
   expBefore, expAfter, expDelta,
-  diamondsBefore, diamondsAfter, diamondsDelta,
-  staminaBefore, staminaAfter,
-  meta,
-  onContinue,
+  opponentName,
+  mySlot,
+  meta,         // { board, winLine, durationSec, moveCount }
+  onExit,
+  onReturnToRoom,
+  returningToRoom = false,
 }) {
   const containerRef = useRef(null);
   const flyLayerRef = useRef(null);
-  const staminaValueRef = useRef(null);
-  const diamondValueRef = useRef(null);
-  const diamondIconRef = useRef(null);
   const expFillRef = useRef(null);
   const expTextRef = useRef(null);
   const expTrackRef = useRef(null);
   const levelLabelRef = useRef(null);
-  const diamondChipRef = useRef(null);
-  const diamondChipIconRef = useRef(null);
   const expChipRef = useRef(null);
   const rafRefs = useRef([]);
   const timeoutRefs = useRef([]);
   const [showFullBoard, setShowFullBoard] = useState(false);
 
-  const isWin = result === "win";
-  const recapTitle = describeRecapTitle(result, meta?.winLine);
+  const recapTitle = describeRecapTitle(result, reason, meta?.winLine);
 
   useEffect(() => {
-    const raf = { current: null };
-    rafRefs.current.push(raf);
-    tween(staminaBefore ?? staminaAfter, staminaAfter, 550, (v) => {
-      if (staminaValueRef.current) staminaValueRef.current.textContent = Math.round(v);
-    }, raf);
-
-    if (!isWin) return () => {
-      rafRefs.current.forEach((r) => cancelAnimationFrame(r.current));
-      timeoutRefs.current.forEach((t) => clearTimeout(t));
-    };
-
     const containerRect = containerRef.current.getBoundingClientRect();
     const layer = flyLayerRef.current;
 
@@ -101,32 +74,9 @@ export default function DailyTrialResultReveal({
       timeoutRefs.current.push(id);
     }
 
-    popIn(diamondChipRef.current, 300);
-    popIn(expChipRef.current, 520);
+    popIn(expChipRef.current, 300);
 
     const flyId = setTimeout(() => {
-      flyClone({
-        layerEl: layer,
-        containerRect,
-        sourceEl: diamondChipIconRef.current,
-        targetEl: diamondIconRef.current,
-        size: 22,
-        endSize: diamondIconRef.current.getBoundingClientRect().width,
-        content: DIAMOND_FLY_SVG,
-        delay: 0,
-        onLanded: () => {
-          const raf2 = { current: null };
-          rafRefs.current.push(raf2);
-          tween(diamondsBefore, diamondsAfter, 450, (v) => {
-            if (diamondValueRef.current) diamondValueRef.current.textContent = Math.round(v);
-          }, raf2);
-          diamondIconRef.current?.animate(
-            [{ transform: "scale(1)" }, { transform: "scale(1.5)" }, { transform: "scale(1)" }],
-            { duration: 450, easing: "ease" }
-          );
-        },
-      });
-
       flyClone({
         layerEl: layer,
         containerRect,
@@ -135,29 +85,28 @@ export default function DailyTrialResultReveal({
         size: 26,
         endSize: 4,
         content: `<div class="result-fly-orb">+${expDelta}</div>`,
-        delay: 150,
+        delay: 0,
         onLanded: () => {
-          const raf3 = { current: null };
-          rafRefs.current.push(raf3);
+          const raf = { current: null };
+          rafRefs.current.push(raf);
           tween(expBefore, expAfter, 500, (v) => {
             const val = Math.round(v);
             if (expFillRef.current) expFillRef.current.style.width = progressPctForExp(val) + "%";
             if (expTextRef.current) expTextRef.current.textContent = expProgressText(val);
-            // 经验跨阶/跨称号(比如"棋童5阶"涨成"棋士1阶")在这局奖励不大的
-            // 情况下不常见,但边界附近确实可能发生——如果只更新进度条和
-            // 阶内文字、不更新这里的称号,会出现"条已经空了但称号还没变"
-            // 这种视觉矛盾,所以称号标签也跟着同一个补间一起刷新。
+            // 涨分不多的情况下跨阶/跨称号并不常见,但边界附近确实可能发生——
+            // 只更新进度条和阶内文字、不更新称号,会出现"条已经空了但称号
+            // 还没变"这种视觉矛盾,所以称号标签也跟着同一个补间一起刷新。
             if (levelLabelRef.current) {
               levelLabelRef.current.textContent = `LV.${levelForExp(val)} ${titleForExp(val)}`;
             }
-          }, raf3);
+          }, raf);
           expTrackRef.current?.animate(
             [{ transform: "scaleY(1)" }, { transform: "scaleY(1.8)" }, { transform: "scaleY(1)" }],
             { duration: 380, easing: "ease" }
           );
         },
       });
-    }, 900);
+    }, 700);
     timeoutRefs.current.push(flyId);
 
     return () => {
@@ -180,16 +129,6 @@ export default function DailyTrialResultReveal({
               </div>
               <div className="result-identity-level" ref={levelLabelRef}>
                 LV.{levelForExp(expBefore)} {titleForExp(expBefore)}
-              </div>
-            </div>
-            <div className="result-resource-group">
-              <div className="result-resource-item stamina">
-                <IconBolt size={17} />
-                <span ref={staminaValueRef}>{staminaBefore}</span>/{DAILY_STAMINA_CAP}
-              </div>
-              <div className="result-resource-item diamond">
-                <span ref={diamondIconRef}><IconGem size={17} /></span>
-                <span ref={diamondValueRef}>{diamondsBefore}</span>
               </div>
             </div>
           </div>
@@ -219,31 +158,18 @@ export default function DailyTrialResultReveal({
               <span className="result-ornament-dot" />
               <span className="result-ornament-line" />
             </div>
+            {desc && <p className="text-caption" style={{ marginTop: "var(--space-2)" }}>{desc}</p>}
           </div>
 
-          {isWin ? (
-            <div className="result-reward-row">
-              <div className="result-reward-chip diamond" ref={diamondChipRef}>
-                <div className="result-reward-chip-top">
-                  <span className="result-reward-chip-icon-badge" ref={diamondChipIconRef}><IconGem size={16} /></span>
-                  +{diamondsDelta}
-                </div>
-                <div className="result-reward-chip-label">钻石奖励</div>
+          <div className="result-reward-row">
+            <div className="result-reward-chip exp" ref={expChipRef}>
+              <div className="result-reward-chip-top">
+                <span className="result-reward-chip-icon-badge"><IconExpStar size={15} /></span>
+                +{expDelta}
               </div>
-              <div className="result-reward-divider" />
-              <div className="result-reward-chip exp" ref={expChipRef}>
-                <div className="result-reward-chip-top">
-                  <span className="result-reward-chip-icon-badge"><IconExpStar size={15} /></span>
-                  +{expDelta}
-                </div>
-                <div className="result-reward-chip-label">经验奖励</div>
-              </div>
+              <div className="result-reward-chip-label">经验奖励</div>
             </div>
-          ) : (
-            <div className="result-reward-row">
-              <div className="result-no-reward-chip">本局未获得奖励</div>
-            </div>
-          )}
+          </div>
 
           <div className="result-recap-card">
             <div className="result-recap-title">{recapTitle}</div>
@@ -281,20 +207,22 @@ export default function DailyTrialResultReveal({
                 <div className="result-stat-cell-value">{meta?.moveCount ?? 0} 手</div>
                 <div className="result-stat-cell-label">手数</div>
               </div>
-              <div className="result-stat-cell">
-                <div className="result-stat-cell-icon"><IconBolt size={16} /></div>
-                <div className="result-stat-cell-value">-{staminaBefore - staminaAfter}</div>
-                <div className="result-stat-cell-label">体力</div>
-              </div>
             </div>
           </div>
 
-          {!isWin && <div className="result-encourage-line">再接再厉,下一局找回来</div>}
+          <div className="result-encourage-line">
+            你执{mySlot === 1 ? "黑" : "白"} · {opponentName}执{mySlot === 1 ? "白" : "黑"}
+          </div>
         </div>
       </div>
 
       <div className="result-reveal-footer">
-        <button className="btn-primary" onClick={onContinue}>继续</button>
+        <div className="result-reveal-footer-row">
+          <button className="btn-ghost" onClick={onExit}>返回首页</button>
+          <button className="btn-primary" onClick={onReturnToRoom} disabled={returningToRoom}>
+            {returningToRoom ? "处理中…" : "返回房间"}
+          </button>
+        </div>
       </div>
 
       {showFullBoard && meta?.board && (

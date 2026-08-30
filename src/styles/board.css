@@ -407,11 +407,11 @@
   box-shadow: 0 0 0 3px rgba(91, 56, 35, 0.35);
 }
 
-/* 棋盘上方的结果展示区,替代原来盖住棋盘的弹窗。这里原来用的是
-   min-height(下限),对手昵称一旦长到换行就会把这块区域撑高、棋盘跟着
-   往下移——现在改成 height(硬上限)+ overflow:hidden,配合上面
-   .turn-timer-label 的单行省略号,双重保险,不管里面塞进什么内容,
-   这块区域的高度都不会再变,棋盘位置彻底焊死。 */
+/* 棋盘上方留白的回合倒计时区。原来这里还兼职放对局结算的标题/说明文字,
+   现在结算已经全部搬到全屏结算页(OnlineResultReveal / PveResultReveal)
+   去了,这块区域只用来放 .turn-timer,但高度硬约束(height,不是
+   min-height)还是保留——回合倒计时的文字长度也会变("轮到你" vs
+   "对手昵称 · 思考中"),同样需要这个盒子焊死棋盘位置不跟着跳。 */
 .pve-result-panel {
   height: 74px;
   overflow: hidden;
@@ -428,34 +428,6 @@
   text-align: center;
   gap: 2px;
   margin-bottom: var(--space-3);
-}
-
-/* 标题字体/配色语义跟 dailytrial.css 的 .result-title 保持一致(衬线字 +
-   赢=金色渐变字/输和和棋=墨色),只是字号、字距按这里 74px 高度的面板压缩过,
-   不能照搬试炼页那个 52px 大字——面板高度是写死的硬约束,加大字号会撑破它。 */
-.pve-result-title {
-  margin: 0;
-  font-family: var(--font-display), serif;
-  font-size: 21px;
-  font-weight: 700;
-  letter-spacing: 3px;
-  line-height: 1.2;
-}
-.pve-result-title.win {
-  background: linear-gradient(160deg, #FCE8B0 0%, var(--gold) 45%, #8A5A16 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-.pve-result-title.lose,
-.pve-result-title.draw {
-  color: var(--ink-token);
-}
-
-.pve-result-desc {
-  margin: 0;
-  font-size: 13px;
-  color: var(--text-secondary);
 }
 
 /* 悔棋:跟顶部"返回"的圆形图标按钮区分开——这里是个带边框的胶囊按钮

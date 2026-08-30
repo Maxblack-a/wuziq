@@ -22,12 +22,35 @@
 - `anon public key`
 - `service_role key`(仅用于 Edge Function,不要放进前端!)
 
-### 2. 建表
+### 2. 建表 + 安全加固补丁(必须按顺序全部跑完)
 
-进入 Supabase 控制台 → SQL Editor,新建查询,粘贴 `supabase/schema.sql` 的全部内容并运行。
+`supabase/` 目录下不止 `schema.sql` 一个文件——`schema.sql` 是主体(建表 + RLS + 核心函数),但落子防作弊、结算防伪造、单设备登录这些安全加固,以及棋力测试/每日试炼的 session 化,是分成好几个独立文件后补上去的。**漏跑任何一个,对应的漏洞就还在**(之前联机对局"点不了子"那次事故,起因就是漏看了这一条)。
+
+进入 Supabase 控制台 → SQL Editor,新建查询,**按下面这个顺序,一个文件一个文件地**把整份内容粘贴进去执行(每个文件都用了 `if not exists`/`create or replace`/`drop ... if exists` 这类写法,重复执行是安全的,不会丢数据):
+
+1. `supabase/schema.sql` —— 建表(`profiles`/`rooms`/`matchmaking_queue`/`friendships`/`game_invites`/`match_history` 等)+ RLS + 核心函数,以及每日试炼、棋力测试的基础结构
+2. `supabase/security_hardening_p0.sql` —— 落子/结算安全加固(`make_move`/`finish_match` 加会话与权限校验,`profiles` 系统字段收紧成客户端不可写)
+3. `supabase/lock_down_finish_match_internal.sql` —— 收紧内部函数(`_finish_match_internal`/`_validate_session`/`_disconnect_timeout`)的执行权限,不让客户端绕开上一步的校验直接调
+4. `supabase/profiles_public_view.sql` —— 建 `profiles_public` 视图,查别人资料时只暴露安全字段,不再能查到 `profiles` 整行
+5. `supabase/daily_trial_session_binding.sql` —— 每日试炼 session 化,堵住"没有真的开局就调结算"这条路
+6. `supabase/daily_trial_quality_plausibility.sql` —— 每日试炼结算加一道耗时合理性校验,同时清理掉更早期一个不安全的 `finish_daily_trial` 历史重载(见下面"可以跳过"那条说明)
+7. `supabase/skill_test_session_binding.sql` —— 棋力测试 session 化,道理跟第 5 条一样
+
+**可以跳过、不建议再单独执行的历史文件**:`add_skill_test_history.sql`、`daily_trial_rating_sync_fixes.sql`、`daily_trial_per_npc_stats.sql`、`daily_trial_cold_start_from_npc_avg.sql` 这四个文件的内容,现在已经原样合并进第 1 步的 `schema.sql` 里了,继续留在目录里只是存档。**其中 `daily_trial_rating_sync_fixes.sql` 需要特别注意——它定义过一个不带 session/npc 校验的老版本 `finish_daily_trial`,如果单独执行会重新打开一个漏洞**,第 6 步已经加了防御性清理,只要按上面 1→7 的顺序执行就没问题,但不要再手动单独跑这四个历史文件。
+
+> 如果不确定线上库现在到底跑到哪一步、有没有漏跑,去 SQL Editor 执行下面这段自查,把结果对照上面 1-7 的文件名过一遍,能唯一确定还差哪几步:
+> ```sql
+> select proname, pg_get_function_arguments(oid) as args
+> from pg_proc where pronamespace = 'public'::regnamespace
+>   and proname in ('make_move','finish_match','_finish_match_internal',
+>                    'finish_daily_trial','start_skill_test','submit_skill_test_result')
+> order by proname;
+> ```
+> `finish_daily_trial` 这一行如果查出来**不止一条**,说明有历史遗留的老签名没清理干净,需要手动执行 `drop function if exists finish_daily_trial(text, numeric);`。
+
 这会创建:`profiles`(玩家资料)、`rooms`(对局房间)、`matchmaking_queue`(匹配队列)、`friendships`(好友关系)、`game_invites`(对战邀请通知)、`match_history`(战绩记录),以及必要的行级安全策略(RLS)和几个原子函数(`match_players` 匹配、`join_room` 加入房间、`add_friend_by_code` 加好友、`finish_match` 结算并计算经验值)。
 
-> 如果你是在已经跑过一次旧版 schema.sql 之后又拉取了新代码:直接把整份新的 `schema.sql` 再跑一遍就行,里面全部用了 `if not exists` / `create or replace` / `drop policy if exists`,重复执行是安全的。经验值改版(概念从"积分/rating"改名为"经验值/exp"、初始值 0、赢/输/和都直接加分、不再有负分)那部分带了列重命名 + `alter column ... set default` 语句,对已有项目同样安全,不会丢历史数据。
+> 如果你是在已经跑过一次旧版之后又拉取了新代码:上面 1-7 每一份都可以直接整份重新跑一遍,里面全部用了 `if not exists` / `create or replace` / `drop policy if exists`,重复执行是安全的。经验值改版(概念从"积分/rating"改名为"经验值/exp"、初始值 0、赢/输/和都直接加分、不再有负分)那部分带了列重命名 + `alter column ... set default` 语句,对已有项目同样安全,不会丢历史数据。
 
 **关于经验值(EXP)**:新玩家初始经验值为 0,每局结束后赢 +10、输 +4、和棋 +6,只涨不降,没有扣分也不会出现负数,由数据库里的 `finish_match` 函数统一计算,前端不参与计算,避免有人从客户端伪造分数。段位分 6 档(棋童/棋士/高手/大师/宗师/棋圣),每档下再分 5 阶;越往后每阶跨度越大(棋童 100 分/阶,棋士 200 分/阶,高手 300 分/阶,大师 400 分/阶,宗师及以上 500 分/阶),展示层算法在 `src/lib/rank.js` 里。
 

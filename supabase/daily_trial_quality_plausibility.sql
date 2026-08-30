@@ -21,6 +21,17 @@
 -- quality 数值本身的真实性。
 -- ============================================================
 
+-- 防御性清理:更早的 daily_trial_rating_sync_fixes.sql 里有一个只有
+-- 2 个参数的老版本 finish_daily_trial(text, numeric)——不需要指定
+-- npc_id,也不需要 session 凭证,直接读全局 daily_trial_rating 发奖励。
+-- 正常情况下后面的 daily_trial_per_npc_stats.sql 会把它删掉,但如果
+-- 各个补丁文件的实际执行顺序被打乱过(比如先跑了内置新版本的
+-- schema.sql,之后又单独重跑了这个旧文件),这个老签名可能会作为一个
+-- "重载"残留在数据库里,绕开所有新加的校验。不管历史上到底跑没跑过、
+-- 顺序对不对,这里都无条件清理一次,跑起来是安全的(函数不存在的话
+-- if exists 直接跳过,不会报错)。
+drop function if exists finish_daily_trial(text, numeric);
+
 -- 参数签名变了(多了 p_move_count/p_duration_sec 两个可选参数,用于
 -- 耗时合理性校验),先删旧版本,理由同之前几次——旧签名没有这个校验,
 -- 留着就是能绕开新检查的后门。

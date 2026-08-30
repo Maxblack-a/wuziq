@@ -178,7 +178,9 @@ begin
       case when opp_slot = 1 then r.player1_last_seen else r.player2_last_seen end,
       r.updated_at
     );
-    if now() - opp_last < interval '45 seconds' then
+    -- 阈值统一从 _disconnect_timeout() 读,跟 check_timeouts() 保持一致
+    -- (见 schema.sql 里这个函数的定义和注释),不再各自写一份字面量。
+    if now() - opp_last < _disconnect_timeout() then
       return jsonb_build_object('error', '对方还在线,暂时不能判定掉线');
     end if;
     return _finish_match_internal(p_room_id, my_slot, 'disconnect');

@@ -350,6 +350,22 @@
 .result-reveal-footer .btn-primary:active {
   filter: brightness(0.96);
 }
+/* 联机对战结算页底部是"返回首页/返回房间"两个并排按钮(每日试炼只有
+   一个"继续"),复用同一个 footer 容器,只是内容换成两按钮一行——
+   套一层 .result-reveal-footer-row 把 max-width/居中这两条从单按钮的
+   `.result-reveal-footer button` 规则里搬出来,两个按钮各自 flex:1
+   平分宽度,不再各自 100%。 */
+.result-reveal-footer-row {
+  display: flex;
+  gap: var(--space-3);
+  max-width: 360px;
+  margin: 0 auto;
+}
+.result-reveal-footer-row button {
+  width: auto;
+  max-width: none;
+  flex: 1;
+}
 
 /* ---- 回顾棋盘的"点击查看完整对局"提示 + 展开图标 ---- */
 .result-recap-board-wrap {

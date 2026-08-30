@@ -39,3 +39,10 @@ revoke execute on function _finish_match_internal(uuid, int, text) from authenti
 revoke execute on function _validate_session(uuid) from public;
 revoke execute on function _validate_session(uuid) from anon;
 revoke execute on function _validate_session(uuid) from authenticated;
+
+-- 同上,_disconnect_timeout() 本身只是返回一个写死的 interval 常量,直接
+-- 调用它拿不到任何数据、也改不了任何东西,没有可利用的风险——但既然
+-- 上面这条注释说了"内部函数一律显式收紧,不留特例",这里也不例外。
+revoke execute on function _disconnect_timeout() from public;
+revoke execute on function _disconnect_timeout() from anon;
+revoke execute on function _disconnect_timeout() from authenticated;

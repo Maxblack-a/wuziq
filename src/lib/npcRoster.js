@@ -28,6 +28,13 @@ export const NPC_LIST = [
     scene: "/xiaoqi-scene.jpg",
     sceneWebp: "/xiaoqi-scene.webp",
   },
+  {
+    id: "shenzhiyuan",
+    name: "沈之远",
+    portrait: "/shenzhiyuan-portrait.webp",
+    scene: "/shenzhiyuan-scene.jpg",
+    sceneWebp: "/shenzhiyuan-scene.webp",
+  },
 ];
 
 // 随机挑一个 NPC。excludeId 用于"换个对手"场景——优先不选中刚刚那位,

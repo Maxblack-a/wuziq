@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import Board from "./Board";
+import OnlineResultReveal from "./OnlineResultReveal";
 import { supabase, getStoredSessionId, sendHeartbeat } from "../lib/supabase";
 import { toBoard2D, checkWin, cloneBoard, BOARD_SIZE } from "../game/logic";
 import { hapticNotify, useTelegramBackButton, setClosingConfirmation } from "../lib/telegram";
@@ -11,16 +12,10 @@ const DISCONNECT_GRACE_MS = 20000; // 对方断线后,宽限20秒再允许判负
 const WIN_REVEAL_DELAY = 1000;     // 五连产生后,先让连线动画播完,再切出结算面板(跟 PveScreen 一致)
 const TURN_SECONDS = 30;           // 每一步的倒计时,纯展示用的软提醒,不会自动判负
 
-// 文案跟每日试炼结算页(dailytrial.css 的 .result-title)共用同一套配色语义:
-// 赢=金色渐变字，输/和棋=墨色，具体颜色在 board.css 里通过 .pve-result-title.win/.lose/.draw
-// 定义，这里只保留文案，不再用内联 color——两个结算页的"赢用金色、输/和棋用墨色"这套视觉规则
-// 现在是统一的，只是联机这边字号更小以适配棋盘上方 74px 的固定高度面板。
-const RESULT_COPY = {
-  win: { title: "胜局" },
-  lose: { title: "败局" },
-  draw: { title: "和棋" },
-};
-
+// 结算揭晓页(OnlineResultReveal)跟每日试炼结算页完全共用同一套
+// .result-reveal-* 视觉(见 dailytrial.css),这里不再需要自己维护一份
+// 标题/配色映射——只留这个文案函数,给结算页当"认输/掉线/正常结束"
+// 那行小字说明用。
 function resultDesc(outcome, reason) {
   if (reason === "forfeit") return outcome === "win" ? "对方中途认输离开了。" : "你已选择认输离开。";
   if (reason === "disconnect") return outcome === "win" ? "对方长时间掉线,判你获胜。" : "你掉线太久,被判负了。";
@@ -29,11 +24,15 @@ function resultDesc(outcome, reason) {
   return "棋盘落满,不分胜负。";
 }
 
-export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
+export default function OnlineGame({ roomId, myId, avatarUrl, onExit, onMatched }) {
   const [room, setRoom] = useState(null);
   const [opponentName, setOpponentName] = useState("对手");
   const [lastMove, setLastMove] = useState(null);
-  const [expDelta, setExpDelta] = useState(null);
+  // 结算页(OnlineResultReveal)的经验条动画需要 before/after 两个值,不能
+  // 只存 delta——两条路径都会写它:实际触发 finish_match/make_move 的那一方
+  // 从 RPC 返回值里直接算,立等可取;只是旁观 postgres_changes 更新的另一方
+  // 没有这个返回值,靠下面那个读 match_history 的 effect 兜底补上。
+  const [expInfo, setExpInfo] = useState(null); // { before, after, delta }
   // 乐观更新:落子瞬间先在本地显示,等服务器确认后再对齐/回滚
   const [pendingMove, setPendingMove] = useState(null); // { board, moveCountAfter }
   // 对手在线状态:disconnectSince=null 表示在线;有值表示从那一刻起断线,配合宽限期显示倒计时
@@ -56,6 +55,11 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
   const lobbyResetRef = useRef(false); // "返回房间"重开成功、状态回到 lobby 时,只重置一次本地残留状态
   const onMatchedRef = useRef(onMatched);
   onMatchedRef.current = onMatched;
+  // 结算页"用时"统计的起点:优先用服务端 room.started_at(start_match()
+  // 里写入的真实开局时间),这个 ref 只是数据库还没跑迁移、started_at
+  // 是 null 时的本地兜底——跟每日试炼结算页(DailyTrialGameScreen)算
+  // durationSec 的方式一样,纯客户端计时,缺点是中途刷新页面会重新计时。
+  const gameStartRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,7 +69,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     // 不然新的一局可能显示上一局的旧经验值变化,或者带着奇怪的残留状态
     setRoom(null);
     setLastMove(null);
-    setExpDelta(null);
+    setExpInfo(null);
     setPendingMove(null);
     setDisconnectSince(null);
     setOpponentName("对手");
@@ -73,6 +77,7 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     lastBoardFlatRef.current = null;
     revealTriggeredRef.current = false;
     lobbyResetRef.current = false;
+    gameStartRef.current = null;
 
     async function load() {
       const { data } = await supabase.from("rooms").select("*").eq("id", roomId).single();
@@ -164,22 +169,31 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
       .then(({ data }) => data && setOpponentName(data.display_name || "对手"));
   }, [room, myId]);
 
-  // 结算之后,不管是不是自己触发的 finish_match,都从战绩表里把经验值变化读出来
+  // 开局计时起点:进入 playing 状态那一刻记一次,只记第一次(悔棋等
+  // 中途的 room 更新不会重复触发,因为 gameStartRef 一旦有值就不再改)
   useEffect(() => {
-    if (!room || room.status !== "finished" || expDelta !== null) return;
+    if (room?.status === "playing" && gameStartRef.current === null) {
+      gameStartRef.current = Date.now();
+    }
+  }, [room?.status]);
+
+  // 结算之后,不管是不是自己触发的 finish_match,都从战绩表里把经验值
+  // before/after 读出来,喂给结算页的经验条动画
+  useEffect(() => {
+    if (!room || room.status !== "finished" || expInfo !== null) return;
     supabase.from("match_history").select("*").eq("room_id", roomId)
       .order("created_at", { ascending: false }).limit(1).single()
       .then(({ data }) => {
         if (!data) return;
         const mySlot = room.player1_id === myId ? 1 : 2;
-        setExpDelta(mySlot === 1
-          ? data.player1_exp_after - data.player1_exp_before
-          : data.player2_exp_after - data.player2_exp_before);
+        const before = mySlot === 1 ? data.player1_exp_before : data.player2_exp_before;
+        const after = mySlot === 1 ? data.player1_exp_after : data.player2_exp_after;
+        setExpInfo({ before, after, delta: after - before });
       });
-  }, [room, roomId, myId, expDelta]);
+  }, [room, roomId, myId, expInfo]);
 
   // 五连产生的瞬间先进入"揭晓中"状态,650ms 之后(跟连线动画同步)才真正
-  // 把结果面板切出来,同一局只触发一次,不会因为 expDelta 之类的后续
+  // 把结果面板切出来,同一局只触发一次,不会因为 expInfo 之类的后续
   // 更新又重新播一遍动画
   useEffect(() => {
     if (!room) return;
@@ -200,8 +214,9 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
     if (room.status === "lobby" && !lobbyResetRef.current) {
       lobbyResetRef.current = true;
       setLastMove(null);
-      setExpDelta(null);
+      setExpInfo(null);
       setRevealing(false);
+      gameStartRef.current = null;
       revealTriggeredRef.current = false;
     }
     if (room.status !== "lobby") lobbyResetRef.current = false;
@@ -392,7 +407,9 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
       if (data.winner === mySlot) hapticNotify("success");
       const fd = data.settlement;
       if (fd && !fd.already_finished) {
-        setExpDelta(mySlot === 1 ? fd.my1_delta : fd.my2_delta);
+        const delta = mySlot === 1 ? fd.my1_delta : fd.my2_delta;
+        const after = mySlot === 1 ? fd.p1_new : fd.p2_new;
+        setExpInfo({ before: after - delta, after, delta });
       }
     }
   }
@@ -406,21 +423,42 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
       p_room_id: roomId, p_winner: mySlot, p_reason: "disconnect", p_session_id: getStoredSessionId(),
     });
     if (data && !data.already_finished) {
-      setExpDelta(mySlot === 1 ? data.my1_delta : data.my2_delta);
+      const delta = mySlot === 1 ? data.my1_delta : data.my2_delta;
+      const after = mySlot === 1 ? data.p1_new : data.p2_new;
+      setExpInfo({ before: after - delta, after, delta });
     }
   }
 
-  // 认输:点确认框里的"确认认输"才会真正执行
+  // 认输:点确认框里的"确认认输"才会真正执行。原来这里认输成功后直接
+  // onExit() 拽回菜单,玩家根本看不到这局其实还是拿了经验(输一局 +4)——
+  // 现在改成不主动退出,让 room 状态自然变成 finished 之后走跟"五连获胜/
+  // 对方掉线判负"完全一样的路径,进 OnlineResultReveal 全屏结算页。
   async function confirmResign() {
     setResigning(true);
     const oppSlot = mySlot === 1 ? 2 : 1;
-    const { error } = await supabase.rpc("finish_match", {
+    const { data, error } = await supabase.rpc("finish_match", {
       p_room_id: roomId, p_winner: oppSlot, p_reason: "forfeit", p_session_id: getStoredSessionId(),
     });
     setResigning(false);
-    setResignConfirmOpen(false);
     if (isSessionSupersededError(error)) { handleSessionSuperseded(); return; }
-    onExit();
+    if (error || data?.error) {
+      // RPC 失败(网络问题等):房间状态没变,保留确认框让玩家可以重试,
+      // 不擅自退出——退出的话这局就变成孤儿房间,状态卡在 playing
+      hapticNotify("error");
+      return;
+    }
+    setResignConfirmOpen(false);
+    if (data && !data.already_finished) {
+      const delta = mySlot === 1 ? data.my1_delta : data.my2_delta;
+      const after = mySlot === 1 ? data.p1_new : data.p2_new;
+      setExpInfo({ before: after - delta, after, delta });
+    }
+    // 乐观更新本地 room 状态,不完全等 realtime 订阅推回来的 UPDATE——
+    // RPC 已经在服务端把房间标成 finished 了,这里先在本地对齐一次,
+    // 万一那条 postgres_changes 事件因为网络抖动没送达,结算页也不会
+    // 因此卡在"对局进行中"出不来;真正的 UPDATE 事件到达后会覆盖这次
+    // 乐观更新,内容一致,不会产生冲突。
+    setRoom((r) => (r ? { ...r, status: "finished", winner: oppSlot, end_reason: "forfeit" } : r));
   }
 
   async function handleRequestUndo() {
@@ -464,6 +502,44 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
 
   const boardLocked = revealing || !!result || !!room.undo_requested_by;
 
+  // 结算结果一出来(揭晓延迟结束后),整页切换成全屏结算揭晓页——
+  // 跟每日试炼结算页(DailyTrialResultReveal)同一个模式:不是嵌在棋盘
+  // 布局里的一块小面板,而是完全替换掉 game-layout。expInfo 需要等一次
+  // 异步读表(见上面那个 effect),这中间的空档给一个轻量的加载态,
+  // 避免结果面板"先空一下、内容再蹦出来"的跳动感。
+  if (result) {
+    if (!expInfo) {
+      return (
+        <div style={{ textAlign: "center", padding: 60 }}>
+          <div className="spinner" style={{ margin: "0 auto" }} />
+          <p className="muted" style={{ marginTop: 16 }}>结算中…</p>
+        </div>
+      );
+    }
+    const durationSec = room.started_at
+      ? Math.max(1, Math.round((Date.now() - new Date(room.started_at).getTime()) / 1000))
+      : gameStartRef.current
+        ? Math.max(1, Math.round((Date.now() - gameStartRef.current) / 1000))
+        : 0;
+    return (
+      <OnlineResultReveal
+        result={result.outcome}
+        reason={result.reason}
+        desc={resultDesc(result.outcome, result.reason)}
+        avatarUrl={avatarUrl}
+        expBefore={expInfo.before}
+        expAfter={expInfo.after}
+        expDelta={expInfo.delta}
+        opponentName={opponentName}
+        mySlot={mySlot}
+        meta={{ board: board2D, winLine, durationSec, moveCount: room.move_count }}
+        onExit={onExit}
+        onReturnToRoom={handleReturnToRoom}
+        returningToRoom={returningToRoom}
+      />
+    );
+  }
+
   return (
     <div>
       <div className="game-layout">
@@ -479,8 +555,6 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
             <div className="pve-turn-pill">
               {revealing ? (
                 <>{room.winner ? "五子连珠!" : "棋盘落满"}</>
-              ) : result ? (
-                <>对局结束</>
               ) : (
                 <>
                   <div className={`turn-dot black${effectiveTurn === 1 ? " active" : ""}`} />
@@ -502,34 +576,21 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
         </div>
 
         <div className="game-board-col">
-          {/* 这块区域固定 74px 高度,不管里面放的是回合倒计时还是结算结果,
-              棋盘的位置都不会跟着跳——三种状态(倒计时/揭晓中留空/结果)
-              共用同一块预留空间 */}
+          {/* 这块区域固定 74px 高度,放回合倒计时——结算结果不再嵌在这里,
+              揭晓延迟一结束整页就切换成 OnlineResultReveal 全屏结算页了
+              (见上面 `if (result)` 那个提前 return),这块面板只在对局
+              进行中才需要装东西,棋盘位置不会跟着跳 */}
           <div className="pve-result-panel">
-            {result ? (
-              <>
-                <h2 className={`pve-result-title ${result.outcome}`}>
-                  {RESULT_COPY[result.outcome].title}
-                </h2>
-                <p className="pve-result-desc">{resultDesc(result.outcome, result.reason)}</p>
-                {typeof expDelta === "number" && (
-                  <p className="mono" style={{ margin: "2px 0 0", fontSize: 18, fontWeight: 700, color: "var(--wood)" }}>
-                    +{expDelta} EXP
-                  </p>
-                )}
-              </>
-            ) : (
-              !revealing && room.status === "playing" && (
-                <div className={`turn-timer${turnUrgent ? " urgent" : ""}`}>
-                  <div className="turn-timer-row">
-                    <span className="turn-timer-label">{isMyTurn ? "轮到你" : `${opponentName} · 思考中`}</span>
-                    <span className="turn-timer-count mono">{turnSecondsLeft}s</span>
-                  </div>
-                  <div className="turn-timer-track">
-                    <div className="turn-timer-fill" style={{ width: `${(turnSecondsLeft / TURN_SECONDS) * 100}%` }} />
-                  </div>
+            {!revealing && room.status === "playing" && (
+              <div className={`turn-timer${turnUrgent ? " urgent" : ""}`}>
+                <div className="turn-timer-row">
+                  <span className="turn-timer-label">{isMyTurn ? "轮到你" : `${opponentName} · 思考中`}</span>
+                  <span className="turn-timer-count mono">{turnSecondsLeft}s</span>
                 </div>
-              )
+                <div className="turn-timer-track">
+                  <div className="turn-timer-fill" style={{ width: `${(turnSecondsLeft / TURN_SECONDS) * 100}%` }} />
+                </div>
+              </div>
             )}
           </div>
 
@@ -543,20 +604,6 @@ export default function OnlineGame({ roomId, myId, onExit, onMatched }) {
             onIllegalTap={() => hapticNotify("warning")}
             previewColor={mySlot}
           />
-
-          {/* 对局结束后的操作按钮,沿用棋盘下方"确认落子"那一条 confirm-bar
-              的位置——两者不会同时出现,视觉上正好是同一个位置被复用。
-              这里不用"返回菜单/再来一局",改成"返回首页/返回房间"。
-              点"返回房间"不需要在这等对方——handleReturnToRoom 里点完
-              立刻就带你去房间准备界面了,对方到没到都不耽误你往下走 */}
-          {result && (
-            <div className="confirm-bar">
-              <button className="btn-ghost" style={{ flex: 1 }} onClick={onExit}>返回首页</button>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={handleReturnToRoom} disabled={returningToRoom}>
-                {returningToRoom ? "处理中…" : "返回房间"}
-              </button>
-            </div>
-          )}
         </div>
 
         <p className="muted" style={{ textAlign: "center", fontSize: 12 }}>
