@@ -349,7 +349,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
       {promotedFlash && <div className="room-toast fade-in-up">对方已离开,你已成为房主</div>}
 
       {/* 标题区:两侧小菱形装饰章 + 印章感标题,下方一条分隔线(中间嵌一个
-          鎏金小点)再接一行"五子棋 · 标准模式"的模式说明。
+          鎏金小点)再接一行"象棋 · 标准模式"的模式说明。
           进了邀请好友这个子面板之后就不再需要——房间是哪个、什么模式,
           用户点进来那一下已经看过了,这里再占一截高度只会把下面真正
           要操作的好友列表往下挤,所以邀请面板打开时直接不渲染这块。 */}
@@ -361,7 +361,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
             <IconDiamondOutline size={11} />
           </div>
           <div className="room-title-divider" />
-          <p className="room-subtitle">五子棋 · 标准模式</p>
+          <p className="room-subtitle">象棋 · 标准模式</p>
         </div>
       )}
 

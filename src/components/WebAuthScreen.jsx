@@ -52,7 +52,7 @@ export default function WebAuthScreen({ onSuccess }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "80vh", padding: "0 4px" }}>
       <div style={{ textAlign: "center", marginBottom: 28 }}>
-        <h2 style={{ marginBottom: 8 }}>墨局五子棋</h2>
+        <h2 style={{ marginBottom: 8 }}>墨局象棋</h2>
         <p className="muted">{mode === "login" ? "登录你的账号" : "创建一个新账号"}</p>
       </div>
 

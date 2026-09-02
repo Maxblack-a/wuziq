@@ -3,7 +3,7 @@ import RulesModal from "./RulesModal";
 import StatBadge from "./StatBadge";
 import { IconRules, IconRobot, IconCalendarStar, IconArrowRight, IconAvatarFallback, IconBolt, IconGem } from "./Icons";
 import { titleForExp, levelForExp, progressPctForExp, expProgressText } from "../lib/rank";
-import { getDisplayStamina } from "../game/dailyTrialEngine";
+import { getDisplayStamina } from "../game/xiangqiDailyTrialEngine";
 
 export default function MainMenu({
   onSelect, playerName, exp, avatarUrl,
@@ -85,11 +85,11 @@ export default function MainMenu({
         </div>
 
         <div className="brand-hero fade-in-up" style={{ animationDelay: "40ms" }}>
-          <div className="brand-name">WUZIGIX</div>
+          <div className="brand-name">XIANGQIX</div>
           <div className="brand-title-row">
-            <h1>五子棋</h1>
+            <h1>象棋</h1>
           </div>
-          <p className="brand-slogan">黑白之间 · 一念胜负</p>
+          <p className="brand-slogan">楚河汉界 · 一步定乾坤</p>
         </div>
 
         {/* 在线状态:结构、配色、文案跟原来完全一样(两行、两级颜色、
@@ -134,6 +134,7 @@ export default function MainMenu({
             <div className="secondary-card-sub">DAILY QUEST</div>
           </button>
         </div>
+
 
         {/* 底部标语,两侧配细线,呼应参考图收尾的"棋院牌匾感" */}
         <div className="bottom-tagline fade-in-up" style={{ animationDelay: "240ms" }}>

@@ -63,12 +63,12 @@ export default function SkillTestEvaluationScreen({ profile, priorHistory, onCon
 
       <div className="linmo-scene-column">
         <div className="linmo-brand-block">
-          <div className="linmo-brand-name">WUZIQIX</div>
+          <div className="linmo-brand-name">XIANGQIX</div>
           <div className="linmo-brand-title-row">
-            <h1>五子棋</h1>
+            <h1>象棋</h1>
             <span className="linmo-brand-seal">规</span>
           </div>
-          <p className="linmo-brand-slogan">黑白之间 · 一念胜负</p>
+          <p className="linmo-brand-slogan">楚河汉界 · 一步定乾坤</p>
         </div>
 
         <div className="linmo-bubble linmo-invite-bubble">

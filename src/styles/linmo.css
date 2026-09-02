@@ -23,14 +23,19 @@
   width: calc(100% + var(--space-4) * 2);
   margin-left: calc(-1 * var(--space-4));
   margin-right: calc(-1 * var(--space-4));
-  /* 只用这一张图,不叠加、不裁切、不留白:严格按图片原始比例
-     (941:1672)撑出高度,图片保持完整、不变形。如果这个高度超出了
-     当前屏幕/窗口能显示的范围,交给外层容器去滚动(下面
-     flex-shrink:0 + 不设 overflow:hidden 就是为了不挡住这个滚动),
-     用户往下滑就能看到按钮——矮屏幕下需要滑一下,是"图片必须完整、
-     不裁不留白"这个前提下唯一剩下的办法。 */
-  aspect-ratio: 941 / 1672;
-  flex-shrink: 0;
+  /* 撑满整个可视高度,不再按图片原始比例(941:1672)算高度——之前
+     这里用 aspect-ratio 精确保原图比例、不裁不留白,但手机屏幕的
+     高宽比普遍比这张图更"瘦长"(常见约 1:2.1~2.2,图片是 1:1.777),
+     导致图片撑出的高度天然比屏幕矮一截,底下露出 background 纯色,
+     看起来就是"图片没铺满屏幕"。
+     现在改成:容器用 flex:1 吃满 .app-shell(flex 列)里除顶栏/按钮
+     以外的剩余空间,图片本身用 object-fit:cover 裁切自适应——不管
+     屏幕比例多"瘦长"或多"矮胖",图片都会裁掉多余部分、真正铺满,
+     不会再露出下面的纯色背景。代价是人物构图会被裁掉一部分,靠下面
+     .linmo-scene-bg 的 object-position 控制优先保留脸部/上半身,而
+     不是裁到构图中间以下那截空桌面。 */
+  flex: 1;
+  min-height: 0; /* flex 子项默认 min-height:auto 会撑破父级,配合 flex:1 拉伸要归零 */
   background: #1C1712;
 }
 
@@ -39,6 +44,8 @@
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: cover;
+  object-position: top center;
   z-index: 0;
   pointer-events: none;
   user-select: none;

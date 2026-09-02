@@ -3,7 +3,7 @@ import MainMenu from "./components/MainMenu";
 import IncomingInviteModal from "./components/IncomingInviteModal";
 import IncomingFriendRequestModal from "./components/IncomingFriendRequestModal";
 import DailyTrialGateModal from "./components/DailyTrialGateModal";
-import { getDisplayStamina } from "./game/dailyTrialEngine";
+import { getDisplayStamina } from "./game/xiangqiDailyTrialEngine";
 import {
   supabase, loginWithTelegram, loginAnonymously, getExistingUserId,
   claimSession, getStoredSessionId, clearStoredSessionId,
@@ -18,18 +18,18 @@ import { initPresence } from "./lib/presence";
 // 天然就是"路由"的形状,很适合按需加载,不用 IncomingInviteModal /
 // IncomingFriendRequestModal / DailyTrialGateModal 这几个小弹窗那样,
 // 它们随时可能跟主菜单一起冒出来,还是保持静态 import。
-const PveScreen = lazy(() => import("./components/PveScreen"));
-const DailyTrialScreen = lazy(() => import("./components/DailyTrialScreen"));
+const XiangqiPveScreen = lazy(() => import("./components/XiangqiPveScreen"));
+const XiangqiDailyTrialScreen = lazy(() => import("./components/XiangqiDailyTrialScreen"));
 const MatchmakingScreen = lazy(() => import("./components/MatchmakingScreen"));
 const InviteScreen = lazy(() => import("./components/InviteScreen"));
 const RoomScreen = lazy(() => import("./components/RoomScreen"));
-const OnlineGame = lazy(() => import("./components/OnlineGame"));
+const XiangqiOnlineGame = lazy(() => import("./components/XiangqiOnlineGame"));
 const FriendsScreen = lazy(() => import("./components/FriendsScreen"));
 const LeaderboardScreen = lazy(() => import("./components/LeaderboardScreen"));
 const ProfileScreen = lazy(() => import("./components/ProfileScreen"));
 const MatchHistoryScreen = lazy(() => import("./components/MatchHistoryScreen"));
 const LinMoIntroScreen = lazy(() => import("./components/LinMoIntroScreen"));
-const SkillTestScreen = lazy(() => import("./components/SkillTestScreen"));
+const XiangqiSkillTestScreen = lazy(() => import("./components/XiangqiSkillTestScreen"));
 const SkillTestResultScreen = lazy(() => import("./components/SkillTestResultScreen"));
 const SkillTestEvaluationScreen = lazy(() => import("./components/SkillTestEvaluationScreen"));
 const SkillTestReviewScreen = lazy(() => import("./components/SkillTestReviewScreen"));
@@ -756,7 +756,7 @@ export default function App() {
     return (
       <div className="app-shell">
         <Suspense fallback={<div className="spinner" />}>
-          <SkillTestScreen onFinish={handleSkillTestFinish} onAbort={handleSkillTestSkip} />
+          <XiangqiSkillTestScreen onFinish={handleSkillTestFinish} onAbort={handleSkillTestSkip} />
         </Suspense>
       </div>
     );
@@ -806,12 +806,12 @@ export default function App() {
       )}
       {screen === "pve" && (
         <Suspense fallback={<ScreenFallbackInline />}>
-          <PveScreen onExit={goBack} onExitHome={goMenu} />
+          <XiangqiPveScreen onExit={goBack} onExitHome={goMenu} />
         </Suspense>
       )}
       {screen === "daily" && (
         <Suspense fallback={<ScreenFallbackInline />}>
-          <DailyTrialScreen onExit={goBack} onExitHome={goMenu} avatarUrl={profile?.avatar_url} exp={profile?.exp} />
+          <XiangqiDailyTrialScreen onExit={goBack} onExitHome={goMenu} />
         </Suspense>
       )}
       {screen === "matchmaking" && (
@@ -874,7 +874,7 @@ export default function App() {
       )}
       {screen === "game" && (
         <Suspense fallback={<ScreenFallbackInline />}>
-          <OnlineGame roomId={roomId} myId={myId} avatarUrl={profile?.avatar_url} onExit={goMenu} onMatched={handleMatched} />
+          <XiangqiOnlineGame roomId={roomId} myId={myId} avatarUrl={profile?.avatar_url} onExit={goMenu} onMatched={handleMatched} />
         </Suspense>
       )}
 
