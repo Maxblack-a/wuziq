@@ -1,0 +1,27 @@
+# Cloudflare Pages 静态资源缓存配置
+#
+# 首页图片(hero-scene.webp / hero-scene.jpg)压缩之后已经只有几十 KB,
+# 但每次重新打开小程序都要求这么一次网络请求,在信号不好的地方还是会
+# 有能感知到的延迟。这里让浏览器/Telegram 内置 webview 把它缓存一整年
+# (immutable 告诉浏览器"这个文件内容不会变,过期前直接用本地缓存,
+# 都不用发请求去问服务器有没有更新")——第一次打开需要网络下载一次,
+# 之后不管是同一天还是几个月后再打开,只要缓存没被用户手动清掉,
+# 图片直接从本地读,不再依赖网络。
+#
+# 注意:因为设了 immutable,以后如果要换掉这张图,不能直接用同名文件
+# 覆盖(线上已经缓存的用户不会看到新图)——正确做法是换一个新文件名
+# (比如 hero-scene-v2.webp),同时把 MainMenu.jsx 里引用的路径也改掉。
+# 这次换图已经是这么做的:文件名从 hero-scene.* 改成了 hero-scene-v2.*,
+# 规则也跟着改成新文件名——旧的 hero-scene.jpg/webp 文件已经不存在了,
+# 规则留着也没意义。下次再换图,记得再往上加一版(hero-scene-v3.*),
+# 不要复用已经出现过的文件名。
+/hero-scene-v2.webp
+  Cache-Control: public, max-age=31536000, immutable
+
+/hero-scene-v2.jpg
+  Cache-Control: public, max-age=31536000, immutable
+
+# JS/CSS 由 Vite 构建时自动加上内容哈希文件名(比如 index-a1b2c3.js),
+# 内容一变文件名就变,天然可以放心用最长缓存时间,不用担心用户看到旧版本
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

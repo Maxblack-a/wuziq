@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "../lib/supabase";
-import { useTelegramBackButton } from "../lib/telegram";
-import { IconAvatarFallback, IconSearch } from "./Icons";
+import { isInTelegram, useTelegramBackButton } from "../lib/telegram";
+import { IconAvatarFallback, IconSearch, IconChevronLeft } from "./Icons";
 
 function randomRoomCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -32,11 +32,21 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
   }, []);
 
   async function loadFriends() {
-    const { data } = await supabase
+    const { data: rows } = await supabase
       .from("friendships")
-      .select("friend_id, profiles:friend_id(id, display_name, rating, avatar_url)")
+      .select("friend_id")
       .eq("user_id", myId);
-    setFriends((data || []).map((r) => r.profiles).filter(Boolean));
+    const friendIds = (rows || []).map((r) => r.friend_id);
+    if (!friendIds.length) { setFriends([]); return; }
+    // 原来是靠 profiles:friend_id(...) 隐式外键 join 一次查完的,现在
+    // profiles 本身只能看自己那一行了,视图又没有外键元数据支持这种
+    // 隐式 join 写法,只能拆成两步:先拿 friend_id 列表,再对
+    // profiles_public 批量查一次。
+    const { data: friendProfiles } = await supabase
+      .from("profiles_public")
+      .select("id, display_name, exp, avatar_url")
+      .in("id", friendIds);
+    setFriends(friendProfiles || []);
   }
 
   async function loadSentRequests() {
@@ -77,8 +87,8 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
     setSearching(true);
     const t = setTimeout(async () => {
       const { data } = await supabase
-        .from("profiles")
-        .select("id, display_name, avatar_url, rating")
+        .from("profiles_public")
+        .select("id, display_name, avatar_url, exp")
         .ilike("display_name", `%${q}%`)
         .neq("id", myId)
         .limit(20);
@@ -158,7 +168,16 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
 
   return (
     <div>
-      <button className="btn-ghost" onClick={onExit}>← 返回</button>
+      {/* Telegram 自带的返回键已经接了同一个 onExit(见上面
+          useTelegramBackButton),UI 上不用再重复画一份;但普通浏览器里
+          没有 Telegram 原生返回键,这里必须补一个,否则用户没法退出。 */}
+      {!isInTelegram && (
+        <div className="room-topbar" style={{ marginBottom: 4 }}>
+          <button className="room-icon-btn" onClick={onExit} aria-label="返回">
+            <IconChevronLeft />
+          </button>
+        </div>
+      )}
       <div className="menu-header"><h2>好友</h2></div>
 
       {/* 搜索昵称加好友——取代原来的好友码 */}
@@ -187,7 +206,7 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
             </div>
             <div className="friend-row-info">
               <div className="friend-row-name">{u.display_name || "玩家"}</div>
-              <div className="friend-row-meta mono">积分 {u.rating}</div>
+              <div className="friend-row-meta mono">经验值 {u.exp}</div>
             </div>
             <div className="friend-row-actions">
               <button
@@ -217,7 +236,7 @@ export default function FriendsScreen({ myId, onMatched, onExit }) {
           </div>
           <div className="friend-row-info">
             <div className="friend-row-name">{f.display_name || "玩家"}</div>
-            <div className="friend-row-meta mono">积分 {f.rating}</div>
+            <div className="friend-row-meta mono">经验值 {f.exp}</div>
           </div>
           <div className="friend-row-actions">
             {pendingInvite?.friendId === f.id ? (

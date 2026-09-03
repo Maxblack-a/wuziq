@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "../lib/supabase";
 import { shareInviteLink, isInTelegram, useTelegramBackButton } from "../lib/telegram";
 import { useOnlineUserIds } from "../lib/presence";
-import { titleForRating, levelForRating } from "../lib/rank";
+import { titleForExp, levelForExp } from "../lib/rank";
 import {
   IconAvatarFallback,
   IconArrowRight,
@@ -41,7 +41,7 @@ const APP_SHORT_NAME = import.meta.env.VITE_TELEGRAM_APP_NAME || "gomoku";
 // 开始才是页面自己的内容)、居中的印章式标题区、放大的 VS 头像位配
 // 六边形等级徽章、"好友在线"胶囊条、墨色主 CTA、描边邀请按钮,以及
 // 底部的房间自动解散提示。
-export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, avatarUrl, rating, onMatched, onExit, onRandomMatch }) {
+export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, avatarUrl, exp, onMatched, onExit, onRandomMatch }) {
   const [roomId, setRoomId] = useState(incomingRoomId || null);
   const [room, setRoom] = useState(null);
   const [opponent, setOpponent] = useState(null);
@@ -130,12 +130,17 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   }, [roomId]);
 
   // 对手进来之后,把 ta 的头像/昵称/分数拉出来显示在 VS 的另一侧——
-  // 分数是为了推算 ta 的 LV.几 等级徽章,跟"我"这边用同一套算法
+  // 分数是为了推算 ta 的 LV.几 等级徽章,跟"我"这边用同一套算法。
+  // 注意:不能写死查 player2_id——如果打开这个页面的人自己就是 player2
+  // (比如通过邀请码加入、成为对手的那一方),player2_id 查出来的会是
+  // "我自己",而不是真正的对手,导致 VS 两边显示成同一个名字。要看
+  // player1_id/player2_id 里哪一个不是我自己,取那一个才是真正的对手。
+  const opponentId = room && (room.player1_id === myId ? room.player2_id : room.player1_id);
   useEffect(() => {
-    if (!room?.player2_id) { setOpponent(null); return; }
-    supabase.from("profiles").select("display_name, avatar_url, rating").eq("id", room.player2_id).single()
+    if (!opponentId) { setOpponent(null); return; }
+    supabase.from("profiles_public").select("display_name, avatar_url, exp").eq("id", opponentId).single()
       .then(({ data }) => setOpponent(data));
-  }, [room?.player2_id]);
+  }, [opponentId]);
 
   // 状态推进到 playing 的那一刻(房主点了"开始游戏"),不管我是房主
   // 自己点的、还是作为对方在旁边看着状态变化的,都统一走 onMatched 进真实对局
@@ -178,16 +183,43 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     onExit();
   }
 
-  useTelegramBackButton(handleExit);
+  // 物理/系统返回键(Telegram 原生 BackButton)跟页面自己顶栏的 "‹" 应该是
+  // 同一个"返回"动作,行为不能不一样——不然会出现"点页面图标是先收起
+  // 邀请面板,按系统返回键却直接把房间退了"这种同一操作两种结果的情况。
+  // 所以这里也接上 handleTopBack,而不是原来写死的 handleExit。
+  useTelegramBackButton(handleTopBack);
+
+  // 顶栏这个 "‹" 图标(以及上面接的物理/系统返回键)要感知当前在不在
+  // "邀请好友"这个子面板里:面板开着就先收起面板,回到"开始匹配/邀请好友"
+  // 那一层;面板没开着,说明已经是最外层了,这时候点它才是真的退出房间。
+  // 这样就不需要再在面板里单独放一个"返回匹配方式"的文字链接,两个长得
+  // 很像又离得很近的返回控件容易被误触成另一个。
+  function handleTopBack() {
+    if (inviting) {
+      setInviting(false);
+      return;
+    }
+    handleExit();
+  }
 
   // 拉一次好友列表,给"邀请好友"面板和"好友在线"这行胶囊条用
   useEffect(() => {
     if (!myId) return;
     supabase
       .from("friendships")
-      .select("friend_id, profiles:friend_id(id, display_name, avatar_url, rating)")
+      .select("friend_id")
       .eq("user_id", myId)
-      .then(({ data }) => setFriends((data || []).map((r) => r.profiles).filter(Boolean)));
+      .then(async ({ data: rows }) => {
+        const friendIds = (rows || []).map((r) => r.friend_id);
+        if (!friendIds.length) { setFriends([]); return; }
+        // 拆成两步查,理由同 FriendsScreen.jsx 的 loadFriends——隐式外键
+        // join 语法查不了 profiles_public 这个视图。
+        const { data: friendProfiles } = await supabase
+          .from("profiles_public")
+          .select("id, display_name, avatar_url, exp")
+          .in("id", friendIds);
+        setFriends(friendProfiles || []);
+      });
   }, [myId]);
 
   async function inviteFriend(friend) {
@@ -206,8 +238,8 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     setFriendSearching(true);
     const t = setTimeout(async () => {
       const { data } = await supabase
-        .from("profiles")
-        .select("id, display_name, avatar_url, rating")
+        .from("profiles_public")
+        .select("id, display_name, avatar_url, exp")
         .ilike("display_name", `%${q}%`)
         .neq("id", myId)
         .limit(20);
@@ -223,11 +255,17 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
     if (data?.status === "auto_accepted") {
       // 对方之前也申请过我,已经直接成为好友——刷新好友列表,这样 TA 马上
       // 会出现在上面的"邀请对战"名单里,不用等再打开一次这个面板
-      const { data: fr } = await supabase
+      const { data: rows } = await supabase
         .from("friendships")
-        .select("friend_id, profiles:friend_id(id, display_name, avatar_url, rating)")
+        .select("friend_id")
         .eq("user_id", myId);
-      setFriends((fr || []).map((r) => r.profiles).filter(Boolean));
+      const friendIds = (rows || []).map((r) => r.friend_id);
+      if (!friendIds.length) { setFriends([]); return; }
+      const { data: friendProfiles } = await supabase
+        .from("profiles_public")
+        .select("id, display_name, avatar_url, exp")
+        .in("id", friendIds);
+      setFriends(friendProfiles || []);
     } else {
       setSentFriendRequestIds((prev) => new Set(prev).add(targetId));
     }
@@ -244,8 +282,11 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
 
   async function handleStartGame() {
     setStarting(true);
-    const { error } = await supabase.from("rooms").update({ status: "playing" }).eq("id", roomId);
-    if (error) { setStarting(false); setErrorMsg("开始失败,请重试"); return; }
+    // 改走 start_match RPC(原来是前端直接 update status)——RPC 里顺带把
+    // 回合截止时间/双方初始心跳都种好了,配合服务端判负兜底机制用,
+    // 见 schema.sql 里 start_match 的注释。
+    const { data, error } = await supabase.rpc("start_match", { p_room_id: roomId });
+    if (error || data?.error) { setStarting(false); setErrorMsg("开始失败,请重试"); return; }
     // 不需要在这里手动 setScreen——上面那个订阅 room.status 变化的 effect
     // 会自己触发 onMatched,房主自己这边和订阅是同一条路径,不用写两遍
   }
@@ -254,21 +295,52 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
   const hasOpponent = !!room?.player2_id;
   const myName = playerName || "我";
 
-  const myLevel = levelForRating(rating);
-  const myTitle = titleForRating(rating ?? 1200);
-  const oppLevel = opponent ? levelForRating(opponent.rating) : null;
-  const oppTitle = opponent ? titleForRating(opponent.rating ?? 1200) : null;
-  const opponentOnline = room?.player2_id ? onlineIds.has(room.player2_id) : false;
+  // 结算后点了"返回房间",但对方还没点:数据库层面这间房的对手位(player2_id)
+  // 还占着上一局那个对手,可这局到底还续不续得上,得看对方点没点"返回房间"。
+  // 用这两个 rematch_ready 标记判断——只要不是两边都点了,这个位置就该当成
+  // "还没定下来",跟全新开一间房、根本没人来时用同一套 UI(开始匹配/邀请
+  // 好友),而不是硬等对方或者另外画一个阉割版页面。
+  const mySlot = room?.player1_id === myId ? 1 : room?.player2_id === myId ? 2 : null;
+  const myRematchReady = mySlot === 1 ? room?.player1_rematch_ready : mySlot === 2 ? room?.player2_rematch_ready : false;
+  const oppRematchReady = mySlot === 1 ? room?.player2_rematch_ready : mySlot === 2 ? room?.player1_rematch_ready : false;
+  const awaitingRematch = room?.status === "finished" && myRematchReady && !oppRematchReady;
+
+  // "邀请好友"这颗按钮(以及"好友在线"胶囊条)平时直接展开面板就好;但如果
+  // 当前是 awaitingRematch 这种情况,原来的对手位事实上还被上一局的对手占着,
+  // 没法把新邀请塞进同一个房间——这时候先悄悄换一间全新的干净房间,原来那间
+  // 不用管(对方真要是也点了"返回房间",走的是它自己两边都确认那条路径,
+  // 跟这里互不影响),再展开邀请面板,面板本身和"第一次进房间"时长得一模一样
+  async function handleOpenInvite() {
+    if (awaitingRematch) {
+      setRoomId(null);
+      setRoom(null);
+      setOpponent(null);
+      setInvitedIds(new Set());
+      createRoom();
+    }
+    setInviting(true);
+  }
+
+  const myLevel = levelForExp(exp);
+  const myTitle = titleForExp(exp ?? 0);
+  const oppLevel = opponent ? levelForExp(opponent.exp) : null;
+  const oppTitle = opponent ? titleForExp(opponent.exp ?? 0) : null;
+  const opponentOnline = opponentId ? onlineIds.has(opponentId) : false;
   const onlineFriendsCount = friends.filter((f) => onlineIds.has(f.id)).length;
 
   return (
     <div>
-      {/* 顶栏:左返回 / 右更多——Telegram 原生的 Close/标题栏在这一层之外,
-          这里只是页面自己的内容,严格对应设计图里"< ... "那一行 */}
-      <div className="room-topbar fade-in-up">
-        <button className="room-icon-btn" onClick={handleExit} aria-label="返回">
-          <IconChevronLeft />
-        </button>
+      {/* 顶栏:左"返回"/ 右"更多"。退出房间/收起邀请面板这个动作已经绑在
+          Telegram 自带的返回键上(见下面 useTelegramBackButton(handleTopBack)),
+          所以在 Telegram 环境里不重复画左边的"‹"图标;但在普通浏览器里
+          Telegram 的原生返回键不存在,必须把这颗按钮画出来,否则用户没有
+          任何办法退出房间。 */}
+      <div className="room-topbar fade-in-up" style={isInTelegram ? { justifyContent: "flex-end" } : undefined}>
+        {!isInTelegram && (
+          <button className="room-icon-btn" onClick={handleTopBack} aria-label="返回">
+            <IconChevronLeft />
+          </button>
+        )}
         <button className="room-icon-btn" onClick={handleShare} disabled={!room?.code} aria-label="更多操作">
           <IconMoreHorizontal />
         </button>
@@ -277,20 +349,27 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
       {promotedFlash && <div className="room-toast fade-in-up">对方已离开,你已成为房主</div>}
 
       {/* 标题区:两侧小菱形装饰章 + 印章感标题,下方一条分隔线(中间嵌一个
-          鎏金小点)再接一行"五子棋 · 标准模式"的模式说明 */}
-      <div className="room-title-wrap fade-in-up" style={{ animationDelay: "40ms" }}>
-        <div className="room-title-row">
-          <IconDiamondOutline size={11} />
-          <h1 className="room-title-text">对局房间</h1>
-          <IconDiamondOutline size={11} />
+          鎏金小点)再接一行"象棋 · 标准模式"的模式说明。
+          进了邀请好友这个子面板之后就不再需要——房间是哪个、什么模式,
+          用户点进来那一下已经看过了,这里再占一截高度只会把下面真正
+          要操作的好友列表往下挤,所以邀请面板打开时直接不渲染这块。 */}
+      {!inviting && (
+        <div className="room-title-wrap fade-in-up" style={{ animationDelay: "40ms" }}>
+          <div className="room-title-row">
+            <IconDiamondOutline size={11} />
+            <h1 className="room-title-text">对局房间</h1>
+            <IconDiamondOutline size={11} />
+          </div>
+          <div className="room-title-divider" />
+          <p className="room-subtitle">象棋 · 标准模式</p>
         </div>
-        <div className="room-title-divider" />
-        <p className="room-subtitle">五子棋 · 标准模式</p>
-      </div>
+      )}
 
       {/* VS 对阵区:双方头像 + 六边形等级徽章 + 昵称 + 段位胶囊 + 在线状态,
-          中间是水墨飞白风格的 VS 徽章 */}
-      <div className="vs-row fade-in-up" style={{ animationDelay: "80ms" }}>
+          中间是水墨飞白风格的 VS 徽章。邀请面板打开时切换成紧凑条
+          (.vs-row-compact 收窄头像、隐去段位胶囊和在线文字这些次要信息),
+          只保留"谁 vs 谁"这一眼状态,把空间让给下面的好友列表 */}
+      <div className={`vs-row fade-in-up${inviting ? " vs-row-compact" : ""}`} style={{ animationDelay: "80ms" }}>
         <div className="vs-slot">
           <div className="vs-avatar">
             {avatarUrl ? <img src={avatarUrl} alt="" /> : <IconAvatarFallback size={26} />}
@@ -349,7 +428,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
         </div>
       </div>
 
-      {!hasOpponent && !inviting && (
+      {(!hasOpponent || awaitingRematch) && !inviting && (
         <>
           <button
             className="room-action-primary fade-in-up"
@@ -373,7 +452,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
             className="room-action-invite fade-in-up"
             style={{ animationDelay: "160ms" }}
             disabled={!roomId}
-            onClick={() => setInviting(true)}
+            onClick={handleOpenInvite}
           >
             <span className="cta-primary-lead">
               <span className="cta-primary-icon"><IconPersonPlus size={17} /></span>
@@ -387,7 +466,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
             </span>
           </button>
 
-          <button className="friends-bar fade-in-up" style={{ animationDelay: "200ms" }} onClick={() => setInviting(true)}>
+          <button className="friends-bar fade-in-up" style={{ animationDelay: "200ms" }} onClick={handleOpenInvite}>
             <span className="friends-bar-icon"><IconFriends size={18} /></span>
             <span className="friends-bar-text">
               好友在线 <span className="friends-bar-count">{onlineFriendsCount}</span> 人
@@ -404,12 +483,8 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
         </>
       )}
 
-      {!hasOpponent && inviting && (
+      {(!hasOpponent || awaitingRematch) && inviting && (
         <div className="fade-in-up" style={{ marginTop: "var(--space-2)" }}>
-          <button className="room-back-link" onClick={() => setInviting(false)}>
-            <IconChevronLeft size={16} /> 返回匹配方式
-          </button>
-
           <p className="friend-section-label">好友列表</p>
           {friends.length === 0 ? (
             <p className="muted" style={{ fontSize: 13, marginBottom: "var(--space-2)" }}>还没有好友,可以在下面搜索昵称添加。</p>
@@ -464,7 +539,7 @@ export default function RoomScreen({ myId, roomId: incomingRoomId, playerName, a
                 </div>
                 <div className="friend-row-info">
                   <div className="friend-row-name">{u.display_name || "玩家"}</div>
-                  <div className="friend-row-meta mono">积分 {u.rating}</div>
+                  <div className="friend-row-meta mono">经验值 {u.exp}</div>
                 </div>
                 <div className="friend-row-actions">
                   <button

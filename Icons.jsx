@@ -1,5 +1,6 @@
 // 统一风格的线性图标,不用 emoji,不引入图标库依赖。
 // 全部用 currentColor,方便在导航默认态/激活态之间切换颜色。
+import { useId } from "react";
 
 export function IconFriends({ size = 20 }) {
   return (
@@ -25,6 +26,24 @@ export function IconTrophy({ size = 20 }) {
   );
 }
 
+export function IconSparkle({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2c.6 3.6 2.4 5.4 6 6-3.6.6-5.4 2.4-6 6-.6-3.6-2.4-5.4-6-6 3.6-.6 5.4-2.4 6-6z" />
+      <path d="M19 15c.3 1.6 1.1 2.4 2.7 2.7-1.6.3-2.4 1.1-2.7 2.7-.3-1.6-1.1-2.4-2.7-2.7 1.6-.3 2.4-1.1 2.7-2.7z" opacity="0.7" />
+    </svg>
+  );
+}
+
+export function IconRadar({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3l8 4.6v8.8L12 21l-8-4.6V7.6L12 3z" />
+      <path d="M12 3v9M12 12l8-4.4M12 12l-8-4.4M12 12l4 8.2M12 12l-4 8.2" />
+    </svg>
+  );
+}
+
 export function IconProfile({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -45,6 +64,129 @@ export function IconRobot({ size = 22 }) {
       <path d="M9 16.5h6" />
       <path d="M2.5 12h2.5" />
       <path d="M19 12h2.5" />
+    </svg>
+  );
+}
+
+export function IconCalendarStar({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="4" y="5.5" width="16" height="14" rx="3" />
+      <path d="M8 3.5v4M16 3.5v4M4 10h16" />
+      <path d="M12 12.6l.9 1.9 2.1.3-1.5 1.5.35 2.1L12 17.4l-1.85 1L10.5 16.3 9 14.8l2.1-.3.9-1.9z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+// 体力值:闪电,每日试炼消耗/展示体力用
+export function IconBolt({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" />
+    </svg>
+  );
+}
+
+// 钻石货币:实心刻面宝石,跟 IconDiamondOutline(纯装饰用的小菱形章)
+// 区分开——这个是真正的"货币"图标,要能在数字旁边一眼认出来。
+// 钻石(硬通货)图标——10条线描出来的低多边形切割钻石:外轮廓6条边
+// (顶边被两个内侧点分成3段 + 左右两条上斜边 + 左右两条下斜边)、腰线、
+// 两条从顶边内侧点先往内收再折向底部尖点的"Z字形"对角线,浅蓝填充、
+// 深蓝描边。这个具体形状是照用户给的参考图逐像素量出来的坐标做的,
+// 不是随手画的钻石,改的时候不要简化掉那个 Z 字转折,不然就不是同一个
+// 图标了。
+export function IconGem({ size = 16 }) {
+  return (
+    <svg width={size} height={size * (22 / 24)} viewBox="0 0 24 22">
+      <polygon points="4.8,1.5 19.2,1.5 23,6.8 12,21 1,7" fill="#A8D8F0" />
+      <g stroke="#1B5A8A" strokeWidth="0.9" strokeLinecap="round" fill="none">
+        <line x1="4.8" y1="1.5" x2="9" y2="1.5" />
+        <line x1="9" y1="1.5" x2="15" y2="1.5" />
+        <line x1="15" y1="1.5" x2="19.2" y2="1.5" />
+        <line x1="4.8" y1="1.5" x2="1" y2="7" />
+        <line x1="19.2" y1="1.5" x2="23" y2="6.8" />
+        <line x1="1" y1="7" x2="23" y2="6.8" />
+        <line x1="1" y1="7" x2="12" y2="21" />
+        <line x1="23" y1="6.8" x2="12" y2="21" />
+        <polyline points="9,1.5 7.3,7.2 12,21" />
+        <polyline points="15,1.5 16.9,6.4 12,21" />
+      </g>
+    </svg>
+  );
+}
+
+// 连胜:火焰,连胜徽章用
+export function IconFlame({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 2c1 3-2.5 4.5-2.5 8a4 4 0 1 0 8 0c0-1.5-.8-2.3-1.3-3 .3 2-1 2.8-1.7 2.2.8-2-.5-4-2.5-7.2z" fill="currentColor" fillOpacity="0.18" />
+    </svg>
+  );
+}
+
+// 用时统计:结算回顾卡片用
+export function IconClock({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3.5 2" />
+    </svg>
+  );
+}
+
+// 手数统计:结算回顾卡片用
+export function IconListNumbers({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 6h11M9 12h11M9 18h11" />
+      <path d="M4 5h1v3M4 8h2" />
+      <path d="M4 13.5c0-.5.4-1 1-1s1 .5 1 1-.3.7-1 1.2-1 .8-1 1.3h2" />
+    </svg>
+  );
+}
+
+// 经验值/积分:五角星徽章(圆形底 + 星形),视觉上跟 IconGem 配对——
+// 一个代表"硬通货"(钻石),一个代表"成长值"(经验),两个图标风格
+// 呼应但形状/主色不同,一眼能区分开是哪种奖励。
+// 经验值:五角星徽章,渐变金色(浅金→深赭)+ 深色描边,比纯色版本更有
+// 刻面高光的质感,跟 IconGem 那种"浅填充+深描边"的宝石感风格呼应。
+// 渐变 id 用 useId 生成,避免这个图标在同一页面出现多次(比如结算页
+// 顶栏和奖励区都会用到)时,重复的 <linearGradient id="..."> 互相冲突。
+export function IconExpStar({ size = 16 }) {
+  const gradId = useId();
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#FCEAB0" />
+          <stop offset="55%" stopColor="#D9A94A" />
+          <stop offset="100%" stopColor="#9E6E22" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M12 3.5l2.35 4.9 5.35.6-3.95 3.75 1.05 5.35L12 15.5l-4.8 2.6 1.05-5.35L4.3 9l5.35-.6z"
+        fill={`url(#${gradId})`}
+        stroke="#9E6E22"
+        strokeWidth="0.4"
+      />
+    </svg>
+  );
+}
+
+// 展开/查看完整内容:结算页回顾棋盘的"点击查看完整对局"提示用
+export function IconMaximize({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3H5a2 2 0 0 0-2 2v3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1-2 2h-3M3 16v3a2 2 0 0 0 2 2h3" />
+    </svg>
+  );
+}
+
+// 关闭:通用叉号,浮层/弹窗关闭按钮用
+export function IconX({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   );
 }
@@ -78,6 +220,20 @@ export function IconSeal({ size = 22 }) {
       <rect x="2" y="2" width="20" height="20" rx="4" fill="#A13A2E" />
       <rect x="2" y="2" width="20" height="20" rx="4" stroke="rgba(255,255,255,0.25)" strokeWidth="1" />
       <text x="12" y="16.5" textAnchor="middle" fontSize="11" fontFamily="'Noto Serif SC', serif" fill="#F5EBDD">规</text>
+    </svg>
+  );
+}
+
+// 顶栏"规则"入口图标:线性风格,跟好友/排行榜/我的这几个导航图标保持
+// 同一套视觉语言(之前规则藏在品牌区的印章按钮里,现在挪回顶栏后需要
+// 一个跟其它导航项风格一致的图标,不能继续用那枚红色印章)
+export function IconRules({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="5" y="3" width="14" height="18" rx="2" />
+      <path d="M9 8h6" />
+      <path d="M9 12h6" />
+      <path d="M9 16h3.5" />
     </svg>
   );
 }
@@ -205,6 +361,25 @@ export function IconClose({ size = 16 }) {
   );
 }
 
+// "我的"页面 · 编辑昵称
+export function IconPencil({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4L16.5 3.5z" />
+    </svg>
+  );
+}
+
+// "我的"页面 · 头像右下角的相机角标,提示头像可点击上传更换
+export function IconCamera({ size = 13 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7h2.4l1-1.6A1.5 1.5 0 0 1 10.2 4.6h3.6a1.5 1.5 0 0 1 1.3.8l1 1.6h2.4A1.5 1.5 0 0 1 20 8.5v9A1.5 1.5 0 0 1 18.5 19h-13A1.5 1.5 0 0 1 4 17.5v-9z" />
+      <circle cx="12" cy="13" r="3.4" />
+    </svg>
+  );
+}
+
 // 人机对战 · 悔棋(逆时针回退箭头,跟"返回"的 chevron 区分开,
 // 一眼能看出这是"撤销上一步"而不是"离开页面")
 export function IconUndo({ size = 16 }) {
@@ -212,6 +387,44 @@ export function IconUndo({ size = 16 }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
       <path d="M7 10H15.5C18 10 20 12 20 14.5C20 17 18 19 15.5 19H10" />
       <path d="M10 6.5L6 10L10 13.5" />
+    </svg>
+  );
+}
+
+// 对局操作栏 · 认输(小旗子)
+export function IconFlag({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3V21" />
+      <path d="M6 4.5C9 3 11 6 14 4.5C17 3 18 4.5 18 4.5V13C18 13 17 11.5 14 13C11 14.5 9 11.5 6 13V4.5Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// 对局操作栏 · 提和(两只手相握)
+export function IconHandshake({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12L6 8L9.5 10.5" />
+      <path d="M22 12L18 8L14.5 10.5" />
+      <path d="M9.5 10.5L11.3 12.1C11.9 12.6 12.8 12.5 13.3 11.9C13.7 11.4 13.7 10.7 13.3 10.2L11 8" />
+      <path d="M6 8L8.2 6C9 5.3 10.2 5.4 10.9 6.2L14.5 10.5" />
+      <path d="M18 8L15.8 6C15 5.3 13.8 5.4 13.1 6.2" />
+      <path d="M6 13L8 15" />
+      <path d="M18 13L16 15" />
+    </svg>
+  );
+}
+
+// 对局界面 · 设置齿轮(右上角,复用规则弹窗当作"更多信息"入口)
+export function IconSettings({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 3.5V5.5" /><path d="M12 18.5V20.5" />
+      <path d="M5.5 12H3.5" /><path d="M20.5 12H18.5" />
+      <path d="M6.9 6.9L5.5 5.5" /><path d="M18.5 18.5L17.1 17.1" />
+      <path d="M17.1 6.9L18.5 5.5" /><path d="M5.5 18.5L6.9 17.1" />
     </svg>
   );
 }

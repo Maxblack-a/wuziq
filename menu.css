@@ -1,41 +1,79 @@
 /* ============================================================
-   品牌区全出血:背景图是真正的背景,横向撑满整个屏幕宽度(打破
-   app-shell 左右 16px 的内边距),不是一张贴在页面中间、四周露出
-   底色边框的"照片卡片"。内部再用 padding 把顶栏和标题文字拉回
-   跟页面其它内容一致的左右边距。
-   容器高度按图片原始比例(1024:1535)撑开,object-fit: cover 在这
-   个比例下等于完整显示、不裁切。底部叠一层遮罩渐隐,让它跟下面
-   app-shell 自身的暖褐色渐变背景之间没有生硬的分界线。
+   全屏背景图:图片本身就是整个首页的背景,不是"顶部一块 hero banner
+   + 下面用 CSS 渐变接一段背景色"这种拼接结构。
+   .page-bg-image 是 .app-shell-menu 的直接子元素(不在 .menu-screen-
+   flex 内部,见 MainMenu.jsx 顶部注释),absolute + inset: 0 让它相对
+   .app-shell-menu 的整个内边距盒铺满——包括 app-shell 自己那圈左右
+   16px 的内边距区域也会被盖住,天然通到屏幕两侧,不需要再像以前那样
+   用 calc(100% + 32px) négative margin 手动把宽度撑出内边距。
+   宽高都是 100%,配合 object-fit: cover,不管屏幕比例多宽多窄多高
+   多矮,图片自己会裁剪填满整个屏幕去适应,不存在"图片盖不到、需要
+   CSS 颜色去填充"的空隙——.app-shell-menu 不再需要任何背景色/渐变
+   (见 global.css)。
    ============================================================ */
-.hero-full-bleed {
-  position: relative;
-  width: calc(100% + var(--space-4) * 2);
-  margin-left: calc(-1 * var(--space-4));
-  margin-right: calc(-1 * var(--space-4));
-  aspect-ratio: 1024 / 1535;
-  overflow: hidden;
-}
-
-.hero-scene-bg {
+.page-bg-image {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* 顶部对齐:图片顶部(棋盘所在的位置)优先完整可见,裁剪只会发生在
+     底部那段本来就是空桌面的区域——这跟之前 hero 图单独一块时的
+     裁剪逻辑一致,只是现在裁剪范围是"整个屏幕高度减去图片顶部" */
   object-position: top center;
   z-index: 0;
   pointer-events: none;
   user-select: none;
-  /* 底部 10% 渐隐透明,融入下方 app-shell 的暖褐渐变,避免硬边——
-     只淡出图片本身最后一截,在线状态行叠在它上面的稳定色区,不受影响 */
-  mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, #000 90%, transparent 100%);
 }
 
-.hero-full-bleed-inner {
+/* 文字/按钮现在直接叠在整张背景图上,不再局限于"棋盘下方那一小段
+   留白"——顶栏可能压在偏亮的窗户/墙面区域,底部标语可能压在偏暗的
+   桌面区域,所以这层压暗改成覆盖整个屏幕高度,而不是只覆盖以前
+   "hero 那一小块"。依然只是用来提升文字对比度的"聚光/压暗"效果,
+   不是拿颜色去填充图片没盖到的地方——图片本身已经 100% 覆盖了
+   整个屏幕,这层只是叠加在它上面的一层半透明暗色,不会露出任何
+   "图片之外"的颜色。 */
+.page-bg-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* 顶栏、品牌标题用的是深色文字(--ink-token 等),这套配色假设自己
+     叠在照片偏亮的区域上(照片顶部的墙面/窗户本来就是亮的)——这里
+     从上半部分保持完全透明,不去压暗它,不然反而会削弱深色文字需要
+     的"亮背景"对比度,好心办坏事。
+     "在线状态"那行浅色文字已经自带一个独立的深色背景块(见
+     .online-status 的注释),不需要这层遮罩额外照顾。
+     真正需要这层遮罩帮忙的只有最下面的"执黑驭白·棋道无尽"这行
+     标语——它是浅色文字、没有自己的背景块,直接叠在照片下半段的
+     桌面区域上。照片这一段本来就偏暗,这里只是再收一点尾,确保
+     不同屏幕高度/裁剪范围下这行字始终有稳定的深色打底,而不是让
+     每个人在自己设备上运气好坏各不相同。 */
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 55%,
+    rgba(20, 14, 9, 0.2) 78%,
+    rgba(20, 14, 9, 0.5) 100%
+  );
+}
+
+/* MainMenu 组件的正文内容——顶栏、标题、在线状态、开始对局按钮、
+   人机挑战/每日试炼、底部标语,全部作为普通流内容从上往下依次排列,
+   叠在背景图上面(z-index 靠 DOM 顺序天然高于 .page-bg-image/
+   .page-bg-scrim,不用显式写 z-index)。内容自然排完之后,下面剩多少
+   背景图就露多少,不强制撑满一屏。
+   height:100% + overflow-y:auto 只是一个保底:正常情况下这几块固定
+   内容加起来远小于一屏高度,用不上滚动;真遇到极端矮的屏幕内容才会
+   超出,这时候允许滚动,而不是把内容硬生生截断看不全。 */
+.menu-screen-flex {
   position: relative;
   z-index: 1;
-  padding: 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .top-bar {
@@ -81,9 +119,15 @@
 }
 
 .identity-level {
-  font-size: 13px;
+  /* 响应式字号:小屏(320px)到大屏(480px,含桌面网页版卡片模式的
+     封顶宽度)之间,字号从 11.5px 平滑过渡到原来的 13px,不再是一个
+     固定死数值。算法见文件顶部,所有首页专属字号统一用同一套公式,
+     小屏统一缩到大屏的 87.5%。 */
+  font-size: clamp(11.5px, calc(8.5px + 0.9375vw), 13px);
   font-weight: 600;
-  color: var(--ink-token);
+  /* 从原来的墨色(--ink-token)改成参考截图取样的暖米金色,只改颜色,
+     字号/字重/布局都不动。 */
+  color: var(--topbar-accent);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -104,6 +148,15 @@
   background: var(--gold);
 }
 
+/* 进度条下方的经验值文字,如 "0/100"——表示当前阶已经攒了多少经验、
+   还差多少到下一阶,字号刻意压得很小,不跟等级文字抢视觉重量 */
+.identity-exp-text {
+  font-family: var(--font-mono);
+  font-size: clamp(8px, calc(6px + 0.625vw), 9px);
+  letter-spacing: 0.02em;
+  color: var(--topbar-accent);
+}
+
 .top-nav-light {
   display: flex;
   align-items: center;
@@ -117,8 +170,8 @@
   flex-direction: column;
   align-items: center;
   gap: 3px;
-  color: var(--text-secondary);
-  font-size: 11px;
+  color: var(--topbar-accent);
+  font-size: clamp(9.5px, calc(6.5px + 0.9375vw), 11px);
   letter-spacing: 0.02em;
   transition: color 0.15s ease, transform 0.15s ease;
 }
@@ -127,16 +180,87 @@
   transform: scale(0.94);
 }
 
+/* ---- 首页顶栏的体力/钻石徽章:数字变化时平滑滚动过渡 + 一次性的
+   "+N/-N"浮动提示 + 图标轻微弹跳,参考大部分手游对经验/货币/体力这类
+   资源变化的标准反馈处理,而不是让数字悄无声息地直接跳到新值。
+   跟"规则"用同一行 top-nav-light、同一套配色(var(--text-secondary)),
+   在这张明亮的首页背景图上能看清,不需要单独再调一套深色方案。 ---- */
+.stat-badge {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+  font-size: clamp(10.5px, calc(7.5px + 0.9375vw), 12px);
+  font-weight: 600;
+  font-family: var(--font-mono);
+}
+.stat-badge-icon {
+  display: flex;
+  align-items: center;
+  color: var(--wood);
+}
+
+/* 体力值专属的颜色覆盖——StatBadge 组件本身是体力值/钻石共用的,
+   直接改 .stat-badge / .stat-badge-icon 会连钻石也一起改掉。这里
+   借组件已经支持的 className 透传,只给体力值这一个实例单独加一层
+   更高优先级的颜色规则(选择器比基础规则更具体,自然覆盖,不用
+   !important),钻石完全不受影响,还是原来的蓝色。 */
+.stat-badge-energy {
+  color: var(--topbar-accent);
+}
+.stat-badge-energy .stat-badge-icon {
+  color: var(--topbar-accent);
+}
+.stat-badge-value {
+  min-width: 1.2em;
+  text-align: left;
+}
+
+@keyframes stat-pop-up {
+  0% { transform: scale(1); color: var(--topbar-accent); }
+  35% { transform: scale(1.4); color: var(--gold); }
+  100% { transform: scale(1); color: var(--topbar-accent); }
+}
+@keyframes stat-pop-down {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.78); }
+  100% { transform: scale(1); }
+}
+.stat-pop-up { animation: stat-pop-up 0.5s ease; }
+.stat-pop-down { animation: stat-pop-down 0.4s ease; }
+
+.stat-badge-float {
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  transform: translateX(-50%);
+  font-size: clamp(9.5px, calc(6.5px + 0.9375vw), 11px);
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: stat-float-up 0.9s ease forwards;
+}
+.stat-badge-float.positive { color: var(--gold); }
+.stat-badge-float.negative { color: var(--text-secondary); }
+
+@keyframes stat-float-up {
+  0% { opacity: 0; transform: translate(-50%, 4px) scale(0.85); }
+  15% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  75% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -14px) scale(0.92); }
+}
+
 .brand-hero {
   position: relative;
   z-index: 1;
   text-align: center;
-  padding: var(--space-6) 0 var(--space-4);
+  padding: var(--space-4) 0 var(--space-3);
 }
 
 .brand-name {
   font-family: var(--font-mono);
-  font-size: 12px;
+  font-size: clamp(10.5px, calc(7.5px + 0.9375vw), 12px);
   font-weight: 600;
   color: var(--wood);
   letter-spacing: 0.32em;
@@ -152,26 +276,16 @@
 }
 
 .brand-hero h1 {
-  font-size: var(--text-title);
+  /* 这里特意不改 --text-title 这个共享变量本身——它同时也被别的
+     页面(比如 mode-card)在用,直接改共享变量会波及首页之外没让
+     碰的地方。改成只在这里局部覆盖一个响应式的字号,--text-title
+     自己保持原来的固定 36px,其它引用它的地方不受影响。 */
+  font-size: clamp(31.5px, calc(22.5px + 2.8125vw), 36px);
 }
-
-/* 印章按钮:装饰性的鉴赏章,同时承担"规则"入口的点击功能 */
-.brand-seal {
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-  margin-bottom: 4px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s ease;
-}
-.brand-seal:active { transform: scale(0.88); }
 
 .brand-slogan {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: clamp(11.5px, calc(8.5px + 0.9375vw), 13px);
   color: var(--text-secondary);
   letter-spacing: 0.12em;
   margin-top: var(--space-1);
@@ -191,64 +305,146 @@
 }
 
 /* ============================================================
-   在线状态行:重新对照设计图放大看了这一小块——之前想错了方向,
-   design 里这行字根本不是"深色字压浅色底",而是白色/暖白字直接压在
-   棋盘投影那圈还没完全褪干净的深色暖褐区域上,圆点也是纯白发光,不是
-   绿色。hero-scene.png 棋盘投影下方 66%-70% 那一段刚好也是这种深色
-   过渡调,天然适合放白字——不用再纠结"往下挪到浅色区才能看清"这种
-   顾虑了,直接搬 design 的配色方案。
+   "我的"页面头部:头像(可点击上传更换)+ 昵称(可编辑)+ 经验值行,
+   风格上尽量克制,不占太多竖向空间——下面还要放好友/战绩两个入口。
    ============================================================ */
-.online-status {
+.profile-head {
+  text-align: center;
+  padding: var(--space-4) 0 var(--space-2);
+}
+
+.profile-avatar-wrap {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  margin: 0 auto;
+  cursor: pointer;
+}
+
+.profile-avatar {
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--wood-soft);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+  box-shadow: 0 0 0 1px var(--border-token);
+}
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.profile-avatar-loading {
   position: absolute;
-  left: 0;
-  right: 0;
-  top: 68%;
-  z-index: 1;
+  inset: 0;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.profile-avatar-loading .spinner {
+  border-color: rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+}
+
+/* 头像右下角的相机角标,提示"点击可更换" */
+.profile-avatar-cam {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--ink-token);
+  color: #FBF6EC;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid var(--surface);
+}
+
+.profile-exp-row {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  margin-top: 10px;
+}
+.profile-exp-row .identity-progress-track { width: 120px; }
+
+/* ============================================================
+   在线状态行:结构、配色跟最早版本完全一致(叠在图片棋盘投影下方的
+   留白区、两行文字、两级颜色、两侧装饰虚线)——这里只做"缩小":
+   字号、间距、圆点、装饰线整体等比调小一圈,不改样式本身。
+   ============================================================ */
+.online-status {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   text-align: center;
-  padding: 0 var(--space-4);
+  /* 要落在棋盘下方,不能压在棋盘上。图片现在是铺满整个屏幕的全屏
+     背景,用 object-fit: cover + object-position: top 从顶部往下裁,
+     不管屏幕多宽多窄,棋盘投影结束的位置在屏幕上永远是"图片实际
+     渲染宽度的 86.4%"这么多像素(0.346 是棋盘投影在原图 1981px
+     高度里的结束位置占比,1981/793 是原图宽高比,两者相乘约等于
+     0.864——这个比例只跟图片本身有关,不随屏幕宽度变化)。
+     margin-top 的百分比是相对"这个元素自己的容器宽度"算的,记这个
+     宽度为 C(即 .menu-screen-flex 的宽度,也就是 app-shell 减去
+     左右各 16px 内边距之后的内容区宽度)。但背景图是相对
+     .app-shell-menu 的整个内边距盒铺满的,实际渲染宽度是 C+32px,
+     不是 C——这 32px 的差需要单独在常数项里补回来,不能直接套用
+     图片自己的宽度去算百分比。
+     上面顶栏 + 品牌标题这块内容的高度,是字号/内边距全部写死 px
+     算出来的固定值,不随屏幕宽度变化,实测约 164px,这里进一步收紧
+     到贴近棋盘投影边缘(呼吸间隙压到 -8px,也就是比边缘再往上一丁点):
+       margin = 0.864 × (C+32px) + (-8px) - 164px
+              = 0.864×C + 27.6px - 8px - 164px
+              = 86.4%×C - 144px(27.6-8-164≈-144,四舍五入)
+     换算成 calc() 就是下面这行。 */
+  margin-top: calc(86.4% - 144px);
 }
 
 .online-status-line {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: clamp(8px, calc(6px + 0.625vw), 9px);
   font-weight: 600;
-  letter-spacing: 0.22em;
-  /* 暖白/米白,不是纯 #FFFFFF——量出来设计图这里的字色偏米黄,
-     直接复用 --wood-soft 这个已有的暖白 token,不用再造一个新色 */
+  letter-spacing: 0.18em;
   color: var(--wood-soft);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .online-dot-glow {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
   background: #FBF6EC;
-  box-shadow: 0 0 0 4px rgba(251, 246, 236, 0.22), 0 0 10px rgba(251, 246, 236, 0.55);
+  box-shadow: 0 0 0 3px rgba(251, 246, 236, 0.22), 0 0 8px rgba(251, 246, 236, 0.55);
 }
 
 .online-status-sub {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  font-size: 12px;
+  gap: var(--space-1);
+  font-size: clamp(9px, calc(7px + 0.625vw), 10px);
   color: rgba(241, 231, 216, 0.78);
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
-/* 副标题两侧的短横线,呼应设计图里"已连接到棋局世界"左右那两条
-   装饰虚线——纯 CSS 画,不额外切图 */
 .online-status-sub::before,
 .online-status-sub::after {
   content: "";
-  width: 20px;
+  width: 14px;
   height: 1px;
   background: rgba(241, 231, 216, 0.45);
 }
@@ -262,10 +458,12 @@
   align-items: center;
   justify-content: space-between;
   width: 100%;
-  /* online-status 这次从 top:72% 又往上挪到 68%(离棋盘更近,贴 design
-     的位置),下面留给按钮的尾巴相应变长了,负 margin 要跟着加大,
-     不然又会变回"在线状态离棋盘近了,但离按钮远了"的跷跷板问题 */
-  margin-top: -100px;
+  position: relative;
+  z-index: 2;
+  /* 直接跟在"在线状态"下面,固定小间距(12px),不再是之前"推到屏幕
+     底部"的做法——ONLINE 落在棋盘下方之后,按钮紧跟着它就行,不需要
+     额外的弹性占位或复杂的定位计算。 */
+  margin-top: var(--space-3);
   background: var(--ink-token);
   color: #FBF6EC;
   border-radius: var(--radius-lg);
@@ -287,14 +485,14 @@
 
 .cta-primary-title {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: clamp(17.5px, calc(12.5px + 1.5625vw), 20px);
   font-weight: 700;
   letter-spacing: 0.1em;
 }
 
 .cta-primary-sub {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: clamp(9.5px, calc(6.5px + 0.9375vw), 11px);
   letter-spacing: 0.24em;
   color: rgba(198, 161, 91, 0.85);
 }
@@ -318,7 +516,7 @@
 .secondary-row {
   display: flex;
   gap: var(--space-3);
-  margin-top: var(--space-4);
+  margin-top: var(--space-2);
 }
 
 .secondary-card {
@@ -327,14 +525,14 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: var(--space-1);
+  gap: 2px;
   /* 设计图里这两张卡片跟背景几乎是同一个色系,只是比背景稍微提亮一点
      (实测卡片内部色值只比卡片外的背景亮 15-20,不是纯白卡片硬贴在暖色
      背景上那种强对比),所以这里改成半透明暖白,而不是纯 #FFFFFF */
   background: rgba(255, 252, 245, 0.6);
   border: 1px solid rgba(222, 211, 194, 0.7);
   border-radius: var(--radius-md);
-  padding: var(--space-4) var(--space-2);
+  padding: 10px var(--space-2);
   box-shadow: var(--shadow-card);
   transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
@@ -353,24 +551,23 @@
 }
 
 .secondary-card-icon {
-  width: 28px;
-  height: 28px;
+  width: 20px;
+  height: 20px;
   color: var(--wood);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: var(--space-1);
 }
 
 .secondary-card-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: clamp(12px, calc(8px + 1.25vw), 14px);
   color: var(--fg);
 }
 
 .secondary-card-sub {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: clamp(8px, calc(6px + 0.625vw), 9px);
   letter-spacing: 0.16em;
   color: var(--text-secondary);
 }
@@ -389,17 +586,26 @@
   align-items: center;
   justify-content: center;
   gap: var(--space-3);
-  margin-top: var(--space-6);
-  padding-bottom: var(--space-4);
-  font-size: 12px;
+  margin-top: var(--space-2);
+  padding-bottom: var(--space-2);
+  font-size: clamp(10.5px, calc(7.5px + 0.9375vw), 12px);
   letter-spacing: 0.14em;
-  color: var(--text-secondary);
+  /* 之前是深灰棕色(--text-secondary),是配那层浅色 CSS 渐变页面
+     背景用的。现在整个页面背景是照片,这行标语正好叠在照片最暗的
+     桌面区域(再加上 .page-bg-scrim 在底部的额外压暗),深色文字在
+     那种背景下基本看不清——换成暖白色 + 一点文字阴影,跟"ONLINE"
+     状态那行(.online-status-sub)保持同一套"叠在深色照片上"的配色
+     逻辑,而不是沿用只适合浅色背景的旧配色。 */
+  color: rgba(241, 231, 216, 0.75);
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
 
 .tagline-line {
   width: 22px;
   height: 1px;
-  background: var(--border-token);
+  /* 同理,原来的浅米色边框色在深色照片背景下本来就偏亮、依然能看清,
+     不需要改;但透明度调高一点,视觉上跟旁边变亮的文字更协调。 */
+  background: rgba(241, 231, 216, 0.4);
 }
 
 /* ============================================================
@@ -490,6 +696,10 @@
   background: var(--wood);
   border-color: var(--wood);
   color: var(--accent-fg);
+}
+.diff-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .room-code-display {
@@ -752,6 +962,48 @@
   font-size: 26px;
   letter-spacing: 0.02em;
   color: var(--wood);
+}
+
+/* ---- 邀请好友面板打开时,VS 区收成一条紧凑状态条 ----
+   头像缩小、段位胶囊和"在线/离线"文字这些次要信息直接隐掉,只留
+   "谁 vs 谁"这一眼状态,把垂直空间让给下面真正要操作的好友列表 */
+.vs-row-compact {
+  padding: 2px 0 10px;
+  gap: var(--space-2);
+}
+.vs-row-compact .vs-slot {
+  gap: 4px;
+  width: auto;
+}
+.vs-row-compact .vs-avatar {
+  width: 40px;
+  height: 40px;
+  border-width: 2px;
+}
+.vs-row-compact .vs-avatar-badge {
+  width: 18px;
+  height: 15px;
+  font-size: 9px;
+  right: -3px;
+  bottom: -1px;
+  border-width: 1.5px;
+}
+.vs-row-compact .vs-name {
+  font-size: 12px;
+  margin-top: 0;
+  max-width: 72px;
+}
+.vs-row-compact .vs-level-tag,
+.vs-row-compact .vs-status-row,
+.vs-row-compact .vs-search-text,
+.vs-row-compact .vs-search-dots {
+  display: none;
+}
+.vs-row-compact .vs-center {
+  padding-top: 8px;
+}
+.vs-row-compact .vs-plain-text {
+  font-size: 17px;
 }
 
 /* ---- 好友在线:辅助信息行,不是按钮——去掉实心底色和胶囊形状,

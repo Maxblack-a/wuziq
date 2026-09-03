@@ -25,7 +25,7 @@ export default function MatchmakingScreen({ myId, onMatched, onExit, onFallbackT
 
       const { data: roomId, error } = await supabase.rpc("match_players", {
         me: myId,
-        my_rating: 1200,
+        my_exp: 0,
       });
 
       if (cancelled) return;

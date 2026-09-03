@@ -1,0 +1,488 @@
+/* ============================================================
+   每日试炼:见面邀请/点评续约/换对手/体力不足这几步的图片背景对话
+   界面全部复用 linmo.css 里 .linmo-scene 那一整套(跟填昵称、邀请
+   棋力测试同一个视觉系统),这个文件只放"结算揭晓"这个纸面战报页
+   (不是对话,不套图片背景)、以及给 .linmo-scene 补的返回按钮/状态条
+   两个小东西。
+   ============================================================ */
+
+.daily-trial-error-text {
+  text-align: center;
+  font-size: 12px;
+  color: var(--seal-red);
+  margin-top: var(--space-2);
+}
+
+.daily-trial-error {
+  text-align: center;
+  padding: 60px var(--space-4);
+}
+.daily-trial-error p {
+  color: var(--fg-muted);
+  margin-bottom: var(--space-3);
+}
+
+/* ============================================================
+   每日试炼的对话界面(见面邀请/点评续约/换对手/体力不足)沿用跟填
+   昵称、邀请棋力测试完全同一套"图片背景 + 信笺气泡 + 胶囊按钮"视觉
+   (.linmo-scene / .linmo-invite-bubble / .linmo-cta 等,定义在
+   linmo.css),这里只补两样林墨见面场景原本没有的东西:场景左上角的
+   返回按钮(填昵称/棋力测试邀请是强制流程没有退出口,每日试炼是可选
+   玩法,需要能随时退出),以及右上角体力/钻石/连胜的小状态条。
+   ============================================================ */
+.linmo-scene-back-btn {
+  position: absolute;
+  z-index: 3;
+  top: var(--space-3);
+  left: var(--space-3);
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: rgba(23, 19, 16, 0.55);
+  color: #F5F0E6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(245, 240, 230, 0.3);
+}
+.linmo-scene-back-btn:active { background: rgba(23, 19, 16, 0.75); transform: scale(0.94); }
+
+.linmo-scene-resource-bar {
+  position: absolute;
+  z-index: 3;
+  top: var(--space-3);
+  right: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+}
+.linmo-scene-resource-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: #F5F0E6;
+  background: rgba(23, 19, 16, 0.5);
+  border-radius: 999px;
+  padding: 3px 8px;
+}
+.linmo-scene-resource-item.win { color: #E8C27A; }
+.linmo-scene-resource-item.lose { color: rgba(245, 240, 230, 0.65); }
+
+/* 点评/续约这几步,气泡里经常要连着说两三句(点评 + 续约邀请/理由),
+   不止棋力测试邀请那种"一句话"——第二、三句用稍微淡一点的颜色区分
+   "补充语"跟"主话"的视觉重量,复用 .linmo-invite-bubble-line 的字号/
+   行高,只覆盖颜色。 */
+.linmo-invite-bubble-line-secondary {
+  color: #6B5A4A;
+}
+
+/* ============================================================
+   对局结算揭晓(胜/负/平):独立全屏页面,不是对话,不套图片背景——
+   继续按钮常驻贴底(.result-reveal-footer 在 flex 布局里独立于可滚动
+   内容区之外,不用 position:fixed 也能做到"到底部"的效果,顺带避开
+   position:fixed 在部分移动端浏览器里跟软键盘/安全区打架的老问题)。
+   ============================================================ */
+.result-reveal-screen {
+  /* 撑满 .app-shell 的左右 padding(16px)——这一页背景色跟 .app-shell
+     自己的底色很接近但不是同一个颜色,不撑满的话四周会露出一圈
+     .app-shell 的颜色,看上去像"贴图贴上去的"。写法跟 linmo.css 里
+     .linmo-scene 撑满同一个容器的负边距技巧完全一致,复用同一个思路。
+     上下也用同样的负边距抵掉 .app-shell 的 safe-area-inset padding——
+     否则在有安全区(比如刘海屏)的设备上,.result-reveal-screen 自己
+     算的 100dvh 高度会跟 .app-shell 的上下 padding 叠加,总高度超出
+     一屏,顶部同样会露色差。 */
+  width: calc(100% + var(--space-4) * 2);
+  margin: calc(-1 * env(safe-area-inset-top)) calc(-1 * var(--space-4)) calc(-1 * env(safe-area-inset-bottom));
+  height: var(--app-height, 100dvh);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, #FBF6EA 0%, #F4EEE1 100%);
+}
+.result-reveal-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-4) var(--space-4) var(--space-2);
+}
+.result-reveal-inner {
+  max-width: 360px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ---- 顶部身份/资源条 ---- */
+.result-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.result-identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.result-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--wood-soft);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+.result-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.result-identity-level {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--wood);
+  white-space: nowrap;
+}
+.result-resource-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+.result-resource-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+.result-resource-item.stamina { color: var(--fg-muted); }
+.result-resource-item.diamond { color: #1E6FB0; }
+
+/* ---- 头像下方的经验进度条(飞行动画的其中一个落点)---- */
+.result-exp-block {
+  margin-top: var(--space-3);
+}
+.result-exp-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #E7DCC5;
+  border: 0.5px solid var(--border-token);
+  overflow: hidden;
+  position: relative;
+}
+.result-exp-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--gold);
+}
+.result-exp-text {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 4px;
+  font-family: var(--font-mono);
+}
+
+/* ---- 胜负标题 ---- */
+.result-title-zone {
+  text-align: center;
+  margin-top: var(--space-8);
+}
+.result-ornament-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  opacity: 0.55;
+}
+.result-ornament-line { width: 28px; height: 0.5px; background: var(--wood); }
+.result-ornament-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--wood); }
+
+.result-title {
+  font-family: var(--font-display, serif);
+  font-weight: 700;
+  font-size: 52px;
+  letter-spacing: 12px;
+  margin: var(--space-2) 0;
+  line-height: 1.1;
+}
+.result-title.win {
+  background: linear-gradient(160deg, #FCE8B0 0%, var(--gold) 45%, #8A5A16 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.result-title.lose,
+.result-title.draw {
+  color: var(--ink-token);
+}
+
+/* ---- 奖励标签行(胜局)/ 未获得奖励提示(败局、和棋)---- */
+.result-reward-row {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  min-height: 62px;
+}
+.result-reward-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+}
+.result-reward-chip-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 19px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+.result-reward-chip-icon-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.result-reward-chip.diamond .result-reward-chip-icon-badge { background: #DCEEFB; }
+.result-reward-chip.exp .result-reward-chip-icon-badge { background: #F1E7D8; }
+.result-reward-chip.diamond .result-reward-chip-top { color: #1E6FB0; }
+.result-reward-chip.exp .result-reward-chip-top { color: var(--wood); }
+.result-reward-chip-label {
+  font-size: 11px;
+  color: var(--fg-muted);
+}
+.result-reward-divider {
+  width: 0.5px;
+  background: var(--border-token);
+  align-self: stretch;
+  margin: 2px 0;
+}
+.result-no-reward-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--wood-soft);
+  color: var(--fg-muted);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 13px;
+  height: fit-content;
+  align-self: center;
+}
+
+/* ---- 对局回顾卡片 ---- */
+.result-recap-card {
+  background: #fff;
+  border-radius: var(--radius-md);
+  border: 0.5px solid var(--border-token);
+  padding: var(--space-4);
+  margin-top: var(--space-5);
+  box-shadow: var(--shadow-card);
+}
+.result-recap-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-token);
+}
+.result-recap-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.result-recap-divider-line { flex: 1; height: 0.5px; background: var(--border-token); }
+.result-recap-divider-dot { width: 4px; height: 4px; transform: rotate(45deg); background: var(--border-token); flex-shrink: 0; }
+
+.result-stats-grid {
+  display: flex;
+  margin-top: var(--space-3);
+}
+.result-stat-cell {
+  flex: 1;
+  text-align: center;
+}
+.result-stat-cell + .result-stat-cell {
+  border-left: 0.5px solid var(--border-token);
+}
+.result-stat-cell-icon { color: var(--gold); }
+.result-stat-cell-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-token);
+  margin-top: 3px;
+}
+.result-stat-cell-label {
+  font-size: 10px;
+  color: var(--fg-muted);
+  margin-top: 1px;
+}
+
+.result-encourage-line {
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: var(--space-3);
+}
+
+/* ---- 底部常驻按钮 ---- */
+.result-reveal-footer {
+  padding: var(--space-3) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(180deg, rgba(244,238,225,0) 0%, #F4EEE1 40%);
+}
+.result-reveal-footer button {
+  width: 100%;
+  max-width: 360px;
+  margin: 0 auto;
+  display: block;
+}
+/* 这个继续按钮是这一局最后的"高光收尾",跟 --gold 变量注释里说的
+   "只用于胜负连线、积分数字这类高光时刻"对上号,专门给这一个按钮开
+   渐变的例外,项目里其它按钮仍然保持扁平色,不要把这段抄到别处去。 */
+.result-reveal-footer .btn-primary {
+  background: linear-gradient(180deg, #D4B276 0%, #B8894A 55%, #8A6231 100%);
+  border: none;
+}
+.result-reveal-footer .btn-primary:active {
+  filter: brightness(0.96);
+}
+/* 联机对战结算页底部是"返回首页/返回房间"两个并排按钮(每日试炼只有
+   一个"继续"),复用同一个 footer 容器,只是内容换成两按钮一行——
+   套一层 .result-reveal-footer-row 把 max-width/居中这两条从单按钮的
+   `.result-reveal-footer button` 规则里搬出来,两个按钮各自 flex:1
+   平分宽度,不再各自 100%。 */
+.result-reveal-footer-row {
+  display: flex;
+  gap: var(--space-3);
+  max-width: 360px;
+  margin: 0 auto;
+}
+.result-reveal-footer-row button {
+  width: auto;
+  max-width: none;
+  flex: 1;
+}
+
+/* ---- 回顾棋盘的"点击查看完整对局"提示 + 展开图标 ---- */
+.result-recap-board-wrap {
+  position: relative;
+  display: flex;
+  width: fit-content;
+  margin: var(--space-2) auto 0;
+  cursor: pointer;
+}
+.result-recap-expand-hint {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(23, 19, 16, 0.55);
+  color: #F5F0E6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.result-recap-tap-caption {
+  font-size: 11px;
+  color: var(--fg-muted);
+  margin-top: 6px;
+}
+
+/* ---- 完整对局回放浮层 ---- */
+.recap-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: rgba(23, 19, 16, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+.recap-modal-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--bg, #F4EEE1);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  max-height: 88vh;
+  overflow-y: auto;
+}
+.recap-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.recap-modal-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-token);
+}
+.recap-modal-close {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: none;
+  background: var(--wood-soft);
+  color: var(--wood);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.recap-modal-close:active { filter: brightness(0.95); }
+.recap-modal-footer-text {
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-muted);
+  margin-top: var(--space-3);
+}
+
+/* ---- 飞行动画层 ---- */
+.result-fly-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+.result-fly-item {
+  position: absolute;
+  top: 0;
+  left: 0;
+  opacity: 0;
+  transform-origin: center center;
+  pointer-events: none;
+}
+.result-fly-orb {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+.result-sparkle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--gold);
+  pointer-events: none;
+  animation: result-sparkle-out 0.6s ease-out forwards;
+}
+@keyframes result-sparkle-out {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.3); opacity: 0; }
+}

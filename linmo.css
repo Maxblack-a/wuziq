@@ -1,0 +1,610 @@
+/* ============================================================
+   林墨见面场景(替代原来纯表单式的"确认昵称"页)
+   图片是真正的背景(全出血,不是插入的图片),对话框/输入框浮在上面。
+
+   关键结构说明(参考设计图的实际排版,不是"顶部品牌区+底部对话"这种
+   上下堆叠结构):
+   - 背景照片本身就是"左亮右暗"的构图——左边是浅色棋馆/竹叶背景,
+     右边是人物暗调半身像。这个明暗对比是照片自带的,不需要额外叠加
+     黑色渐变遮罩去"造"可读性;文字色到底用深色还是浅色,取决于文字
+     具体落在图片的哪个区域(左边深色字、顶栏浅色字)。
+   - 顶栏(身份牌 + 好友/排行榜/我的)横跨整个宽度,贴在图片最上方——
+     这一条无论落在左边浅色区还是右边人物暗调区,顶部都有统一的暗
+     渐变,浅色文字全程可读。
+   - 真正的内容(品牌区 + 对话 + 输入框 + 按钮)是一条贴左对齐的窄列,
+     宽度大约图片宽度的 44%,压在左边那块浅色区域上,深色文字——
+     不是居中,也不是占满整个宽度。
+   - "你好,我叫林墨…你叫什么名字啊?"这两句是直接写在背景上的深色
+     字,没有气泡框;只有第一句招呼("哎,你就是那个新来的棋手吧")
+     是真正带气泡的。
+   ============================================================ */
+.linmo-scene {
+  position: relative;
+  width: calc(100% + var(--space-4) * 2);
+  margin-left: calc(-1 * var(--space-4));
+  margin-right: calc(-1 * var(--space-4));
+  /* 撑满整个可视高度,不再按图片原始比例(941:1672)算高度——之前
+     这里用 aspect-ratio 精确保原图比例、不裁不留白,但手机屏幕的
+     高宽比普遍比这张图更"瘦长"(常见约 1:2.1~2.2,图片是 1:1.777),
+     导致图片撑出的高度天然比屏幕矮一截,底下露出 background 纯色,
+     看起来就是"图片没铺满屏幕"。
+     现在改成:容器用 flex:1 吃满 .app-shell(flex 列)里除顶栏/按钮
+     以外的剩余空间,图片本身用 object-fit:cover 裁切自适应——不管
+     屏幕比例多"瘦长"或多"矮胖",图片都会裁掉多余部分、真正铺满,
+     不会再露出下面的纯色背景。代价是人物构图会被裁掉一部分,靠下面
+     .linmo-scene-bg 的 object-position 控制优先保留脸部/上半身,而
+     不是裁到构图中间以下那截空桌面。 */
+  flex: 1;
+  min-height: 0; /* flex 子项默认 min-height:auto 会撑破父级,配合 flex:1 拉伸要归零 */
+  background: #1C1712;
+}
+
+.linmo-scene-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* 只在最顶上留一条很浅的暗角,保证顶栏(不管落在左边浅色区还是右边
+   人物区)文字对比度都够——不是覆盖全图的渐变 */
+.linmo-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 8, 6, 0.55) 0%, rgba(10, 8, 6, 0.15) 12%, transparent 22%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+/* 顶栏(身份牌 + 好友/排行榜/我的)已经拿掉了——这个页面出现的时候
+   用户昵称都还没确认,这些入口本来就没有实际内容,而且占掉的顶部
+   空间对矮屏幕/矮窗口很不友好,去掉之后能省出接近顶部 15%~20% 的
+   高度,让整张卡片需要的总高度变矮,减少"需要往下滑才能看到按钮"
+   的情况。相关的 .linmo-scene-topbar / .linmo-nav 样式先留着不删,
+   万一以后要在别处复用同一套顶栏样式。 */
+.linmo-scene-topbar {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4) 0;
+}
+
+.linmo-scene-topbar .identity-level { color: #F5F0E6; }
+.linmo-scene-topbar .identity-exp-text { color: rgba(245, 240, 230, 0.7); }
+.linmo-scene-topbar .identity-progress-track { background: rgba(245, 240, 230, 0.25); }
+
+.linmo-nav {
+  display: flex;
+  gap: var(--space-4);
+}
+.linmo-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  color: #F5F0E6;
+  font-size: 11px;
+}
+
+/* 左侧内容窄列——宽度按参考图比例大致是整张图的 44%,贴左对齐,
+   压在背景照片天然偏亮的那一侧。top 从原来的 19%(给顶栏让位)
+   收紧到 6%,紧贴顶部,把顶栏空出来的高度让给实际内容。 */
+.linmo-scene-column {
+  position: absolute;
+  z-index: 2;
+  top: 6%;
+  left: 0;
+  width: 45%;
+  padding: 0 0 0 var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.linmo-brand-block {
+  margin-bottom: 2px;
+}
+.linmo-brand-name {
+  color: var(--wood);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.28em;
+  font-weight: 600;
+}
+.linmo-brand-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+.linmo-brand-title-row h1 {
+  font-family: var(--font-display);
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--ink-token);
+  margin: 0;
+}
+.linmo-brand-seal {
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #B23B2E;
+  color: #F5F0E6;
+  font-size: 10px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-card);
+}
+.linmo-brand-slogan {
+  color: var(--text-secondary);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  margin-top: 4px;
+}
+
+.linmo-bubble {
+  position: relative;
+  background: rgba(245, 240, 230, 0.96);
+  border: 1px solid rgba(198, 161, 91, 0.35);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-modal);
+  /* 票券式切角,不是普通圆角——四角各斜切一小块 */
+  clip-path: polygon(
+    10px 0, calc(100% - 10px) 0, 100% 10px,
+    100% calc(100% - 10px), calc(100% - 10px) 100%,
+    10px 100%, 0 calc(100% - 10px), 0 10px
+  );
+}
+/* 气泡左上角压着的小装饰图标(参考图里是个小花/星形点缀) */
+.linmo-bubble-deco {
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  width: 16px;
+  height: 16px;
+  color: var(--gold);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.25));
+}
+
+.linmo-bubble-line {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-token);
+  line-height: 1.5;
+}
+
+/* ============================================================
+   棋力测试邀请这一步专用的气泡/按钮样式——只加在 .linmo-invite-*
+   这几个类上,不覆盖上面 .linmo-bubble / .linmo-cta / .linmo-actions-row
+   本身,这样"问名字"那一步和 LinMoRetakeIntroScreen(复测邀请)复用
+   同一批基础类时不会被连带改样式。只有邀请测试这一屏的 JSX 会同时
+   带上基础类 + 这里的 .linmo-invite-* 类。
+   ============================================================ */
+.linmo-invite-bubble {
+  /* 不透明的暖调宣纸色,而不是半透明叠色——跟深色场景照片形成清晰的
+     "信笺压在照片上"的对比,而不是让照片透出来把纸面弄脏 */
+  background: #EFE6D3;
+  border: 1px solid rgba(198, 161, 91, 0.55);
+  padding: var(--space-4) var(--space-3);
+  /* 双层投影:近处一层收紧的暗影贴着卡片给出厚度,远处一层更大更淡
+     的投影把卡片从深色背景照片上"提"起来 */
+  box-shadow:
+    0 1px 2px rgba(23, 17, 10, 0.25),
+    0 14px 32px rgba(10, 8, 5, 0.45);
+  /* 票券式切角:只切左上→右下这条对角线上不相邻的两个角(右上、
+     左下),另外两角(左上、右下)保持直角——参考图里就是这种"票根"
+     切法,不是四角都切成一样对称的八边形 */
+  clip-path: polygon(
+    0 0, calc(100% - 14px) 0, 100% 14px,
+    100% 100%, 14px 100%, 0 calc(100% - 14px)
+  );
+}
+
+/* 正文结束后压一条细金线 + 中间一颗菱形,呼应参考图气泡收尾处的
+   装饰线 */
+.linmo-invite-bubble-end-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--space-2);
+}
+.linmo-invite-bubble-end-divider::before,
+.linmo-invite-bubble-end-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(198, 161, 91, 0.6));
+}
+.linmo-invite-bubble-end-divider::after {
+  background: linear-gradient(90deg, rgba(198, 161, 91, 0.6), transparent);
+}
+.linmo-invite-bubble-end-divider-dot {
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--gold);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+}
+
+/* 气泡内顶部的"林墨"落款——不是聊天气泡常见的"谁在说话"标签,更像
+   信笺抬头,棕红色(跟品牌区的印章同色系),小图标压在名字右下角,
+   下面一条细金线把落款跟正文分开 */
+.linmo-invite-bubble-name {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  color: #B23B2E;
+  margin-bottom: 6px;
+}
+.linmo-invite-bubble-name-icon {
+  color: var(--gold);
+  opacity: 0.8;
+  transform: translateY(2px);
+}
+.linmo-invite-bubble-divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(198, 161, 91, 0.55), rgba(198, 161, 91, 0.1));
+  margin-bottom: var(--space-2);
+}
+
+.linmo-invite-bubble-line {
+  /* 暖棕墨色,而不是基础类用的近黑 var(--ink-token)——跟宣纸底色
+     更搭,不会显得像印刷体 */
+  color: #3D2B22;
+  line-height: 1.6;
+}
+
+/* "你好,我叫林墨…你叫什么名字啊?"——不带气泡框,直接压在背景上。
+   注意两点:①这一行往下,左侧文字列压着的背景已经从"五子棋"标题
+   那一段的浅色区域,过渡到偏暗的棕色区域了,要用浅色字,不能用深色
+   墨字;②实际测过原图像素,这行字比气泡内的文字略大一些(不是同一
+   个字号),不能直接照抄气泡的字号。 */
+.linmo-plain-line {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  color: #F5F0E6;
+  line-height: 1.5;
+}
+
+.linmo-name-highlight {
+  color: var(--gold);
+}
+
+.linmo-divider {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.linmo-divider::before,
+.linmo-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(198, 161, 91, 0.7));
+}
+.linmo-divider::after {
+  background: linear-gradient(90deg, rgba(198, 161, 91, 0.7), transparent);
+}
+.linmo-divider-dot {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--gold);
+  transform: rotate(45deg);
+  flex-shrink: 0;
+  position: relative;
+}
+.linmo-divider-dot::after {
+  content: "";
+  position: absolute;
+  inset: 2.5px;
+  background: var(--gold);
+}
+
+.linmo-input-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.linmo-input-label {
+  color: #F5F0E6;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  display: flex;
+  align-items: center;
+}
+.linmo-input-label .linmo-diamond { margin-left: 0; }
+
+.linmo-input-wrap {
+  position: relative;
+}
+.linmo-input {
+  width: 100%;
+  padding: 12px 32px 16px 14px;
+  min-height: 44px;
+  font-size: 15px;
+  background: rgba(245, 240, 230, 0.9);
+  color: var(--ink-token);
+  border: 1px solid rgba(198, 161, 91, 0.5);
+  border-radius: var(--radius-md);
+  box-sizing: border-box;
+}
+.linmo-input::placeholder { color: var(--text-secondary); }
+.linmo-input-icon {
+  position: absolute;
+  right: 8px;
+  bottom: 6px;
+  color: var(--gold);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.linmo-hint {
+  color: rgba(245, 240, 230, 0.75);
+  font-size: 11px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.linmo-hint-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--gold);
+  flex-shrink: 0;
+}
+
+/* 装饰用的小菱形分隔符,只用在"你的名字"这个标签前面——跟上面
+   linmo-hint 两侧的小圆点是两种不同的点缀,不要混用 */
+.linmo-diamond {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  background: var(--gold);
+  transform: rotate(45deg);
+  margin: 0 6px 1px;
+  vertical-align: middle;
+}
+
+/* "继续/好啊/开始"这几个主按钮,只在林墨见面场景里用——深色照片
+   背景上要用胶囊形 + 金色描边 + 金色字,跟全局纸色背景上用的
+   .btn-primary(木色底、浅色字)是两套配色,不能共用同一套样式 */
+.linmo-cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  background: rgba(23, 19, 16, 0.92);
+  border: 1px solid var(--gold);
+  border-radius: 999px;
+  padding: 12px 20px;
+  color: var(--gold);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 600;
+  box-shadow: var(--shadow-card);
+}
+.linmo-cta:disabled { opacity: 0.5; }
+.linmo-cta svg { color: var(--gold); }
+
+.linmo-error {
+  color: #B23B2E;
+  font-size: 12px;
+  text-align: center;
+}
+
+.linmo-actions-row {
+  display: flex;
+  gap: var(--space-2);
+}
+.linmo-actions-row > * { flex: 1; }
+/* "改天吧"这类次要按钮,在林墨见面场景的深色背景上,原本给纸色背景
+   设计的 .btn-ghost(深色字、浅色描边)基本看不见,需要单独覆盖一套
+   跟场景背景匹配的浅色描边/浅色字版本 */
+.linmo-actions-row .btn-ghost {
+  background: rgba(245, 240, 230, 0.08);
+  color: #F5F0E6;
+  border: 1px solid rgba(245, 240, 230, 0.35);
+  border-radius: 999px;
+}
+
+/* 棋力测试邀请专用的按钮排布(邀请测试 + 复测邀请两屏都用):主按钮
+   占满整列宽度放上面,"改天吧/再想想"退成正下方的纯文字链接——不
+   跟基础的 .linmo-actions-row 并排布局混在一起,免得连带影响其他还
+   在用并排布局的地方。DOM 顺序仍是"次要按钮在前、主按钮在后"(跟填
+   昵称页共用同一套书写习惯),这里用 order 把主按钮视觉上提到上面。 */
+.linmo-invite-actions-row {
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.linmo-invite-actions-row .linmo-invite-cta { order: 1; width: 100%; flex: none; }
+.linmo-invite-actions-row .linmo-invite-skip {
+  order: 2;
+  background: transparent;
+  border: none;
+  color: rgba(198, 161, 91, 0.85);
+  font-size: 13px;
+  padding: 10px;
+  flex: none;
+  width: auto;
+}
+/* 接近纯黑的实底,比 .linmo-cta 更沉、更不透——跟金色描边形成更干净
+   利落的对比,而不是让深色场景照片透过来 */
+.linmo-invite-cta {
+  background: #100D0A;
+  border: 1px solid rgba(198, 161, 91, 0.9);
+  letter-spacing: 0.02em;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.4),
+    0 10px 22px rgba(10, 8, 5, 0.5);
+}
+
+/* ============================================================
+   棋力测试对局页:顶部一条"林墨小像 + 台词气泡"状态条,下面照常复用
+   现有棋盘组件——不重新设计棋盘,保持跟联机/人机对战视觉统一。
+   ============================================================ */
+.skilltest-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-1) var(--space-3);
+}
+
+.skilltest-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--wood-soft);
+  border: 1px solid var(--border-token);
+}
+.skilltest-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+}
+
+.skilltest-header-text {
+  flex: 1;
+  min-width: 0;
+}
+.skilltest-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--ink-token);
+}
+.skilltest-line {
+  font-size: 13px;
+  color: var(--fg-muted);
+  min-height: 17px;
+  transition: opacity 0.2s ease;
+}
+/* 林墨"思考中"的小圆点——追加在上一句台词后面,而不是把台词整句替换
+   成"…"。之前是整句被替换掉,导致玩家应对关卡后刚跳出来的反馈句
+   (比如"反应挺快。")还没看清就被思考状态盖掉了,现在保留原句,
+   只在句尾追加一个跳动的省略号,顺带也是"他在想接下来怎么走"这个
+   停顿感的一部分。 */
+.skilltest-thinking-dots {
+  display: inline-block;
+  margin-left: 2px;
+  animation: skilltest-dots-blink 1.1s ease-in-out infinite;
+}
+@keyframes skilltest-dots-blink {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+.skilltest-progress {
+  display: flex;
+  gap: 4px;
+  padding: 0 var(--space-1) var(--space-2);
+}
+.skilltest-progress-dot {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--wood-soft);
+}
+.skilltest-progress-dot.done { background: var(--gold); }
+.skilltest-progress-dot.active { background: var(--wood); }
+
+/* ============================================================
+   结果揭晓页(数据部分):六维雷达图 + 类型标签——林墨的点评已经
+   拆到 SkillTestEvaluationScreen 那一屏,复用 .linmo-scene /
+   .linmo-invite-bubble(见 linmo.css 顶部林墨见面场景那一节),不在
+   这里。.result-thinking-dots / .result-comment-reveal 这两个动画类
+   也是给那一屏的气泡文字用的,定义留在这一节是历史原因,没有特殊
+   依赖关系,可以搬但没必要。
+   ============================================================ */
+/* "让我想想怎么说……"后面跳动的省略号,停顿期间露出,点评揭晓后消失 */
+.result-thinking-dots {
+  display: inline-block;
+  margin-left: 2px;
+  animation: skilltest-dots-blink 1.1s ease-in-out infinite;
+}
+/* 点评揭晓那一下给个轻微的淡入,呼应"他刚想好要怎么说"这个时机,
+   而不是文字生硬地一下子蹦出来 */
+.result-comment-reveal {
+  animation: result-comment-fade-in 0.35s ease;
+}
+@keyframes result-comment-fade-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.result-type-badge {
+  text-align: center;
+  margin-bottom: var(--space-2);
+}
+.result-type-name {
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--wood);
+}
+.result-type-summary {
+  color: var(--fg-muted);
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+.radar-wrap {
+  display: flex;
+  justify-content: center;
+  margin: var(--space-2) 0 var(--space-4);
+}
+
+.result-dim-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.result-dim-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.result-dim-label {
+  width: 62px;
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+.result-dim-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--wood-soft);
+  overflow: hidden;
+}
+.result-dim-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--wood), var(--gold));
+}

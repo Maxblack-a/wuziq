@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "../lib/supabase";
-import { useTelegramBackButton } from "../lib/telegram";
+import { isInTelegram, useTelegramBackButton } from "../lib/telegram";
+import { IconChevronLeft } from "./Icons";
 
 // 这个页面现在只剩"用邀请码/邀请链接加入别人的房间"这一件事——
 // "建房间邀请好友"已经并到 RoomScreen 里去了,不再重复一份。
@@ -43,7 +44,16 @@ export default function InviteScreen({ myId, prefillCode, onMatched, onExit }) {
 
   return (
     <div>
-      <button className="btn-ghost" onClick={onExit}>← 返回</button>
+      {/* Telegram 自带的返回键已经接了同一个 onExit(见上面
+          useTelegramBackButton),UI 上不用再重复画一份;但普通浏览器里
+          没有 Telegram 原生返回键,这里必须补一个,否则用户没法退出。 */}
+      {!isInTelegram && (
+        <div className="room-topbar" style={{ marginBottom: 4 }}>
+          <button className="room-icon-btn" onClick={onExit} aria-label="返回">
+            <IconChevronLeft />
+          </button>
+        </div>
+      )}
       <div className="menu-header"><h2>输入房间号</h2></div>
       <input
         className="mono"
@@ -53,7 +63,7 @@ export default function InviteScreen({ myId, prefillCode, onMatched, onExit }) {
         maxLength={6}
         style={{
           width: "100%", padding: 16, fontSize: 22, textAlign: "center",
-          background: "var(--ink)", color: "var(--fg)", border: "1px solid var(--ink-line)",
+          background: "var(--wood-soft)", color: "var(--fg)", border: "1px solid var(--ink-line)",
           borderRadius: "var(--radius-md)", marginBottom: 16,
         }}
       />

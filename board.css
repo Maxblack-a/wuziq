@@ -1,50 +1,55 @@
 .board-wrap {
+  /* 【踩坑记录,别再这么改】
+     曾经改成过 .game-board-col{display:flex} + board-wrap 用 flex 居中,
+     结果棋盘直接从页面上消失。原因:Board.jsx 组件最外层还包了一层没有
+     class 的 <div>(为了在棋盘下面放"确认落子"按钮),这层 div 变成 flex
+     item 之后,默认按"内容撑开尺寸"来算宽度——但它唯一的内容
+     (board-wrap)自己又是 width:100% 这种百分比宽度,百分比在计算父级
+     "内容尺寸"时不算数,于是这层 div 被量出 0 宽度,board-wrap 的 100%
+     自然也是 0。这是本次真正被实测复现、也被实测修好的 bug,别再改回
+     display:flex 那套。
+
+     真正导致"棋盘贴左边、右边留白"的原因,其实是 .game-board-col 那边:
+     它同时写了 width:100% 和负外边距(margin:0 -16px)想让棋盘出血到
+     贴边——但 width:100% 是相对父容器算出的固定值,并不会因为负外边距
+     自动变宽,结果就是整个容器只是被"推"向左边,右边space没被填满,
+     实测量出来正好缺了 32px,跟反馈里"贴左边、右边一大截留白"完全对得
+     上。修法在下面 .game-board-col 里:把 width:100% 去掉,让它保持
+     默认的 width:auto,这样负外边距才会按预期把容器两侧都撑开、居中
+     不偏。
+
+     这里(board-wrap)维持原来"width:100% + max-width 封顶 + margin:auto
+     居中"的写法不变——这套写法本身没问题,已经用无头浏览器实测确认过,
+     真正的坑在父容器,不在这。
+
+     四周留白统一由 Board.jsx 里的 MARGIN 常量控制(画线、点击热区、
+     星位点用的是同一套坐标),不再靠这里的 border/padding 硬凑,所以
+     board-wrap 本身不需要再留任何 padding 或 border。 */
   width: 100%;
-  /* 之前 max-width 只给到 85vw/85vh,15列一分,单格触摸目标在常见手机
-     宽度下只有约20px,远低于44px的可用性建议下限,很容易点错相邻格。
-     现在尽量把棋盘撑到接近整屏宽度(配合 .game-board-col 的出血负边距
-     抵消掉外层 app-shell 的左右留白),并把棋盘自身的内边距从16px收窄到
-     8px,把这部分空间也让给格子本身。 */
   max-width: min(560px, 92vh, 98vw);
   margin: 0 auto;
-  position: relative;
-  /* 原来用 aspect-ratio:1/1 撑出正方形。问题是 .board-grid::before 网格线
-     是靠 position:absolute + inset:calc(100%/30) 定位的,而"绝对定位子元素
-     的百分比 inset 相对父元素的百分比高度"这条链路,依赖父元素(.board-wrap)
-     的高度被解析成"确定尺寸(definite size)"——aspect-ratio 撑出来的高度在
-     部分安卓系统 WebView(Telegram 内置浏览器常见)里并不总是被当成确定尺寸,
-     于是子元素的百分比高度/inset 解析基准就变得不稳定,实测表现正是棋盘
-     网格线整体偏向左下,右侧和顶部多出一截空白——不是设计需要,是这个
-     WebView 兼容性问题导致的渲染 bug。
-     改用"padding-top:100%撑出等高" 这个更老、兼容性覆盖面更广的经典做法:
-     .board-wrap 自己不再放内容,只负责用 padding-top 撑出一个确定的正方形
-     高度;真正的背景/内边距/网格全部挪到内部绝对定位铺满的 .board-inner 里,
-     它的 inset:0 直接是 0 这个具体数值,不再依赖任何"自动高度"百分比换算,
-     彻底绕开这个问题。 */
-  padding-top: 100%;
-}
-
-.board-inner {
-  position: absolute;
-  inset: 0;
+  aspect-ratio: 1 / 1;
   border-radius: var(--radius-md);
-  padding: var(--board-padding);
   background:
     repeating-linear-gradient(90deg, rgba(0,0,0,0.06) 0 1px, transparent 1px 40px),
     linear-gradient(160deg, var(--board-wood-1), var(--board-wood-2));
   box-shadow: inset 0 2px 12px rgba(0,0,0,0.45), var(--shadow-modal);
-  --board-padding: var(--space-2);
+  position: relative;
 }
 
-/* 不是自己回合时,只压暗棋盘格子这一层(0.75→0.55），角标文字作为同级
-   元素叠在上面,不会被这层opacity一起拖暗,保持清晰可读 */
+/* 不是自己回合时,棋盘不能点(pointer-events: none),但视觉上保持清晰——
+   之前这里用 opacity + 去饱和度压暗棋盘,想用来提示"现在轮不到你",
+   但对手多想一会儿这层暗淡就跟着挂一会儿,棋子和线看着发灰、糊在一起,
+   反而妨碍看棋。回合信息已经在棋盘上方的状态栏里明明白白写着了,
+   这里不需要再靠"把棋盘弄得看不清"来重复提示一遍。 */
 .board-wrap.board-disabled .board-grid {
-  opacity: 0.55;
-  filter: saturate(0.5) brightness(0.9);
   pointer-events: none;
 }
 
 .board-disabled-badge {
+  /* 保留这份规则,以防以后又需要在棋盘上叠一个短暂的角标提示——
+     只是现在没有任何地方渲染 .board-disabled-badge 这个元素了,
+     该"对方回合"角标已经去掉,回合信息统一由棋盘上方的状态栏显示。 */
   position: absolute;
   top: 50%;
   left: 50%;
@@ -64,24 +69,35 @@
   position: relative;
   width: 100%;
   height: 100%;
-  display: grid;
-  grid-template-columns: repeat(15, 1fr);
-  grid-template-rows: repeat(15, 1fr);
   transition: opacity 0.2s ease, filter 0.2s ease;
 }
 
-/* 网格线用背景绘制,而不是每个格子加边框,避免线条粗细不均 */
-.board-grid::before {
-  content: "";
+/* 网格线直接由 Board.jsx 里的 <svg className="board-lines-svg"> 画出来,
+   15 条横线 + 15 条竖线首尾相连,天然围成一个完整的矩形边框——不再靠
+   CSS 背景渐变取整拼线,最外层不会再出现"线被裁掉一截"的情况 */
+.board-lines-svg {
   position: absolute;
-  inset: calc(100% / 30);
-  background-image:
-    repeating-linear-gradient(0deg, rgba(237,230,214,0.35) 0, rgba(237,230,214,0.35) 1px, transparent 1px, transparent calc(100% / 14)),
-    repeating-linear-gradient(90deg, rgba(237,230,214,0.35) 0, rgba(237,230,214,0.35) 1px, transparent 1px, transparent calc(100% / 14));
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.board-line {
+  stroke: rgba(237, 230, 214, 0.35);
+  stroke-width: 0.35;
+}
+
+/* 最外圈单独再描一圈稍粗、稍亮的线,让边框看起来是"故意做的",
+   而不是跟内部网格线一样粗细、容易被忽略 */
+.board-frame {
+  fill: none;
+  stroke: rgba(237, 230, 214, 0.55);
+  stroke-width: 0.6;
 }
 
 .board-cell {
-  position: relative;
+  position: absolute;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -97,6 +113,8 @@
 .star-point::after {
   content: "";
   position: absolute;
+  inset: 0;
+  margin: auto;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -122,23 +140,69 @@
   box-shadow: 0 2px 4px rgba(0,0,0,0.35);
 }
 
-.stone.last-move::after {
+/* 最后一手标记:前两版都试过、都不理想——
+   1) 贴棋子外沿的细金色描边:对比的是棋盘背景,深胡桃木棕跟低饱和度的
+      鎏金色本来就是近似色调,线又细,基本看不清。
+   2) 棋子表面中心的朱红实心点:朱红虽然色相跟黑白都不同,但它本身明度
+      偏暗,压在近黑色的黑子上明度差很小,一样不容易一眼扫到;点做大了
+      又变成棋子表面凭空多出的一块异色疙瘩,看着像瑕疵。
+   
+   现在改成棋子中心一个空心细环,颜色按棋子本身反过来选——黑子用暖白
+   环,白子用墨色环,始终是当前底色下明度差最大的那个方向,不依赖某个
+   固定色号去碰运气。空心环不填色、不遮挡棋子本身的圆形轮廓和光泽,
+   密集摆子时也是靠"形状+明度"双重线索去定位,不是只靠颜色。
+   不叠加任何光晕/柔光,单纯一圈细描边。
+   Board.jsx 是联机对战和人机对战共用的组件,这里改一处两边同步生效 */
+/* 保留:早期版本,贴着棋子外沿的细金色描边。跟下面新的反色空心环
+   (::after)不是互斥关系,两层伪元素同时存在——::before 是这圈金边,
+   ::after 是棋子中心那个反色环,当前 last-move 的棋子上两个效果会
+   同时显示 */
+.stone.last-move::before {
   content: "";
   position: absolute;
-  inset: 38%;
+  inset: 0;
   border-radius: 50%;
-  background: var(--jade);
-  opacity: 0.85;
+  border: 1.5px solid var(--gold);
+  pointer-events: none;
+}
+
+.stone.black.last-move::after,
+.stone.white.last-move::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 32%;
+  height: 32%;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.stone.black.last-move::after {
+  border: 1.5px solid var(--stone-white-hi);
+}
+
+.stone.white.last-move::after {
+  border: 1.5px solid var(--stone-black);
 }
 
 .stone.winning {
-  box-shadow: 0 0 0 3px var(--gold), 0 0 14px rgba(198, 161, 91, 0.65);
+  /* 之前这里给每颗获胜的棋子单独套一圈实色圆环 + 大范围模糊(3px环 + 最高
+     18px 模糊),五颗棋子紧挨着排列,间距本来就只有几像素,每颗自己的光晕
+     一大就直接跟邻居的光晕糊在一起,连成一整块发光的"药丸"——这正是
+     之前效果图被吐槽"看不清是几颗棋子"的主要原因,比连线本身的问题还大。
+     现在把棋子自身的高亮压得很轻(1.5px 环 + 最多 5px 模糊),真正的暖色
+     视觉重量交给下面 .win-line-glow/.win-line-path 那条贯穿棋子的线来
+     承担——参考的目标效果里,棋子本身干净的圆形轮廓没有被自己的光晕
+     吃掉,暖色主要是"线"在发光,不是每颗子各自发光。 */
+  box-shadow: 0 0 0 1.5px var(--gold), 0 0 3px rgba(198, 161, 91, 0.4);
   animation: drop 220ms cubic-bezier(0.34, 1.56, 0.64, 1), winning-glow 1.2s ease-in-out 220ms infinite alternate;
 }
 
 @keyframes winning-glow {
-  from { box-shadow: 0 0 0 3px var(--gold), 0 0 8px rgba(198, 161, 91, 0.45); }
-  to { box-shadow: 0 0 0 3px var(--gold), 0 0 18px rgba(198, 161, 91, 0.85); }
+  from { box-shadow: 0 0 0 1.5px var(--gold), 0 0 2px rgba(198, 161, 91, 0.3); }
+  to { box-shadow: 0 0 0 1.5px var(--gold), 0 0 5px rgba(198, 161, 91, 0.6); }
 }
 
 /* 待确认的预览棋子:半透明 + 呼吸脉动,跟已经真正落下的棋子明确区分开,
@@ -171,22 +235,53 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 3;
+  /* 之前这里是 z-index:3,压在棋子(z-index:2)上面,连线的粗线+柔光晕会
+     整段盖在棋子表面,把棋子自己的圆形边界都糊掉。现在改成 z-index:1,
+     跟网格线同一层但画在网格线之后(所以还是盖在网格线上面),但压在
+     棋子下面——效果是连线只在棋子之间的缝隙里露出来,棋子本身完整、
+     干净地叠在最上层,不会被线的柔光晕吃掉边界,这正是参考图里"棋子
+     清清楚楚、暖色主要来自贯穿的线"这种效果的关键。 */
+  z-index: 1;
+}
+
+/* 连线视觉效果分两层:一层稍宽的柔光晕垫底,一层细的实色核心线在上面,
+   叠出"发光笔触"的效果。之前这两层都做得偏粗偏虚(16px+3px模糊),
+   五颗棋子紧挨着、缝隙本来就没多宽,粗光晕会直接糊成一整块看不清棋子
+   的"药丸"。现在两层都收窄了不少,线主要在棋子间的缝隙里透出暖光,
+   不会盖过棋子本身的轮廓。画线动画时长 1000ms——结果面板会在画完的
+   同一刻切出来(见 WIN_REVEAL_DELAY),线本身画完之后不会消失,所以
+   没有再另外留停顿的必要。 */
+.win-line-glow {
+  fill: none;
+  stroke: var(--gold);
+  stroke-width: 9;
+  stroke-linecap: round;
+  opacity: 0.5;
+  filter: blur(2px);
+  stroke-dasharray: 400;
+  stroke-dashoffset: 400;
+  animation: draw-line 1000ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 
 .win-line-path {
   fill: none;
   stroke: var(--gold);
-  stroke-width: 6;
+  stroke-width: 3.5;
   stroke-linecap: round;
-  filter: drop-shadow(0 0 6px rgba(198,161,91,0.65));
+  filter: drop-shadow(0 0 5px rgba(198,161,91,0.8));
   stroke-dasharray: 400;
   stroke-dashoffset: 400;
-  animation: draw-line 450ms ease forwards;
+  animation: draw-line 1000ms cubic-bezier(0.22, 1, 0.36, 1) forwards,
+    win-line-pulse 1s ease-in-out 1000ms infinite alternate;
 }
 
 @keyframes draw-line {
   to { stroke-dashoffset: 0; }
+}
+
+@keyframes win-line-pulse {
+  from { filter: drop-shadow(0 0 4px rgba(198,161,91,0.65)); }
+  to { filter: drop-shadow(0 0 9px rgba(198,161,91,0.95)); }
 }
 
 .game-layout {
@@ -196,12 +291,25 @@
 }
 
 .game-board-col {
-  width: 100%;
   /* 抵消 app-shell 左右各 --space-4 的留白,让棋盘尽量撑满屏幕宽度——
      这样 15×15 格子实际分到的触摸面积才能明显变大,而不是被外层padding
-     限制住(board-wrap 的 max-width 放大了也没用,父容器窄它照样窄) */
+     限制住(board-wrap 的 max-width 放大了也没用,父容器窄它照样窄)。
+
+     关键点:这里不能再写 width:100%。width:100% 是相对父容器
+     (.game-layout)算出来的一个固定值,不会因为下面的负外边距自动变宽——
+     负外边距只会把整个盒子往左"推",右边空出来的宽度并不会被自动填满。
+     实测(无头浏览器量出来的)结果是右边正好缺 32px,棋盘因此贴左边、
+     右边留一大块白,这正是最早反馈里"棋盘不居中"的真实原因。
+
+     去掉 width 声明、让它保持默认的 width:auto 之后,浏览器会自动把
+     "负边距占掉的宽度"补回到盒子本身的宽度上,两侧就能均匀撑开、贴边
+     且对称——这是 CSS 里让负外边距"出血"生效的标准写法。
+
+     留白从原来的 --space-2(8px)收窄到 --space-1(4px):这部分是纯粹的
+     "指尖安全边距",没必要占太多——省下来的宽度直接让给棋盘,在手机上
+     大约能让棋盘再多出接近1个格子的可视/点击面积。 */
   margin: 0 calc(var(--space-4) * -1);
-  padding: 0 var(--space-2);
+  padding: 0 var(--space-1);
 }
 
 .game-info-col {
@@ -239,6 +347,22 @@
   margin-bottom: var(--space-2);
 }
 
+/* 悔棋从棋盘下方挪到顶栏、放在"轮到你"右侧之后,用这一个 flex 容器把
+   [状态胶囊 + 悔棋按钮] 打包成一组,让它们整体贴着 .room-topbar 右边——
+   不然 room-topbar 本身是 justify-content:space-between,3 个元素平铺
+   会把状态胶囊挤到正中间,跟返回按钮、悔棋按钮之间留出两块不对称的
+   大空档,难看。 */
+.pve-topbar-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0; /* 同样是为了让里面的回合胶囊能真正缩水触发省略号,
+    不然这一层自己就按内容撑开宽度,回合胶囊内部再怎么设置省略号
+    都没有实际生效的空间——跟 .pve-turn-pill / .turn-timer-label
+    是同一个套路 */
+  flex: 1 1 auto;
+}
+
 .pve-turn-pill {
   display: flex;
   align-items: center;
@@ -249,6 +373,18 @@
   font-weight: 600;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
+  min-width: 0; /* 同样是为了让下面的昵称能在 flex 布局里真的缩、触发省略号 */
+  max-width: 100%;
+}
+/* 对手昵称长度不可控,这个胶囊在顶栏里跟"认输""悔棋"按钮抢空间,
+   窄屏上很容易被挤得只剩很小一截——不截断的话昵称会把胶囊、进而把
+   整个顶栏撑高(顶栏在棋盘上方,一旦变高棋盘就跟着往下移)。这里跟
+   下面棋盘上方的 .turn-timer-label 是同一个问题、同一个修法。 */
+.pve-turn-pill-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
 }
 
 .turn-indicator {
@@ -271,10 +407,27 @@
   box-shadow: 0 0 0 3px rgba(91, 56, 35, 0.35);
 }
 
-.pve-disclaimer {
-  font-size: 12px;
+/* 棋盘上方留白的回合倒计时区。原来这里还兼职放对局结算的标题/说明文字,
+   现在结算已经全部搬到全屏结算页(OnlineResultReveal / PveResultReveal)
+   去了,这块区域只用来放 .turn-timer,但高度硬约束(height,不是
+   min-height)还是保留——回合倒计时的文字长度也会变("轮到你" vs
+   "对手昵称 · 思考中"),同样需要这个盒子焊死棋盘位置不跟着跳。 */
+.pve-result-panel {
+  height: 74px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch; /* 不能用 center——center 会让 .turn-timer
+    按自己内容的宽度收缩显示,完全不受这个容器宽度约束,下面给
+    .turn-timer-label 加的省略号也就没有"边界"可以触发,长昵称会直接
+    从两边溢出裁切、连"…"都不出现(截图实测过)。stretch 强制它撑满
+    容器宽度,省略号才有意义。h2/p 这些结算文案本来就是块级元素,
+    stretch 不影响它们横向撑满 + text-align:center 居中文字的效果,
+    肉眼看不出区别。 */
+  justify-content: center;
   text-align: center;
-  color: var(--text-secondary);
+  gap: 2px;
+  margin-bottom: var(--space-3);
 }
 
 /* 悔棋:跟顶部"返回"的圆形图标按钮区分开——这里是个带边框的胶囊按钮
@@ -291,7 +444,134 @@
   padding: var(--space-2) var(--space-4);
   font-size: 14px;
   font-weight: 600;
+  flex-shrink: 0; /* 挤空间的时候该缩的是回合胶囊里的昵称,不是这个按钮 */
   transition: background 0.15s ease, transform 0.15s ease, opacity 0.15s ease;
 }
 .btn-undo:active { background: var(--wood-soft); transform: scale(0.97); }
 .btn-undo:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* 联机对战专用:认输入口做成低存在感的文字按钮,跟"返回"这种导航类
+   图标按钮明确区分开——不该让人一眼看着像能随便点的返回键,得看起来
+   是一个需要想一下才会点的操作,点了之后还有确认弹窗兜底防误触 */
+.resign-btn {
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
+}
+.resign-btn:active { background: var(--wood-soft); }
+.resign-btn:disabled { opacity: 0.4; }
+
+/* 回合倒计时:复用 .pve-result-panel 同一块预留区域(对局中这里本来是空的,
+   只有结算之后才会被结果面板占用,两者不会同时出现),不额外占用新高度,
+   棋盘的位置不会因为倒计时的出现/消失而跳动 */
+.turn-timer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 2px;
+}
+.turn-timer-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+/* 对手昵称是用户自己填的,长度不可控——一旦长到把这一行撑成两行,
+   上面 .pve-result-panel 的高度就会被顶破,棋盘跟着往下移一截。
+   min-width:0 让这个 flex 子项真的能缩下去(不然 flex 子项默认
+   min-width:auto,按内容撑开,ellipsis 不生效),配合 nowrap +
+   text-overflow 直接单行截断,昵称太长就显示省略号,不留换行的可能;
+   右边倒计时数字反过来要 flex-shrink:0,不能被这一行的收缩逻辑挤没了 */
+.turn-timer-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.turn-timer-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--wood);
+  transition: color 0.2s ease;
+  flex-shrink: 0;
+}
+.turn-timer-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-token);
+  overflow: hidden;
+}
+.turn-timer-fill {
+  height: 100%;
+  background: var(--gold);
+  transition: width 1s linear, background 0.2s ease;
+}
+/* 最后10秒:数字和进度条一起变成印章朱红色,数字带一点透明度脉动提醒,
+   但不做太剧烈的动画,避免在棋盘旁边太抢眼、干扰正常落子判断 */
+.turn-timer.urgent .turn-timer-count { color: var(--seal-red); animation: timer-pulse 0.8s ease-in-out infinite; }
+.turn-timer.urgent .turn-timer-fill { background: var(--seal-red); }
+@keyframes timer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+/* ---- PVE 选边界面:进对局前先选执黑(先手)还是执白(后手) ----
+   两张大卡片,左边一颗对应颜色的棋子(复用棋盘本身的 .stone 渐变样式,
+   保证跟棋盘上的真棋子看起来是同一种材质),右边文字说明这个选择意味着
+   "先手/后手"——避免玩家选完之后才发现"原来我一直是后手"这种误解 */
+.side-select {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-2) var(--space-4);
+}
+.side-select-title {
+  font-family: var(--font-display), serif;
+  font-size: 20px;
+  text-align: center;
+  color: var(--ink-token);
+  margin-bottom: 2px;
+}
+.side-select-subtitle {
+  text-align: center;
+  font-size: 13px;
+  margin-bottom: var(--space-2);
+}
+.side-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border-token);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  transition: background 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
+}
+.side-btn:active {
+  background: var(--wood-soft);
+  transform: scale(0.98);
+}
+.side-btn-stone {
+  width: 44px;
+  height: 44px;
+  flex-shrink: 0;
+  animation: none; /* 这里是静态展示，不需要棋盘落子那个弹入动画 */
+}
+.side-btn-text {
+  text-align: left;
+}
+.side-btn-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink-token);
+}
+.side-btn-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}

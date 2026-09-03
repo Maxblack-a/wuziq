@@ -61,7 +61,7 @@ export async function shareInviteLink(code, botUsername, appShortName) {
 
   if (tg?.openTelegramLink) {
     tg.openTelegramLink(
-      `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("来五子棋对战,点进来直接开局 ♟")}`
+      `https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent("来象棋对战,点进来直接开局 ♟")}`
     );
     return { copied: false, shared: true, link };
   }

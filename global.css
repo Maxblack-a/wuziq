@@ -17,6 +17,9 @@
   --text-secondary: #6B6258;/* 次要文字 */
   --border-token: #DED3C2;  /* 边框/分隔线 */
   --seal-red: #A13A2E;      /* 印章朱红:跟品牌区印章同色,复用做"寻找棋友中"这类强调态文字/数字 */
+  --topbar-accent: #DCC4A0; /* 顶栏统一强调色:从参考截图(见习棋士 Lv.1 卡片)取样得出,
+                                用于首页顶栏"身份牌文字 + 体力值文字图标 + 规则入口"这几处的统一
+                                风格,注意钻石图标/数值不用这个色,保持原来的独立蓝色不变 */
 
   /* ---- 兼容旧变量名,值全部换成上面的新色板,不再让 Telegram 主题色覆盖 ---- */
   --ink: var(--ink-token);
@@ -90,6 +93,7 @@ body {
   -webkit-tap-highlight-color: transparent;
   overscroll-behavior: none;
   overflow-y: auto;
+  overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -100,6 +104,15 @@ body {
   display: flex;
   flex-direction: column;
   padding: env(safe-area-inset-top) var(--space-4) env(safe-area-inset-bottom);
+  /* 这套 UI 是按手机宽度设计的(Telegram Mini App / 移动端浏览器),
+     一直没有设最大宽度。在真实手机上没问题,因为屏幕本身就是窄的;
+     但在电脑浏览器这种宽屏窗口里打开,.app-shell 会被撑到跟窗口一样
+     宽——加一个最大宽度并居中,让它在任何窗口宽度下都保持手机比例的
+     样子,两侧露出来的部分交给 body 自己的底色(见 global.css 里 body
+     的 background),不会显得突兀。数值参考主流手机里较宽的一档
+     (iPhone 14 Pro Max 逻辑宽度 430px),再留一点余量。 */
+  max-width: 480px;
+  margin: 0 auto;
   /* 除首页外,其余所有页面(对局房间、好友、排行榜……)共用这一份
      背景——之前误把首页专属的"聚光灯+纵深渐变"写在这个所有页面都
      共用的容器上,导致别的页面背景也跟着变得又暗又艳,跟设计图里
@@ -109,14 +122,106 @@ body {
   background: linear-gradient(180deg, #F6EFE2 0%, #F0E4C9 100%);
 }
 
-/* 首页专属的品牌背景:棋盘英雄图下方需要延续那种"上浅下深、中间打了
-   一层暖金聚光"的纵深感,这份重装饰只在首页这一层生效,不再影响
-   其余页面。*/
+/* 首页背景不再是这里画的 CSS 渐变——图片本身(MainMenu.jsx 里的
+   .page-bg-image)就是整个首页的背景,不需要额外的颜色/渐变去填充
+   任何区域。这里只保留"精确锁一屏高度、裁掉溢出"和"作为背景图的
+   定位参照"这两件事。*/
 .app-shell-menu {
-  background:
-    radial-gradient(ellipse 130% 85% at 50% 44%, rgba(212, 173, 116, 0.30), transparent 60%),
-    radial-gradient(ellipse 165% 100% at 50% 15%, transparent 50%, rgba(90, 68, 42, 0.20) 100%),
-    linear-gradient(180deg, #F6EFE3 0%, #F1E6D4 26%, #E2D0B4 50%, #CBB495 72%, #B4A080 100%);
+  position: relative;
+  /* 首页不需要滚动:开始对局 + 人机挑战/每日试炼 + 底部标语这几块
+     内容加起来的高度是固定的(字号、padding 都是写死的 px,不会变),
+     背景图和文字内容中间用 .menu-flex-spacer 那个弹性空白隔开,自动
+     吃掉"一屏高度减去这些固定内容"之后剩下的空间(见 menu.css)。
+     这里把 .app-shell 原本的 min-height 覆盖成精确的 height,并裁掉
+     溢出——这样不管屏幕多高多矮,整个首页永远刚好撑满一屏,不会因为
+     内容比预期高一点点就多出一条可以滚动的空白。
+     真正极端矮的屏幕(比如很小的手机横屏)才会触发 .menu-screen-flex
+     自己的 overflow-y:auto 兜底,不会内容被截断到完全看不见。 */
+  height: var(--app-height, 100dvh);
+  overflow: hidden;
+}
+
+/* ============================================================
+   宽屏"卡片"模式:平板 / 桌面浏览器 / Telegram 桌面端自适应
+   ------------------------------------------------------------
+   整套 UI 是按手机竖屏设计的(棋盘 MARGIN、各种 full-bleed 负边距
+   都是按"容器宽度=手机屏幕宽度"这个假设算的)。
+   之前 .app-shell 没有任何宽度上限,在平板/桌面打开时会被拉到跟浏览器
+   窗口一样宽,直接暴露一个问题:棋盘本身虽然有 max-width 封顶
+   (board.css 的 min(560px,92vh,98vw)),不会无限变大,但棋盘周围的
+   按钮、列表、卡片全都还是 width:100%,在超宽容器里被拉得稀稀拉拉,
+   行高、留白比例跟手机上完全不一致。
+
+   解法不是给每个组件单独写宽屏样式,而是在最外层把"可用宽度"这件事
+   收回到手机尺寸——超过手机宽度的部分不再拉伸内容,而是把整个 App
+   收进一张固定宽度、居中显示的卡片里,四周露出统一的暖色桌面背景
+   (视觉上接近"手机贴在桌面中间"的效果,Telegram 桌面端本身也是这个
+   思路)。这样断点以下的所有组件完全不用改一行,天然继承手机布局。
+
+   断点特意写成"宽度够 且 高度也够"两个条件同时成立才触发——
+   单纯宽度够但高度很矮(典型手机横屏,比如 812×375)要排除掉,那种
+   场景应该继续走 board.css 里手机横屏专用的棋盘+信息栏并排布局,
+   不该被这里的"卡片模式"覆盖掉。 */
+@media (min-width: 640px) and (min-height: 560px) {
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* 卡片外露出的桌面背景,跟应用本身的暖木色调统一,不用生硬的
+       纯灰/纯白,避免卡片像是"贴出来的" */
+    background: radial-gradient(ellipse 120% 90% at 50% 0%, #EDE0C3 0%, #C7AF89 55%, #A68C68 100%);
+  }
+
+  #root {
+    width: 100%;
+    max-width: 560px; /* 跟棋盘自身的 max-width 封顶对齐,卡片刚好能让棋盘用满宽度 */
+    height: var(--app-height, 100dvh);
+    /* 屏幕本身够高时(比如桌面大显示器全屏开浏览器),不让卡片跟着
+       撑到极端的高度比例——封个上限,配合下面 body 的 align-items:
+       center,超出部分变成卡片上下的呼吸空间,看起来像"悬浮"而不是
+       一条又高又窄的裂缝。屏幕本身没那么高(比如平板)时,
+       max-height 不会生效,卡片照常贴满可视高度,不会平白多出滚动。 */
+    max-height: 900px;
+    border-radius: var(--radius-lg);
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    box-shadow: 0 0 0 1px rgba(23, 23, 23, 0.08), 0 30px 70px rgba(23, 23, 23, 0.35);
+  }
+
+  /* 卡片模式下滚动容器换成了 #root 自己(上面设了 overflow-y:auto +
+     明确的 height/max-height),.app-shell 不需要再靠"至少跟设备
+     视口一样高"把内容撑满——如果还用 100dvh 那一套,遇到桌面端
+     浏览器窗口比 900px 高的情况,.app-shell 会被撑到远超卡片实际
+     高度(900px 封顶),内容明明没那么多却要多滑一大截空白才能到底。
+     改成 100%,相对刚好等于 #root 算出来的真实高度(即 dvh 和 900px
+     两者取小值),内容多就在卡片内部滚动,内容少就正好贴满卡片,
+     不会再有平白多出来的空白。 */
+  .app-shell {
+    min-height: 100%;
+  }
+
+  /* 首页锁高度用的是 var(--app-height, 100dvh),在桌面卡片模式下
+     #root 本身已经被 max-height:900px 封顶且垂直居中(见上面的
+     注释),如果 .app-shell-menu 还是死认 100dvh,窗口比 900px 高时
+     它会比 #root 自己算出来的高度还高,首页内容溢出卡片边界。跟
+     .app-shell 的处理方式一样,改成 100%,相对 #root 已经算好的
+     实际高度走。 */
+  .app-shell-menu {
+    height: 100%;
+  }
+}
+
+/* 更宽的桌面窗口:卡片本身宽度已经封顶在 560px,不需要再变化,
+   但四周留出的桌面背景区域大到一定程度后,给卡片补一圈更明显的
+   投影和圆角收边,视觉上更接近"一台悬浮的设备"而不是简单地被
+   居中,跟窄一些的平板宽度(640px 出头)区分开,避免两种场景用
+   同一套很轻的阴影导致平板上卡片存在感太弱、桌面上又显得太突兀。 */
+@media (min-width: 1024px) and (min-height: 560px) {
+  #root {
+    border-radius: 28px;
+    box-shadow: 0 0 0 1px rgba(23, 23, 23, 0.08), 0 40px 90px rgba(23, 23, 23, 0.42);
+  }
 }
 
 /* ---- Typography 阶梯:Title / Heading / Body / Caption ---- */

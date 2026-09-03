@@ -1,0 +1,380 @@
+/* 对局界面视觉大改版:参考图是暖木纹棋盘 + 立体棋子 + 水墨氛围底色,
+   这版尽量往那个方向靠。棋盘纹理用 SVG feTurbulence 现生成噪点(见
+   XiangqiBoard.jsx 里的 <filter id="xq-wood-grain">),不需要额外配图片
+   素材,体积成本几乎为零,而且随棋盘缩放不会糊。 */
+
+.xq-board-wrap {
+  width: 100%;
+  max-width: min(560px, 92vh, 98vw);
+  margin: 0 auto;
+  aspect-ratio: 9 / 10;
+  border-radius: 20px;
+  position: relative;
+  padding: 10px;
+  background:
+    linear-gradient(160deg, #C89A5B 0%, #B07E3E 40%, #8A5A2B 100%);
+  box-shadow:
+    0 14px 28px rgba(43, 24, 8, 0.45),
+    inset 0 0 0 1px rgba(255, 224, 178, 0.25),
+    inset 0 2px 4px rgba(255, 235, 200, 0.35);
+}
+
+.xq-board-wrap.xq-board-disabled .xq-board-grid {
+  pointer-events: none;
+}
+
+.xq-board-grid {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  overflow: hidden;
+  background: linear-gradient(155deg, #E8C98E 0%, #D9AF6E 45%, #C4934E 100%);
+  box-shadow: inset 0 2px 10px rgba(74, 41, 12, 0.35), inset 0 -2px 6px rgba(255, 240, 210, 0.25);
+}
+
+.xq-wood-defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+.xq-wood-texture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+
+.xq-lines-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.xq-line {
+  stroke: rgba(74, 41, 12, 0.55);
+  stroke-width: 0.22;
+  vector-effect: non-scaling-stroke;
+}
+
+.xq-frame {
+  fill: none;
+  stroke: rgba(74, 41, 12, 0.65);
+  stroke-width: 0.45;
+  vector-effect: non-scaling-stroke;
+}
+
+.xq-move-path {
+  stroke: rgba(198, 145, 58, 0.85);
+  stroke-width: 0.45;
+  stroke-dasharray: 1.6 1.4;
+  vector-effect: non-scaling-stroke;
+  animation: xq-path-flow 1.2s linear infinite;
+}
+
+@keyframes xq-path-flow {
+  to { stroke-dashoffset: -6; }
+}
+
+.xq-river-label {
+  position: absolute;
+  left: 0;
+  right: 0;
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: space-around;
+  padding: 0 16%;
+  color: rgba(74, 41, 12, 0.55);
+  font-family: var(--font-display, "Noto Serif SC", serif);
+  font-size: clamp(11px, 3vw, 16px);
+  letter-spacing: 0.3em;
+  pointer-events: none;
+  user-select: none;
+}
+
+.xq-cell {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.xq-target {
+  width: 26%;
+  height: 26%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(198, 145, 58, 0.95), rgba(198, 145, 58, 0.5));
+  box-shadow: 0 0 6px rgba(198, 145, 58, 0.6);
+  pointer-events: none;
+  animation: xq-target-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes xq-target-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.15); opacity: 1; }
+}
+
+.xq-target-capture {
+  width: 80%;
+  height: 80%;
+  background: transparent;
+  border: 2.5px solid rgba(161, 58, 46, 0.8);
+  box-sizing: border-box;
+  box-shadow: 0 0 8px rgba(161, 58, 46, 0.45);
+  animation: xq-target-pulse 1.4s ease-in-out infinite;
+}
+
+.xq-piece {
+  width: 84%;
+  height: 84%;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  transition: transform 0.12s ease;
+  box-shadow:
+    0 3px 4px rgba(43, 24, 8, 0.5),
+    0 1px 0 rgba(255, 255, 255, 0.4) inset,
+    0 -3px 5px rgba(120, 80, 30, 0.25) inset;
+  border: 1.5px solid #8a5a2b;
+  position: relative;
+}
+
+.xq-piece::before {
+  /* 棋子边缘再叠一圈细金线,呼应参考图里"骨白底 + 细描边"的立体感 */
+  content: "";
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 1px solid rgba(139, 94, 42, 0.35);
+  pointer-events: none;
+}
+
+.xq-piece-glyph {
+  font-family: var(--font-display, "Noto Serif SC", serif);
+  font-weight: 700;
+  font-size: clamp(14px, 3.8vw, 23px);
+  transform: translateY(-1px);
+}
+
+.xq-piece.xq-red {
+  background: radial-gradient(circle at 32% 28%, #fff8ec, #f4dcae 55%, #e7c088 100%);
+  color: #A13A2E;
+  border-color: #8a5a2b;
+}
+
+.xq-piece.xq-black {
+  background: radial-gradient(circle at 32% 28%, #fefbf4, #f1e9d5 55%, #e2d3b0 100%);
+  color: #171717;
+  border-color: #8a5a2b;
+}
+
+.xq-piece.xq-selected {
+  transform: scale(1.1);
+  box-shadow:
+    0 0 0 3px #C6A15B,
+    0 0 14px rgba(198, 161, 91, 0.7),
+    0 3px 4px rgba(43, 24, 8, 0.5);
+}
+
+.xq-piece.xq-last-move {
+  box-shadow:
+    0 0 0 2px rgba(198, 161, 91, 0.85),
+    0 3px 4px rgba(43, 24, 8, 0.5);
+}
+
+.xq-piece.xq-in-check {
+  box-shadow:
+    0 0 0 3px #A13A2E,
+    0 0 12px rgba(161, 58, 46, 0.85),
+    0 3px 4px rgba(43, 24, 8, 0.5);
+  animation: xq-check-pulse 0.9s ease-in-out infinite;
+}
+
+@keyframes xq-check-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.2); }
+}
+
+/* ---- 对局顶部/底部的玩家状态条(参考图里"● 对手 Lv.18 [币]1250  02:38"
+   这一整行) ---- */
+.xq-player-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2, 8px) var(--space-1, 4px);
+  gap: var(--space-3, 12px);
+}
+
+.xq-player-identity {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.xq-player-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.xq-player-dot.xq-red { background: #A13A2E; box-shadow: 0 0 6px rgba(161, 58, 46, 0.5); }
+.xq-player-dot.xq-black { background: #171717; box-shadow: 0 0 6px rgba(0, 0, 0, 0.4); }
+
+.xq-player-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary, #171717);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.xq-player-level {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--wood-soft, #F1E7D8);
+  color: var(--text-secondary, #6B6258);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.xq-player-exp {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--text-secondary, #6B6258);
+  flex-shrink: 0;
+}
+
+.xq-player-timer-col {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 5px;
+  min-width: 64px;
+}
+
+.xq-player-timer-count {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary, #171717);
+  line-height: 1;
+}
+
+.xq-player-timer-count.xq-urgent { color: #A13A2E; animation: timer-pulse 0.8s ease-in-out infinite; }
+
+@keyframes timer-pulse {
+  0%, 100% { opacity: 1; } 50% { opacity: 0.55; }
+}
+
+.xq-player-timer-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--wood-soft, #E4D9C6);
+  overflow: hidden;
+}
+
+.xq-player-timer-fill {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s linear;
+}
+.xq-player-timer-fill.xq-red { background: linear-gradient(90deg, #C24A3C, #A13A2E); }
+.xq-player-timer-fill.xq-green { background: linear-gradient(90deg, #6FA96B, #4C8A48); }
+
+/* ---- "最近走子" 记法胶囊 ---- */
+.xq-last-move-pill {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  margin: 4px auto 10px;
+  border-radius: 10px;
+  overflow: hidden;
+  width: fit-content;
+  font-size: 13px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+.xq-last-move-pill-label {
+  padding: 7px 14px;
+  background: #171717;
+  color: #FBF6EC;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.xq-last-move-pill-value {
+  padding: 7px 16px;
+  background: #FBF6EC;
+  color: #A13A2E;
+  font-weight: 700;
+  font-family: var(--font-display, "Noto Serif SC", serif);
+  white-space: nowrap;
+}
+
+/* ---- 底部悬浮操作栏(认输 / 提和 / 更多) ---- */
+.xq-action-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  margin: 14px auto 4px;
+  padding: 12px 8px;
+  max-width: 420px;
+  border-radius: 999px;
+  background: linear-gradient(160deg, #2b2420, #171310);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.35);
+}
+.xq-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #E4D9C6;
+  font-size: 14px;
+  padding: 6px 10px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+.xq-action-btn:active { background: rgba(255, 255, 255, 0.08); }
+.xq-action-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.xq-action-btn.xq-danger { color: #E8917F; }
+
+.xq-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-1);
+  color: var(--text-primary);
+  font-size: var(--text-body);
+}
+
+.xq-turn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 600;
+}
+
+.xq-turn-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink-token);
+}
+
+.xq-turn-dot.xq-red { background: var(--seal-red); }
+.xq-turn-dot.xq-black { background: var(--ink-token); }
+
+.secondary-card.active {
+  border-color: var(--wood);
+  box-shadow: 0 0 0 2px var(--wood) inset;
+}
