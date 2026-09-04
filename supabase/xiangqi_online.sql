@@ -359,6 +359,7 @@ begin
   if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
   if r.status <> 'playing' then return jsonb_build_object('error', '对局不在进行中'); end if;
   if r.undo_requested_by is not null then return jsonb_build_object('error', '有悔棋请求待处理'); end if;
+  if r.draw_requested_by is not null then return jsonb_build_object('error', '有提和请求待处理'); end if;
 
   my_slot := case when me = r.player1_id then 1 else 2 end;
   my_color := case when my_slot = 1 then 1 else -1 end; -- 1=红 -1=黑
@@ -633,3 +634,94 @@ grant execute on function match_players(uuid, int) to authenticated;
 grant execute on function create_rematch(uuid) to authenticated;
 grant execute on function return_to_room(uuid) to authenticated;
 grant execute on function respond_undo(uuid, boolean) to authenticated;
+
+-- ============================================================
+-- 提和(request_draw / respond_draw)—— 参考对局界面效果图里有这个按钮,
+-- 之前项目里完全没有这个功能(只有自动判和:困毙/绝杀/60回合/三次重复),
+-- 这次照着 request_undo/respond_undo 的模式对称地加一套"双方都要同意"的
+-- 提和流程。跟悔棋共用同一条"一次只能有一个待处理请求"的约束——如果
+-- 已经有人在悔棋,不能再提和,反过来也一样,不然两个都在等对方处理的
+-- 请求同时挂着,UI 状态会很难说清楚该先弹哪个。
+-- ============================================================
+
+alter table rooms add column if not exists draw_requested_by uuid;
+
+create or replace function request_draw(p_room_id uuid)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+begin
+  if me is null then raise exception '未登录'; end if;
+  select * into r from rooms where id = p_room_id for update;
+  if r.id is null then return jsonb_build_object('error', '房间不存在'); end if;
+  if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
+  if r.status <> 'playing' then return jsonb_build_object('error', '对局不在进行中'); end if;
+  if r.undo_requested_by is not null then return jsonb_build_object('error', '有悔棋请求待处理,不能同时提和'); end if;
+  if r.draw_requested_by is not null then return jsonb_build_object('error', '已经有一个提和请求在等待回应'); end if;
+
+  update rooms set draw_requested_by = me where id = p_room_id;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+
+create or replace function respond_draw(p_room_id uuid, p_accept boolean)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+  settlement jsonb;
+begin
+  if me is null then raise exception '未登录'; end if;
+  select * into r from rooms where id = p_room_id for update;
+  if r.id is null then return jsonb_build_object('error', '房间不存在'); end if;
+  if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
+  if r.draw_requested_by is null then return jsonb_build_object('error', '没有待处理的提和请求'); end if;
+  if me = r.draw_requested_by then return jsonb_build_object('error', '不能回应自己发起的请求'); end if;
+
+  if p_accept then
+    settlement := _finish_match_internal(p_room_id, 0, 'normal');
+    return jsonb_build_object('accepted', true, 'settlement', settlement);
+  else
+    update rooms set draw_requested_by = null where id = p_room_id;
+    return jsonb_build_object('accepted', false);
+  end if;
+end;
+$$;
+
+grant execute on function request_draw(uuid) to authenticated;
+grant execute on function respond_draw(uuid, boolean) to authenticated;
+
+-- 覆盖一下 request_undo,加一条"有待处理的提和请求时不能同时悔棋"——
+-- 原版(schema.sql 里那份)当时还没有提和这个概念,不知道要检查这一列。
+-- 签名跟原版完全一样(同一个函数,直接顶掉),不会产生重复重载。
+create or replace function request_undo(p_room_id uuid)
+returns jsonb
+language plpgsql
+security definer
+as $$
+declare
+  me uuid := auth.uid();
+  r rooms%rowtype;
+begin
+  if me is null then raise exception '未登录'; end if;
+
+  select * into r from rooms where id = p_room_id for update;
+  if r.id is null then return jsonb_build_object('error', '房间不存在'); end if;
+  if me <> r.player1_id and me <> r.player2_id then return jsonb_build_object('error', '无权限'); end if;
+  if r.status <> 'playing' then return jsonb_build_object('error', '对局不在进行中'); end if;
+  if r.board_before_last_move is null then return jsonb_build_object('error', '还没有可以悔的棋'); end if;
+  if r.undo_requested_by is not null then return jsonb_build_object('error', '已经有一个悔棋请求在等待处理'); end if;
+  if r.draw_requested_by is not null then return jsonb_build_object('error', '有提和请求待处理,不能同时悔棋'); end if;
+
+  update rooms set undo_requested_by = me where id = p_room_id;
+  return jsonb_build_object('ok', true);
+end;
+$$;
+grant execute on function request_undo(uuid) to authenticated;

@@ -4,7 +4,8 @@ import {
   createTestState, recordPlayerMove, getTestAiMove, recordAiMove, checkTestOver,
   computeXiangqiSkillProfile, PLAYER_COLOR, AI_COLOR,
 } from "../game/xiangqiSkillProfile";
-import { legalMovesFrom, isInCheck } from "../game/xiangqiLogic";
+import { legalMovesFrom, isInCheck, RED } from "../game/xiangqiLogic";
+import { moveToChineseNotation } from "../game/chineseNotation";
 import { supabase } from "../lib/supabase";
 import { hapticNotify } from "../lib/telegram";
 
@@ -22,6 +23,7 @@ export default function XiangqiSkillTestScreen({ onFinish, onAbort }) {
   const [state, setState] = useState(() => createTestState());
   const [selected, setSelected] = useState(null);
   const [lastMove, setLastMove] = useState(null);
+  const [lastMoveNotation, setLastMoveNotation] = useState(null);
   const [thinking, setThinking] = useState(false);
   const [revealing, setRevealing] = useState(false);
   const sessionIdRef = useRef(null);
@@ -63,8 +65,10 @@ export default function XiangqiSkillTestScreen({ onFinish, onAbort }) {
         return;
       }
       const next = { ...afterPlayerState };
+      const notation = moveToChineseNotation(next.board, move.from, move.to);
       recordAiMove(next, move);
       setLastMove({ from: move.from, to: move.to });
+      setLastMoveNotation(notation);
       setThinking(false);
 
       const over = checkTestOver(next);
@@ -82,9 +86,11 @@ export default function XiangqiSkillTestScreen({ onFinish, onAbort }) {
   function handleBoardMove(from, to) {
     if (thinking || revealing || state.turn !== PLAYER_COLOR) return;
     const next = { ...state };
+    const notation = moveToChineseNotation(next.board, from, to);
     recordPlayerMove(next, from, to);
     setSelected(null);
     setLastMove({ from, to });
+    setLastMoveNotation(notation);
 
     const over = checkTestOver(next);
     if (over) {
@@ -100,13 +106,27 @@ export default function XiangqiSkillTestScreen({ onFinish, onAbort }) {
 
   return (
     <div className="app-shell">
-      <div className="xq-status-bar">
-        <div className="xq-turn-badge">
-          <span className={`xq-turn-dot ${state.turn === PLAYER_COLOR ? "xq-red" : "xq-black"}`} />
-          {revealing ? "对局结束…" : thinking ? "对方思考中…" : "轮到你"}
-        </div>
-        {checkColor && !revealing && <div style={{ color: "var(--seal-red)", fontWeight: 700 }}>将军！</div>}
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", padding: "var(--space-2) 0" }}>
+        <span style={{ fontSize: 13, color: "var(--text-secondary)", letterSpacing: "0.15em" }}>· 棋力测试 ·</span>
       </div>
+
+      <div className="xq-player-row">
+        <div className="xq-player-identity">
+          <span className={`xq-player-dot ${AI_COLOR === RED ? "xq-red" : "xq-black"}`} />
+          <span className="xq-player-name">测试对手</span>
+        </div>
+        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+          {!revealing && state.turn === AI_COLOR ? (thinking ? "思考中…" : "回合中") : ""}
+        </span>
+      </div>
+
+      {lastMoveNotation && (
+        <div className="xq-last-move-pill">
+          <span className="xq-last-move-pill-label">最近走子</span>
+          <span className="xq-last-move-pill-value">{lastMoveNotation}</span>
+        </div>
+      )}
+
       <XiangqiBoard
         board={state.board}
         onMove={handleBoardMove}
@@ -118,6 +138,21 @@ export default function XiangqiSkillTestScreen({ onFinish, onAbort }) {
         disabled={state.turn !== PLAYER_COLOR}
         locked={revealing}
       />
+
+      <div className="xq-player-row">
+        <div className="xq-player-identity">
+          <span className={`xq-player-dot ${PLAYER_COLOR === RED ? "xq-red" : "xq-black"}`} />
+          <span className="xq-player-name">我方</span>
+        </div>
+        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+          {!revealing && state.turn === PLAYER_COLOR ? "轮到你" : ""}
+        </span>
+      </div>
+
+      {checkColor && !revealing && (
+        <p style={{ textAlign: "center", color: "var(--seal-red)", fontWeight: 700, margin: "2px 0 0" }}>将军！</p>
+      )}
+
       <p className="muted" style={{ textAlign: "center", fontSize: 12, marginTop: "var(--space-3)" }}>
         正常下完这一局,系统会根据你的实际走法生成六维画像 —— 不是问卷,下棋就是测试。
       </p>

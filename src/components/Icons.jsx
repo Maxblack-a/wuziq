@@ -390,3 +390,41 @@ export function IconUndo({ size = 16 }) {
     </svg>
   );
 }
+
+// 对局操作栏 · 认输(小旗子)
+export function IconFlag({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M6 3V21" />
+      <path d="M6 4.5C9 3 11 6 14 4.5C17 3 18 4.5 18 4.5V13C18 13 17 11.5 14 13C11 14.5 9 11.5 6 13V4.5Z" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+// 对局操作栏 · 提和(两只手相握)
+export function IconHandshake({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2 12L6 8L9.5 10.5" />
+      <path d="M22 12L18 8L14.5 10.5" />
+      <path d="M9.5 10.5L11.3 12.1C11.9 12.6 12.8 12.5 13.3 11.9C13.7 11.4 13.7 10.7 13.3 10.2L11 8" />
+      <path d="M6 8L8.2 6C9 5.3 10.2 5.4 10.9 6.2L14.5 10.5" />
+      <path d="M18 8L15.8 6C15 5.3 13.8 5.4 13.1 6.2" />
+      <path d="M6 13L8 15" />
+      <path d="M18 13L16 15" />
+    </svg>
+  );
+}
+
+// 对局界面 · 设置齿轮(右上角,复用规则弹窗当作"更多信息"入口)
+export function IconSettings({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="3.2" />
+      <path d="M12 3.5V5.5" /><path d="M12 18.5V20.5" />
+      <path d="M5.5 12H3.5" /><path d="M20.5 12H18.5" />
+      <path d="M6.9 6.9L5.5 5.5" /><path d="M18.5 18.5L17.1 17.1" />
+      <path d="M17.1 6.9L18.5 5.5" /><path d="M5.5 18.5L6.9 17.1" />
+    </svg>
+  );
+}

@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import XiangqiBoard from "./XiangqiBoard";
-import { IconUndo, IconChevronLeft } from "./Icons";
+import { IconUndo, IconChevronLeft, IconFlag } from "./Icons";
 import {
   createInitialBoard, cloneBoard, applyMove, legalMovesFrom, isLegalMove,
   isInCheck, checkGameOver, positionKey, RED, BLACK,
 } from "../game/xiangqiLogic";
+import { moveToChineseNotation } from "../game/chineseNotation";
 import { chooseAiMove } from "../game/xiangqiAi";
 import { useTelegramBackButton, hapticNotify } from "../lib/telegram";
 
@@ -21,9 +22,11 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
   const [turn, setTurn] = useState(RED); // 红方永远先手
   const [selected, setSelected] = useState(null);
   const [lastMove, setLastMove] = useState(null);
+  const [lastMoveNotation, setLastMoveNotation] = useState(null);
   const [history, setHistory] = useState([]);
   const [gameOver, setGameOver] = useState(null); // { winner, reason } | null
   const [thinking, setThinking] = useState(false);
+  const [resignConfirmOpen, setResignConfirmOpen] = useState(false);
 
   const aiColor = playerColor === RED ? BLACK : RED;
   const aiTimerRef = useRef(null);
@@ -52,6 +55,7 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
     if (!isLegalMove(board, from, to, turn)) return;
 
     const wasCapture = board[to[1]][to[0]] !== 0;
+    const notation = moveToChineseNotation(board, from, to);
     pushHistory(cloneBoard(board), turn);
     const next = applyMove(board, from, to);
     const nextTurn = -turn;
@@ -59,6 +63,7 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
     positionHistoryRef.current = [...positionHistoryRef.current, positionKey(next, nextTurn)];
     setBoard(next);
     setLastMove({ from, to });
+    setLastMoveNotation(notation);
     setSelected(null);
     setTurn(nextTurn);
 
@@ -106,6 +111,7 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
     noCaptureRef.current = target.noCapture;
     setSelected(null);
     setLastMove(null);
+    setLastMoveNotation(null);
     setGameOver(null);
   }
 
@@ -114,10 +120,17 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
     setTurn(RED);
     setSelected(null);
     setLastMove(null);
+    setLastMoveNotation(null);
     setHistory([]);
     positionHistoryRef.current = [];
     noCaptureRef.current = 0;
     setGameOver(null);
+  }
+
+  function handleResign() {
+    setResignConfirmOpen(false);
+    setGameOver({ over: true, winner: aiColor, reason: "forfeit" });
+    hapticNotify?.("warning");
   }
 
   const checkColor = gameOver ? null : (isInCheck(board, turn) ? turn : null);
@@ -148,19 +161,29 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
 
   return (
     <div className="app-shell">
-      <div className="screen-header">
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "var(--space-2) 0" }}>
         <button className="nav-icon-btn" onClick={onExit}><IconChevronLeft /></button>
-        <div className="screen-title">象棋 · 人机对战</div>
-        <button className="nav-icon-btn" onClick={handleUndo}><IconUndo /></button>
+        <span style={{ fontSize: 13, color: "var(--text-secondary)", letterSpacing: "0.15em" }}>· 人机对战 ·</span>
+        <button className="nav-icon-btn" onClick={handleUndo} disabled={thinking || history.length === 0}><IconUndo /></button>
       </div>
 
-      <div className="xq-status-bar">
-        <div className="xq-turn-badge">
-          <span className={`xq-turn-dot ${turn === RED ? "xq-red" : "xq-black"}`} />
-          {gameOver ? "对局结束" : thinking ? "对方思考中…" : turn === playerColor ? "轮到你" : "对方回合"}
+      <div className="xq-player-row">
+        <div className="xq-player-identity">
+          <span className={`xq-player-dot ${aiColor === RED ? "xq-red" : "xq-black"}`} />
+          <span className="xq-player-name">AI 对手</span>
+          <span className="xq-player-level">{difficulty === "easy" ? "随意" : "正常"}</span>
         </div>
-        {checkColor && !gameOver && <div style={{ color: "var(--seal-red)", fontWeight: 700 }}>将军！</div>}
+        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+          {!gameOver && turn === aiColor ? (thinking ? "思考中…" : "回合中") : ""}
+        </span>
       </div>
+
+      {lastMoveNotation && (
+        <div className="xq-last-move-pill">
+          <span className="xq-last-move-pill-label">最近走子</span>
+          <span className="xq-last-move-pill-value">{lastMoveNotation}</span>
+        </div>
+      )}
 
       <XiangqiBoard
         board={board}
@@ -174,6 +197,31 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
         locked={!!gameOver}
       />
 
+      <div className="xq-player-row">
+        <div className="xq-player-identity">
+          <span className={`xq-player-dot ${playerColor === RED ? "xq-red" : "xq-black"}`} />
+          <span className="xq-player-name">我方</span>
+        </div>
+        <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>
+          {!gameOver && turn === playerColor ? "轮到你" : ""}
+        </span>
+      </div>
+
+      {checkColor && !gameOver && (
+        <p style={{ textAlign: "center", color: "var(--seal-red)", fontWeight: 700, margin: "2px 0 0" }}>将军！</p>
+      )}
+
+      {!gameOver && (
+        <div className="xq-action-bar">
+          <button className="xq-action-btn xq-danger" onClick={() => setResignConfirmOpen(true)}>
+            <IconFlag size={16} /> 认输
+          </button>
+          <button className="xq-action-btn" onClick={handleUndo} disabled={thinking || history.length === 0}>
+            <IconUndo size={16} /> 悔棋
+          </button>
+        </div>
+      )}
+
       {gameOver && (
         <div style={{ padding: "var(--space-6)", textAlign: "center" }}>
           <div style={{ fontSize: "var(--text-heading)", fontWeight: 700, marginBottom: "var(--space-3)" }}>
@@ -182,11 +230,25 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
               : gameOver.reason === "stalemate" ? "（困毙）"
               : gameOver.reason === "repetition" ? "（局面三次重复）"
               : gameOver.reason === "sixty_move" ? "（60回合无吃子）"
+              : gameOver.reason === "forfeit" ? "（认输）"
               : ""}
           </div>
           <div style={{ display: "flex", gap: "var(--space-3)", justifyContent: "center" }}>
             <button className="cta-primary" onClick={handleRestart}>再来一局</button>
             <button className="secondary-card" onClick={onExitHome}>返回首页</button>
+          </div>
+        </div>
+      )}
+
+      {resignConfirmOpen && (
+        <div className="modal-overlay">
+          <div className="modal-panel" style={{ textAlign: "center" }}>
+            <h2 className="text-heading">确定要认输吗?</h2>
+            <p className="text-caption" style={{ marginTop: "var(--space-2)" }}>这局会直接结束,不计入任何分数,随时可以再来一局。</p>
+            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setResignConfirmOpen(false)}>取消</button>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={handleResign}>确认认输</button>
+            </div>
           </div>
         </div>
       )}

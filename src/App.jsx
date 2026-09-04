@@ -874,7 +874,7 @@ export default function App() {
       )}
       {screen === "game" && (
         <Suspense fallback={<ScreenFallbackInline />}>
-          <XiangqiOnlineGame roomId={roomId} myId={myId} avatarUrl={profile?.avatar_url} onExit={goMenu} onMatched={handleMatched} />
+          <XiangqiOnlineGame roomId={roomId} myId={myId} avatarUrl={profile?.avatar_url} myExp={profile?.exp} onExit={goMenu} onMatched={handleMatched} />
         </Suspense>
       )}
 

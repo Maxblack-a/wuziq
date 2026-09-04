@@ -4,8 +4,11 @@ import { supabase, getStoredSessionId, sendHeartbeat } from "../lib/supabase";
 import {
   createInitialBoard, cloneBoard, applyMove, legalMovesFrom, isInCheck, RED, BLACK,
 } from "../game/xiangqiLogic";
+import { moveToChineseNotation } from "../game/chineseNotation";
+import { levelForExp } from "../lib/rank";
 import { hapticNotify, useTelegramBackButton, setClosingConfirmation } from "../lib/telegram";
-import { IconUndo } from "./Icons";
+import { IconUndo, IconFlag, IconHandshake, IconChevronLeft, IconSettings } from "./Icons";
+import RulesModal from "./RulesModal";
 
 const HEARTBEAT_INTERVAL_MS = 8000;
 const DISCONNECT_GRACE_MS = 20000;
@@ -29,10 +32,12 @@ function flatToBoard2D(flat) {
   return b;
 }
 
-export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onMatched }) {
+export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, myExp, onExit, onMatched }) {
   const [room, setRoom] = useState(null);
   const [opponentName, setOpponentName] = useState("对手");
+  const [opponentExp, setOpponentExp] = useState(null);
   const [lastMove, setLastMove] = useState(null); // { from:[x,y], to:[x,y] }
+  const [lastMoveNotation, setLastMoveNotation] = useState(null); // "炮二平五" 这种记法字符串
   const [expInfo, setExpInfo] = useState(null);
   const [pendingMove, setPendingMove] = useState(null); // { board, turnAfter, moveCountAfter }
   const [disconnectSince, setDisconnectSince] = useState(null);
@@ -41,6 +46,9 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
   const [resigning, setResigning] = useState(false);
   const [requestingUndo, setRequestingUndo] = useState(false);
   const [respondingUndo, setRespondingUndo] = useState(false);
+  const [requestingDraw, setRequestingDraw] = useState(false);
+  const [respondingDraw, setRespondingDraw] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [returningToRoom, setReturningToRoom] = useState(false);
   const [selected, setSelected] = useState(null);
   const [endKind, setEndKind] = useState(null); // 'checkmate' | 'stalemate' | null,来自 make_move 返回值
@@ -56,7 +64,9 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
     let cancelled = false;
     setRoom(null);
     setLastMove(null);
+    setLastMoveNotation(null);
     setExpInfo(null);
+    setOpponentExp(null);
     setPendingMove(null);
     setDisconnectSince(null);
     setOpponentName("对手");
@@ -89,7 +99,10 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
               if (oldFlat[i] !== 0 && newFlat[i] === 0) from = [i % 9, Math.floor(i / 9)];
               if (newFlat[i] !== 0) to = [i % 9, Math.floor(i / 9)];
             }
-            if (from && to) setLastMove({ from, to });
+            if (from && to) {
+              setLastMove({ from, to });
+              setLastMoveNotation(moveToChineseNotation(flatToBoard2D(oldFlat), from, to));
+            }
           }
           lastBoardFlatRef.current = newFlat;
           setRoom(payload.new);
@@ -131,8 +144,12 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
     if (!room) return;
     const opponentId = room.player1_id === myId ? room.player2_id : room.player1_id;
     if (!opponentId) return;
-    supabase.from("profiles_public").select("display_name").eq("id", opponentId).single()
-      .then(({ data }) => data && setOpponentName(data.display_name || "对手"));
+    supabase.from("profiles_public").select("display_name, exp").eq("id", opponentId).single()
+      .then(({ data }) => {
+        if (!data) return;
+        setOpponentName(data.display_name || "对手");
+        setOpponentExp(data.exp ?? 0);
+      });
   }, [room, myId]);
 
   useEffect(() => {
@@ -157,7 +174,7 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
     if (!room) return;
     if (room.status === "lobby" && !lobbyResetRef.current) {
       lobbyResetRef.current = true;
-      setLastMove(null); setExpInfo(null); setEndKind(null);
+      setLastMove(null); setLastMoveNotation(null); setExpInfo(null); setEndKind(null);
       gameStartRef.current = null;
     }
     if (room.status !== "lobby") lobbyResetRef.current = false;
@@ -250,7 +267,11 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
 
   const incomingUndo = room.status === "playing" && room.undo_requested_by && room.undo_requested_by !== myId;
   const myUndoPending = room.undo_requested_by === myId;
-  const canRequestUndo = room.status === "playing" && !room.undo_requested_by && !!room.board_before_last_move && !pendingMove;
+  const canRequestUndo = room.status === "playing" && !room.undo_requested_by && !room.draw_requested_by && !!room.board_before_last_move && !pendingMove;
+
+  const incomingDraw = room.status === "playing" && room.draw_requested_by && room.draw_requested_by !== myId;
+  const myDrawPending = room.draw_requested_by === myId;
+  const canRequestDraw = room.status === "playing" && !room.draw_requested_by && !room.undo_requested_by && !pendingMove;
 
   const turnDeadline = room.status === "playing" && room.turn_deadline ? new Date(room.turn_deadline).getTime() : null;
   const turnSecondsLeft = turnDeadline ? Math.max(0, Math.ceil((turnDeadline - now) / 1000)) : TURN_SECONDS;
@@ -264,7 +285,7 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
   }
 
   async function handleBoardMove(from, to) {
-    if (!isMyTurn || room.undo_requested_by) { hapticNotify("warning"); return; }
+    if (!isMyTurn || room.undo_requested_by || room.draw_requested_by) { hapticNotify("warning"); return; }
     const piece = board2D[from[1]][from[0]];
     const next = cloneBoard(board2D);
     next[to[1]][to[0]] = piece;
@@ -272,6 +293,7 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
     const nextSlot = mySlot === 1 ? 2 : 1;
 
     setLastMove({ from, to });
+    setLastMoveNotation(moveToChineseNotation(board2D, from, to));
     setSelected(null);
     setPendingMove({ board: next, turnAfter: nextSlot, moveCountAfter: room.move_count + 1 });
 
@@ -341,6 +363,20 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
     await supabase.rpc("respond_undo", { p_room_id: roomId, p_accept: accept });
     setRespondingUndo(false);
   }
+  async function handleRequestDraw() {
+    setRequestingDraw(true);
+    await supabase.rpc("request_draw", { p_room_id: roomId });
+    setRequestingDraw(false);
+  }
+  async function handleRespondDraw(accept) {
+    setRespondingDraw(true);
+    // 同意的那一刻服务端会直接结算(和棋),棋盘状态跟经验值变化都会通过
+    // 下面 room.status==='finished' 那个通用 effect 从 match_history 里
+    // 拿到,这里不用重复处理——跟 handleRespondUndo 保持同一套"只管
+    // 发请求,结果交给订阅"的写法。
+    await supabase.rpc("respond_draw", { p_room_id: roomId, p_accept: accept });
+    setRespondingDraw(false);
+  }
   async function handleReturnToRoom() {
     setReturningToRoom(true);
     await supabase.rpc("return_to_room", { p_room_id: roomId });
@@ -349,7 +385,7 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
   }
 
   const checkColor = room.status === "playing" && !pendingMove && isInCheck(board2D, effectiveTurnColor) ? effectiveTurnColor : null;
-  const boardLocked = !!result || !!room.undo_requested_by;
+  const boardLocked = !!result || !!room.undo_requested_by || !!room.draw_requested_by;
   const legalTargets = selected && isMyTurn ? legalMovesFrom(board2D, selected[0], selected[1]) : [];
 
   let result = null;
@@ -385,48 +421,57 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
     );
   }
 
+  const myLevel = levelForExp(myExp);
+  const opponentLevel = levelForExp(opponentExp);
+  const myTimerPct = isMyTurn ? (turnSecondsLeft / TURN_SECONDS) * 100 : 100;
+  const oppTimerPct = !isMyTurn && room.status === "playing" ? (turnSecondsLeft / TURN_SECONDS) * 100 : 100;
+
   return (
     <div>
       <div className="game-layout">
-        <div className="room-topbar pve-topbar">
-          {room.status === "playing" ? (
-            <button className="resign-btn" onClick={() => setResignConfirmOpen(true)}>认输</button>
-          ) : <span />}
-          <div className="pve-topbar-right">
-            <div className="pve-turn-pill">
-              <div className={`turn-dot black${effectiveTurnSlot === 2 ? " active" : ""}`} style={{ background: effectiveTurnSlot === 1 ? "var(--seal-red)" : undefined }} />
-              <span className="pve-turn-pill-name">{isMyTurn ? "轮到你" : `${opponentName} · 思考中`}</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "var(--space-2) 0" }}>
+          <button className="nav-icon-btn" onClick={handleBackAction}><IconChevronLeft /></button>
+          <span style={{ fontSize: 13, color: "var(--text-secondary)", letterSpacing: "0.15em" }}>
+            · {room.status === "playing" ? "对局中" : "对局"} ·
+          </span>
+          <button className="nav-icon-btn" onClick={() => setRulesOpen(true)}><IconSettings /></button>
+        </div>
+
+        {/* 对手状态行:黑点/红点 + 昵称 + 等级徽章 + 计时(带进度条),
+            布局照抄参考图里"● 对手 Lv.18 [币]1250  02:38"那一整行,
+            只是把"[币]1250"换成了这个项目本来就有的经验值。 */}
+        <div className="xq-player-row">
+          <div className="xq-player-identity">
+            <span className={`xq-player-dot ${mySlot === 1 ? "xq-black" : "xq-red"}`} />
+            <span className="xq-player-name">{opponentName}</span>
+            <span className="xq-player-level">Lv.{opponentLevel}</span>
+          </div>
+          <div className="xq-player-timer-col">
+            <span className={`xq-player-timer-count${!isMyTurn && turnUrgent ? " xq-urgent" : ""}`}>
+              {room.status === "playing" && !isMyTurn ? `${turnSecondsLeft}s` : "--"}
+            </span>
+            <div className="xq-player-timer-track">
+              <div
+                className="xq-player-timer-fill"
+                style={{
+                  width: `${!isMyTurn ? oppTimerPct : 100}%`,
+                  background: mySlot === 1
+                    ? "linear-gradient(90deg, #3a3a3a, #171717)"
+                    : "linear-gradient(90deg, #C24A3C, #A13A2E)",
+                }}
+              />
             </div>
-            {room.status === "playing" && (
-              <button
-                className="btn-undo"
-                onClick={myUndoPending ? undefined : handleRequestUndo}
-                disabled={!canRequestUndo || requestingUndo || myUndoPending}
-              >
-                <IconUndo size={15} /> {myUndoPending ? "等待回应…" : "悔棋"}
-              </button>
-            )}
           </div>
         </div>
 
-        <div className="game-board-col">
-          <div className="pve-result-panel">
-            {room.status === "playing" && (
-              <div className={`turn-timer${turnUrgent ? " urgent" : ""}`}>
-                <div className="turn-timer-row">
-                  <span className="turn-timer-label">
-                    {isMyTurn ? "轮到你" : `${opponentName} · 思考中`}
-                    {checkColor && <span style={{ color: "var(--seal-red)", marginLeft: 8 }}>将军！</span>}
-                  </span>
-                  <span className="turn-timer-count mono">{turnSecondsLeft}s</span>
-                </div>
-                <div className="turn-timer-track">
-                  <div className="turn-timer-fill" style={{ width: `${(turnSecondsLeft / TURN_SECONDS) * 100}%` }} />
-                </div>
-              </div>
-            )}
+        {lastMoveNotation && (
+          <div className="xq-last-move-pill">
+            <span className="xq-last-move-pill-label">最近走子</span>
+            <span className="xq-last-move-pill-value">{lastMoveNotation}</span>
           </div>
+        )}
 
+        <div className="game-board-col">
           <XiangqiBoard
             board={board2D}
             onMove={handleBoardMove}
@@ -441,9 +486,26 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
           />
         </div>
 
-        <p className="muted" style={{ textAlign: "center", fontSize: 12 }}>
-          你执{mySlot === 1 ? "红" : "黑"} · {opponentName}执{mySlot === 1 ? "黑" : "红"}
-        </p>
+        {/* 我方状态行,跟上面对手那行结构一样,只是颜色跟计时方向相反 */}
+        <div className="xq-player-row">
+          <div className="xq-player-identity">
+            <span className={`xq-player-dot ${mySlot === 1 ? "xq-red" : "xq-black"}`} />
+            <span className="xq-player-name">我方</span>
+            <span className="xq-player-level">Lv.{myLevel}</span>
+          </div>
+          <div className="xq-player-timer-col">
+            <span className={`xq-player-timer-count${isMyTurn && turnUrgent ? " xq-urgent" : ""}`}>
+              {room.status === "playing" && isMyTurn ? `${turnSecondsLeft}s` : "--"}
+            </span>
+            <div className="xq-player-timer-track">
+              <div className="xq-player-timer-fill xq-green" style={{ width: `${isMyTurn ? myTimerPct : 100}%` }} />
+            </div>
+          </div>
+        </div>
+
+        {checkColor && room.status === "playing" && (
+          <p style={{ textAlign: "center", color: "var(--seal-red)", fontWeight: 700, margin: "2px 0 0" }}>将军！</p>
+        )}
 
         {disconnectSince && room.status === "playing" && (
           <div className="panel" style={{ textAlign: "center" }}>
@@ -455,6 +517,28 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
                 对方长时间未响应,正在为你判定获胜…
               </p>
             )}
+          </div>
+        )}
+
+        {room.status === "playing" && (
+          <div className="xq-action-bar">
+            <button className="xq-action-btn xq-danger" onClick={() => setResignConfirmOpen(true)}>
+              <IconFlag size={16} /> 认输
+            </button>
+            <button
+              className="xq-action-btn"
+              onClick={myDrawPending ? undefined : () => handleRequestDraw()}
+              disabled={!canRequestDraw || requestingDraw || myDrawPending}
+            >
+              <IconHandshake size={16} /> {myDrawPending ? "等待回应…" : "提和"}
+            </button>
+            <button
+              className="xq-action-btn"
+              onClick={myUndoPending ? undefined : handleRequestUndo}
+              disabled={!canRequestUndo || requestingUndo || myUndoPending}
+            >
+              <IconUndo size={16} /> {myUndoPending ? "等待回应…" : "悔棋"}
+            </button>
           </div>
         )}
       </div>
@@ -484,6 +568,20 @@ export default function XiangqiOnlineGame({ roomId, myId, avatarUrl, onExit, onM
           </div>
         </div>
       )}
+
+      {incomingDraw && (
+        <div className="modal-overlay">
+          <div className="modal-panel" style={{ textAlign: "center" }}>
+            <h2 className="text-heading">{opponentName} 提议和棋</h2>
+            <p className="text-caption" style={{ marginTop: "var(--space-2)" }}>同意的话,这局立刻结束,双方各记一次和棋。</p>
+            <div style={{ display: "flex", gap: "var(--space-3)", marginTop: "var(--space-6)" }}>
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => handleRespondDraw(false)} disabled={respondingDraw}>拒绝</button>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={() => handleRespondDraw(true)} disabled={respondingDraw}>同意</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {rulesOpen && <RulesModal onClose={() => setRulesOpen(false)} />}
     </div>
   );
 }

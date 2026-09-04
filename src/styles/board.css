@@ -332,7 +332,8 @@
     flex: 1 1 100%;
   }
   .game-board-col {
-    width: min(480px, 85vh, 60vw);
+    /* 同样不能用裸 85vh,理由跟 xiangqi.css 里 .xq-board-wrap 那处一致 */
+    width: min(480px, calc(var(--app-height, 100dvh) * 0.85), 60vw);
     flex: 0 0 auto;
     margin: 0;
     padding: 0;

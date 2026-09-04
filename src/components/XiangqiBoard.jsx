@@ -55,6 +55,7 @@ export default function XiangqiBoard({
 
   const xs = Array.from({ length: BOARD_W }, (_, i) => i);
   const ys = Array.from({ length: BOARD_H }, (_, i) => i);
+  const targetList = legalTargets || [];
 
   return (
     <div className={`xq-board-wrap${disabled ? " xq-board-disabled" : ""}`}>
@@ -76,6 +77,15 @@ export default function XiangqiBoard({
           <line className="xq-line" x1={px(3)} y1={py(7)} x2={px(5)} y2={py(9)} />
           <line className="xq-line" x1={px(5)} y1={py(7)} x2={px(3)} y2={py(9)} />
           <rect className="xq-frame" x={px(0)} y={py(0)} width={px(8) - px(0)} height={py(9) - py(0)} />
+
+          {/* 选中棋子 -> 各合法落点之间的虚线连接,一眼看出"能走去哪几个方向",
+              而不是孤零零几个点散在棋盘上看不出跟谁有关系 */}
+          {sel && targetList.map(([tx, ty]) => (
+            <line
+              key={`path-${tx}-${ty}`} className="xq-move-path"
+              x1={px(sel[0])} y1={py(sel[1])} x2={px(tx)} y2={py(ty)}
+            />
+          ))}
         </svg>
 
         <div className="xq-river-label" style={{ top: `${(py(4) + py(5)) / 2}%` }}>
@@ -104,7 +114,7 @@ export default function XiangqiBoard({
                   <div
                     className={`xq-piece ${pieceColor(piece) === RED ? "xq-red" : "xq-black"}${isSel ? " xq-selected" : ""}${isLast ? " xq-last-move" : ""}${checkColor === pieceColor(piece) ? " xq-in-check" : ""}`}
                   >
-                    {PIECE_NAME[pieceColor(piece)][pieceType(piece)]}
+                    <span className="xq-piece-glyph">{PIECE_NAME[pieceColor(piece)][pieceType(piece)]}</span>
                   </div>
                 )}
               </div>
