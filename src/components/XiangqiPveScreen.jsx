@@ -185,17 +185,19 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
         </div>
       )}
 
-      <XiangqiBoard
-        board={board}
-        onMove={handleBoardMove}
-        selected={selected}
-        onSelectChange={setSelected}
-        legalTargets={turn === playerColor ? legalTargets : []}
-        lastMove={lastMove}
-        checkColor={checkColor}
-        disabled={turn !== playerColor}
-        locked={!!gameOver}
-      />
+      <div className="game-board-col">
+        <XiangqiBoard
+          board={board}
+          onMove={handleBoardMove}
+          selected={selected}
+          onSelectChange={setSelected}
+          legalTargets={turn === playerColor ? legalTargets : []}
+          lastMove={lastMove}
+          checkColor={checkColor}
+          disabled={turn !== playerColor}
+          locked={!!gameOver}
+        />
+      </div>
 
       <div className="xq-player-row">
         <div className="xq-player-identity">

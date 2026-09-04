@@ -127,17 +127,19 @@ export default function XiangqiSkillTestScreen({ onFinish, onAbort }) {
         </div>
       )}
 
-      <XiangqiBoard
-        board={state.board}
-        onMove={handleBoardMove}
-        selected={selected}
-        onSelectChange={setSelected}
-        legalTargets={state.turn === PLAYER_COLOR ? legalTargets : []}
-        lastMove={lastMove}
-        checkColor={checkColor}
-        disabled={state.turn !== PLAYER_COLOR}
-        locked={revealing}
-      />
+      <div className="game-board-col">
+        <XiangqiBoard
+          board={state.board}
+          onMove={handleBoardMove}
+          selected={selected}
+          onSelectChange={setSelected}
+          legalTargets={state.turn === PLAYER_COLOR ? legalTargets : []}
+          lastMove={lastMove}
+          checkColor={checkColor}
+          disabled={state.turn !== PLAYER_COLOR}
+          locked={revealing}
+        />
+      </div>
 
       <div className="xq-player-row">
         <div className="xq-player-identity">

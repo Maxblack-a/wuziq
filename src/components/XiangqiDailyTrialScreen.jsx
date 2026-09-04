@@ -311,17 +311,19 @@ export default function XiangqiDailyTrialScreen({ onExit, onExitHome }) {
         </div>
       )}
 
-      <XiangqiBoard
-        board={board}
-        onMove={handleBoardMove}
-        selected={selected}
-        onSelectChange={setSelected}
-        legalTargets={turn === PLAYER_COLOR ? legalTargets : []}
-        lastMove={lastMove}
-        checkColor={checkColor}
-        disabled={turn !== PLAYER_COLOR}
-        locked={!!gameOver}
-      />
+      <div className="game-board-col">
+        <XiangqiBoard
+          board={board}
+          onMove={handleBoardMove}
+          selected={selected}
+          onSelectChange={setSelected}
+          legalTargets={turn === PLAYER_COLOR ? legalTargets : []}
+          lastMove={lastMove}
+          checkColor={checkColor}
+          disabled={turn !== PLAYER_COLOR}
+          locked={!!gameOver}
+        />
+      </div>
 
       <div className="xq-player-row">
         <div className="xq-player-identity">
