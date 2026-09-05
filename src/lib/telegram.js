@@ -34,6 +34,38 @@ export function getInitData() {
   return tg?.initData || "";
 }
 
+// 临时诊断用:把关键的视口/兼容性信息收集成一个对象,配合下面的
+// XqDebugBadge 组件直接显示在页面上,不需要用户去翻控制台。排查完
+// "棋盘尺寸不对"这个问题之后,这个函数和用到它的地方可以一起删掉。
+export function getDebugSnapshot() {
+  const boardWrap = document.querySelector(".xq-board-wrap");
+  const boardCol = document.querySelector(".game-board-col");
+  const shell = document.querySelector(".app-shell");
+  function box(el) {
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    const cs = getComputedStyle(el);
+    return {
+      w: Math.round(r.width), h: Math.round(r.height),
+      cssMaxWidth: cs.maxWidth, display: cs.display, aspectRatio: cs.aspectRatio,
+    };
+  }
+  return {
+    tgVersion: tg?.version || "无(不在Telegram里)",
+    tgPlatform: tg?.platform || "-",
+    viewportHeight: tg?.viewportHeight ?? "-",
+    viewportStableHeight: tg?.viewportStableHeight ?? "-",
+    windowInner: `${window.innerWidth}x${window.innerHeight}`,
+    dpr: window.devicePixelRatio,
+    appHeightVar: getComputedStyle(document.documentElement).getPropertyValue("--app-height") || "(空)",
+    supportsAspectRatio: CSS.supports("aspect-ratio", "1/1"),
+    appShell: box(shell),
+    gameBoardCol: box(boardCol),
+    xqBoardWrap: box(boardWrap),
+    ua: navigator.userAgent,
+  };
+}
+
 // 当前这个 WebView 里,Telegram 报告的用户 id(不是我们数据库里的,是 Telegram 自己的)。
 // 用来跟本地缓存的登录态做核对,防止同一设备切换过 Telegram 账号时沿用了错的登录态。
 export function getTelegramUserId() {

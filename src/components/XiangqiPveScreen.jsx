@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import XiangqiBoard from "./XiangqiBoard";
+import XqDebugBadge from "./XqDebugBadge";
 import { IconUndo, IconChevronLeft, IconFlag } from "./Icons";
 import {
   createInitialBoard, cloneBoard, applyMove, legalMovesFrom, isLegalMove,
@@ -161,6 +162,7 @@ export default function XiangqiPveScreen({ onExit, onExitHome }) {
 
   return (
     <div className="app-shell">
+      <XqDebugBadge />
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "var(--space-2) 0" }}>
         <button className="nav-icon-btn" onClick={onExit}><IconChevronLeft /></button>
         <span style={{ fontSize: 13, color: "var(--text-secondary)", letterSpacing: "0.15em" }}>· 人机对战 ·</span>
