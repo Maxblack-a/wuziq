@@ -32,7 +32,11 @@ export default function XqDebugBadge() {
         <b style={{ color: "#fff" }}>棋盘诊断信息(截图发给开发者)</b>
         <span onClick={() => setVisible(false)} style={{ color: "#f88", padding: "0 6px" }}>关闭 ✕</span>
       </div>
-      {`Telegram版本: ${snap.tgVersion}  平台: ${snap.tgPlatform}
+      <div style={{ background: "#ff0", color: "#000", fontWeight: "bold", padding: "2px 6px", marginBottom: 4, display: "inline-block" }}>
+        构建版本标记: {snap.buildMark}
+      </div>
+      {`
+Telegram版本: ${snap.tgVersion}  平台: ${snap.tgPlatform}
 viewportHeight: ${snap.viewportHeight}  viewportStableHeight: ${snap.viewportStableHeight}
 window内部尺寸: ${snap.windowInner}  DPR: ${snap.dpr}
 --app-height变量: ${snap.appHeightVar}

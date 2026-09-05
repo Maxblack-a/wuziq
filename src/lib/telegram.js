@@ -37,6 +37,14 @@ export function getInitData() {
 // 临时诊断用:把关键的视口/兼容性信息收集成一个对象,配合下面的
 // XqDebugBadge 组件直接显示在页面上,不需要用户去翻控制台。排查完
 // "棋盘尺寸不对"这个问题之后,这个函数和用到它的地方可以一起删掉。
+//
+// BUILD_MARK 是每一轮排查专门加的"这份代码到底是哪个版本"标记——
+// 之前来回好几轮,没法百分之百确认对方实际测试的是不是最新那份代码
+// (截图数字曾经跟上一轮一模一样,大概率是缓存/没重新部署导致的),
+// 这次直接把版本号打进截图里,不用再靠猜。以后每次改完这个文件相关的
+// 排查逻辑,记得把这个字符串换一下。
+export const BUILD_MARK = "PHASE11-FIX-CALC-WIDTH";
+
 export function getDebugSnapshot() {
   const boardWrap = document.querySelector(".xq-board-wrap");
   const boardCol = document.querySelector(".game-board-col");
@@ -51,6 +59,7 @@ export function getDebugSnapshot() {
     };
   }
   return {
+    buildMark: BUILD_MARK,
     tgVersion: tg?.version || "无(不在Telegram里)",
     tgPlatform: tg?.platform || "-",
     viewportHeight: tg?.viewportHeight ?? "-",
